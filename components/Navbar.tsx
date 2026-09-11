@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useSyncExternalStore } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -14,18 +14,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { socialLinks } from '@/lib/socialLinks';
 import { getStorageItem, setStorageItem } from '@/lib/browserStorage';
 
+const subscribeToHydration = () => () => {};
+
 export default function Navbar() {
     const [scrolled, setScrolled] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-    const [isInitialLoad] = useState(() => {
-        if (typeof window === 'undefined') return false;
-        const played = getStorageItem('session', 'moreli_nav_played');
-        if (!played) {
-            setStorageItem('session', 'moreli_nav_played', 'true');
-            return true;
-        }
-        return false;
-    });
+    const hydrated = useSyncExternalStore(subscribeToHydration, () => true, () => false);
+    const isInitialLoad = hydrated && !getStorageItem('session', 'moreli_nav_played');
+    useEffect(() => {
+        setStorageItem('session', 'moreli_nav_played', 'true');
+    }, []);
     const { profile, setProfile } = useProfile(); // We need setProfile for the mobile switcher
     const { language } = useLanguage();
     const { t, translateText } = useTranslate(language);
@@ -55,11 +53,21 @@ export default function Navbar() {
 
     // Lock body scroll when menu is open
     useEffect(() => {
-        if (mobileMenuOpen) {
-            document.body.style.overflow = 'hidden';
-        } else {
-            document.body.style.overflow = 'unset';
-        }
+        if (!mobileMenuOpen) return;
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        const desktop = window.matchMedia('(min-width: 1280px)');
+        const closeOnDesktop = () => { if (desktop.matches) setMobileMenuOpen(false); };
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setMobileMenuOpen(false);
+        };
+        desktop.addEventListener('change', closeOnDesktop);
+        window.addEventListener('keydown', closeOnEscape);
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            desktop.removeEventListener('change', closeOnDesktop);
+            window.removeEventListener('keydown', closeOnEscape);
+        };
     }, [mobileMenuOpen]);
 
     const photographyLinks = [
@@ -195,6 +203,8 @@ export default function Navbar() {
                         type="button"
                         className="group relative z-[90] flex h-10 w-10 flex-col items-end justify-center gap-1.5 rounded-md border border-transparent transition-colors duration-300 hover:border-foreground/10 hover:bg-white/10 focus:outline-none sm:h-11 sm:w-11"
                         aria-label={mobileMenuOpen ? t('ui.closeMenu') : t('ui.openMenu')}
+                        aria-expanded={mobileMenuOpen}
+                        aria-controls="mobile-navigation"
                     >
                         <motion.div
                             animate={mobileMenuOpen ? { rotate: 45, y: 6 } : { rotate: 0, y: 0 }}
@@ -216,13 +226,14 @@ export default function Navbar() {
             <AnimatePresence>
                 {mobileMenuOpen && (
                     <motion.div
+                        id="mobile-navigation"
                         initial={{ opacity: 0, y: '-100%' }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: '-100%' }}
                         transition={{ duration: 0.5, ease: [0.19, 1, 0.22, 1] }}
                         className="fixed inset-0 z-[70] overflow-y-auto bg-black/95 backdrop-blur-3xl xl:hidden"
                     >
-                        <div className="flex min-h-screen flex-col items-center justify-center space-y-10 px-5 py-28 sm:p-8">
+                        <div className="flex min-h-dvh flex-col items-center justify-center space-y-10 px-5 py-24 sm:px-8">
 
                             {/* Profile Switcher Mobile */}
                             <div className="entry-selector-frost mb-4 flex max-w-full flex-wrap items-center justify-center gap-1 rounded-full px-2 py-1">

@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { requireAdmin } from '@/lib/auth';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -14,7 +15,10 @@ export async function GET() {
     }
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+    const unauthorized = requireAdmin(req);
+    if (unauthorized) return unauthorized;
+
     try {
         const body = await req.json();
         const { type, item } = body;

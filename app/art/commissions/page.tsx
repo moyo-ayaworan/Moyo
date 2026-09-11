@@ -72,7 +72,7 @@ export default function ArtCommissionsPage() {
                         >
                             <div className="relative aspect-[3/4] overflow-hidden bg-neutral-900">
                                 <SeoImage
-                                    src="/art_commission.webp"
+                                    src="/image-placeholder.svg"
                                     alt="Moyo Ayaworan commissioned fine art process preview"
                                     fill
                                     sizes="(min-width: 768px) 50vw, 100vw"

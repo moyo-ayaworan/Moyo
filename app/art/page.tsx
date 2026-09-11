@@ -106,7 +106,7 @@ export default function FineArtPage() {
                                 <div className="relative aspect-[4/3] overflow-hidden">
                                     <div className="absolute inset-0 z-10 bg-black/20 transition-colors group-hover:bg-black/0" />
                                     <SeoImage
-                                        src={work.image || '/art_preview.webp'}
+                                        src={work.image || '/image-placeholder.svg'}
                                         alt={`${translateText(work.title)} by Moyo Ayaworan`}
                                         fill
                                         sizes="(min-width: 768px) 50vw, 100vw"

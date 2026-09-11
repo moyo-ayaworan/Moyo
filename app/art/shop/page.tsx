@@ -10,10 +10,10 @@ import GlareHover from '@/components/GlareHover';
 import SeoImage from '@/components/SeoImage';
 
 const items = [
-    { id: 1, title: "Presence (Limited Edition)", details: "Hand Finished Print", image: "/shop_1.webp" },
-    { id: 2, title: "The Quiet Archive", details: "Monograph", image: "/shop_2.webp" },
-    { id: 3, title: "Identity Fragment III", details: "Original Work", image: "/shop_3.webp" },
-    { id: 4, title: "Memory Study #4", details: "Framed Edition", image: "/shop_4.webp" },
+    { id: 1, title: "Presence (Limited Edition)", details: "Hand Finished Print", image: "/image-placeholder.svg" },
+    { id: 2, title: "The Quiet Archive", details: "Monograph", image: "/image-placeholder.svg" },
+    { id: 3, title: "Identity Fragment III", details: "Original Work", image: "/image-placeholder.svg" },
+    { id: 4, title: "Memory Study #4", details: "Framed Edition", image: "/image-placeholder.svg" },
 ];
 
 type ShopItem = {

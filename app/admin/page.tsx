@@ -873,7 +873,7 @@ export default function AdminPage() {
         fetch('/api/content'),
         fetch('/api/contact'),
         fetch('/api/socials'),
-        fetch('/api/orders'),
+        fetch('/api/orders', { headers, credentials: 'same-origin' }),
       ]);
       const catalogRes = await fetch('/api/photography-catalog/categories', { headers, credentials: 'same-origin' });
 

@@ -60,7 +60,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'This download URL is not supported.' }, { status: 400 });
   }
 
-  const fileResponse = await fetch(downloadUrl);
+  let fileResponse: Response;
+  try {
+    fileResponse = await fetch(downloadUrl, { signal: AbortSignal.timeout(30_000) });
+  } catch {
+    return NextResponse.json({ error: 'Unable to prepare this download. Please try again.' }, { status: 502 });
+  }
   if (!fileResponse.ok || !fileResponse.body) {
     return NextResponse.json({ error: 'Unable to prepare this download.' }, { status: 502 });
   }
@@ -70,7 +75,7 @@ export async function GET(req: NextRequest) {
   return new NextResponse(fileResponse.body, {
     headers: {
       'Content-Type': fileResponse.headers.get('content-type') || 'application/octet-stream',
-      'Content-Disposition': `attachment; filename="${fileName.replace(/"/g, '')}"`,
+      'Content-Disposition': `attachment; filename="${fileName.replace(/[^a-zA-Z0-9._-]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(fileName).replace(/['()*]/g, (char) => '%' + char.charCodeAt(0).toString(16))}`,
       'Cache-Control': 'private, no-store',
     },
   });

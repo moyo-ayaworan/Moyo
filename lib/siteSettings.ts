@@ -75,10 +75,10 @@ export const defaultSiteSettings: SiteSettings = {
     showNewsletter: true,
   },
   art: {
-    heroImage: '/art_hero.webp',
+    heroImage: '/homepage-desktop.jpg',
     aboutImage: '/profile-portrait.jpg',
-    previewImageOne: '/art_preview.webp',
-    previewImageTwo: '/art_preview.webp',
+    previewImageOne: '/image-placeholder.svg',
+    previewImageTwo: '/image-placeholder.svg',
   },
   portfolio: {
     eyebrow: 'Selected Portfolio',

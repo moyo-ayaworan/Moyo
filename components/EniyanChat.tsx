@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { setStorageItem } from '@/lib/browserStorage';
 import {
   ArrowRight,
   CalendarCheck,
@@ -375,7 +376,7 @@ export default function EniyanChat() {
   }
 
   function closeChat() {
-    window.localStorage.setItem(DISMISS_KEY, String(Date.now()));
+    setStorageItem('local', DISMISS_KEY, String(Date.now()));
     setIsOpen(false);
   }
 

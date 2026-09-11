@@ -92,9 +92,7 @@ function uniqueImages(categories: CatalogCategory[]) {
 export default function HeroImageMotion() {
     const [images, setImages] = useState<string[]>([]);
     const [activeIndex, setActiveIndex] = useState(0);
-    const [viewportWidth, setViewportWidth] = useState(() =>
-        typeof window === 'undefined' ? 1280 : window.innerWidth
-    );
+    const [viewportWidth, setViewportWidth] = useState(1280);
     const reduceMotion = useReducedMotion();
 
     useEffect(() => {

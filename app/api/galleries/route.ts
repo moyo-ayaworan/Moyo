@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
 import slugify from 'slugify';
+import { randomBytes } from 'node:crypto';
 
 type GalleryRow = {
   id: number;
 };
 
 function randomCode() {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
+  return randomBytes(6).toString('hex').toUpperCase();
 }
 
 function galleryResponse(rows: GalleryRow[]) {

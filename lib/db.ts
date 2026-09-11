@@ -27,11 +27,19 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-let initialized = false;
+let initialization: Promise<void> | undefined;
 
 async function ensureTables() {
-  if (initialized) return;
-  initialized = true;
+  if (!initialization) {
+    initialization = initializeTables().catch((error) => {
+      initialization = undefined;
+      throw error;
+    });
+  }
+  await initialization;
+}
+
+async function initializeTables() {
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS artworks (
