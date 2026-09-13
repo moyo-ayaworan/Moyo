@@ -118,7 +118,7 @@ export async function GET(req: NextRequest) {
      FROM bookings
      WHERE status IN ('pending', 'confirmed')
        AND reminder_24h_sent_at IS NULL
-       AND scheduled_at BETWEEN NOW() + INTERVAL '23 hours' AND NOW() + INTERVAL '25 hours'`
+       AND (scheduled_at AT TIME ZONE 'Africa/Lagos')::date = (NOW() AT TIME ZONE 'Africa/Lagos')::date + 1`
   );
 
   const { rows: todayRows } = await query(
