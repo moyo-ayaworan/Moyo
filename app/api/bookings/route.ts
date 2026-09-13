@@ -3,13 +3,13 @@ import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import { query } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
+import { BOOKING_TIMES, isCalendarDate, parseBookingDate } from '@/lib/bookingDates';
 
 export const runtime = 'nodejs';
 
 const CONTACT_EMAIL = process.env.CONTACT_EMAIL || 'ijabikenm@gmail.com';
 const STUDIO_TIMEZONE = 'Africa/Lagos';
-const STUDIO_OFFSET = '+01:00';
-const SLOT_TIMES = new Set(['09:00', '11:00', '13:00', '15:00', '17:00']);
+const SLOT_TIMES = new Set(BOOKING_TIMES);
 
 type BookingRow = {
   id: number;
@@ -48,14 +48,6 @@ function escapeHtml(value: string) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
-}
-
-function parseBookingDate(date: string, time: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) return null;
-  if (!SLOT_TIMES.has(time)) return null;
-  const scheduledAt = new Date(`${date}T${time}:00${STUDIO_OFFSET}`);
-  if (Number.isNaN(scheduledAt.getTime())) return null;
-  return scheduledAt;
 }
 
 function createManageToken() {
@@ -170,30 +162,38 @@ export async function GET(req: NextRequest) {
 
   const start = req.nextUrl.searchParams.get('start') || '';
   const end = req.nextUrl.searchParams.get('end') || '';
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+  if (!isCalendarDate(start) || !isCalendarDate(end) || start > end) {
     return NextResponse.json({ error: 'Valid start and end dates are required.' }, { status: 400 });
   }
 
-  const { rows } = await query(
-    `SELECT booking_date::text AS booking_date, booking_time
-     FROM bookings
-     WHERE status <> 'cancelled'
-       AND booking_date BETWEEN $1::date AND $2::date
-     ORDER BY booking_date, booking_time`,
-    [start, end]
-  );
+  try {
+    const { rows } = await query(
+      `SELECT booking_date::text AS booking_date, booking_time
+       FROM bookings
+       WHERE status <> 'cancelled'
+         AND booking_date BETWEEN $1::date AND $2::date
+       ORDER BY booking_date, booking_time`,
+      [start, end]
+    );
 
-  const booked = rows.reduce<Record<string, string[]>>((acc, row: { booking_date: string; booking_time: string }) => {
-    acc[row.booking_date] = [...(acc[row.booking_date] || []), row.booking_time];
-    return acc;
-  }, {});
+    const booked = rows.reduce<Record<string, string[]>>((acc, row: { booking_date: string; booking_time: string }) => {
+      acc[row.booking_date] = [...(acc[row.booking_date] || []), row.booking_time];
+      return acc;
+    }, {});
 
-  return NextResponse.json({ booked, slots: Array.from(SLOT_TIMES) });
+    return NextResponse.json({ booked, slots: Array.from(SLOT_TIMES) });
+  } catch (error) {
+    console.error('[bookings] Failed to load availability:', error);
+    return NextResponse.json({ error: 'Could not load availability. Please try again.' }, { status: 503 });
+  }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json() as Record<string, unknown>;
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: 'A booking object is required.' }, { status: 400 });
+    }
     const name = normalize(body.name);
     const email = normalize(body.email).toLowerCase();
     const phone = normalize(body.phone);
@@ -201,8 +201,8 @@ export async function POST(req: NextRequest) {
     const message = normalize(body.message);
     const bookingDate = normalize(body.bookingDate);
     const bookingTime = normalize(body.bookingTime);
-    const clientNotes = normalize(body.clientNotes);
-    const internalNotes = normalize(body.internalNotes);
+    const clientNotes = '';
+    const internalNotes = '';
     const scheduledAt = parseBookingDate(bookingDate, bookingTime);
 
     if (!name || !email || !service || !bookingDate || !bookingTime) {
@@ -227,12 +227,17 @@ export async function POST(req: NextRequest) {
     );
 
     const booking = rows[0] as BookingRow;
-    const sent = await sendBookingEmails(booking, req.nextUrl.origin);
-    if (sent) {
-      await query('UPDATE bookings SET confirmation_sent_at = NOW(), updated_at = NOW() WHERE id = $1', [booking.id]);
+    let emailSent = false;
+    try {
+      emailSent = await sendBookingEmails(booking, req.nextUrl.origin);
+      if (emailSent) {
+        await query('UPDATE bookings SET confirmation_sent_at = NOW(), updated_at = NOW() WHERE id = $1', [booking.id]);
+      }
+    } catch (error) {
+      console.error('[bookings] Booking saved but confirmation email failed:', error);
     }
 
-    return NextResponse.json({ booking, message: 'Booking request created.' }, { status: 201 });
+    return NextResponse.json({ booking, emailSent, message: 'Booking request created.' }, { status: 201 });
   } catch (error: unknown) {
     if (typeof error === 'object' && error && 'code' in error && error.code === '23505') {
       return NextResponse.json({ error: 'That time has just been booked. Please choose another slot.' }, { status: 409 });

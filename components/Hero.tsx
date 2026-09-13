@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useLanguage } from '@/context/LanguageContext';
 import { useTranslate } from '@/lib/translations';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useSiteSettings } from '@/lib/useSiteSettings';
 import { getStorageItem, setStorageItem } from '@/lib/browserStorage';
 import SeoImage from '@/components/SeoImage';
@@ -15,7 +15,8 @@ import SeoImage from '@/components/SeoImage';
 import { MaskedLine } from '@/components/ui/MaskedText';
 
 const ThreeAtmosphere = dynamic(() => import('@/components/ThreeAtmosphere'), { ssr: false });
-const HeroImageMotion = dynamic(() => import('@/components/HeroImageMotion'), { ssr: false });
+
+const subscribeToHydration = () => () => {};
 
 interface HeroProps {
     profileType: 'photography' | 'art';
@@ -28,15 +29,11 @@ export default function Hero({ profileType }: HeroProps) {
     const [cmsHero, setCmsHero] = useState<{ heroText: string; heroImage: string } | null>(null);
     const [showDecorativeEffects, setShowDecorativeEffects] = useState(false);
 
-    const [isInitialLoad] = useState(() => {
-        if (typeof window === 'undefined') return false;
-        const played = getStorageItem('session', 'moreli_intro_played');
-        if (!played) {
-            setStorageItem('session', 'moreli_intro_played', 'true');
-            return true;
-        }
-        return false;
-    });
+    const hydrated = useSyncExternalStore(subscribeToHydration, () => true, () => false);
+    const isInitialLoad = hydrated && !getStorageItem('session', 'moreli_intro_played');
+    useEffect(() => {
+        setStorageItem('session', 'moreli_intro_played', 'true');
+    }, []);
 
     useEffect(() => {
         fetch('/api/content')
@@ -57,7 +54,7 @@ export default function Hero({ profileType }: HeroProps) {
 
     const heroImage = profileType === 'art'
         ? settings.art.heroImage
-        : cmsHero?.heroImage || '/photography_hero.webp';
+        : cmsHero?.heroImage || '/KNG_1564_11.jpg.jpeg';
 
     const subtext = profileType === 'photography'
         ? translateText(settings.photography.heroSubtext || t('hero.photographySub'))
@@ -96,7 +93,7 @@ export default function Hero({ profileType }: HeroProps) {
                     style={{ willChange: 'transform, opacity' }}
                 >
                     <SeoImage
-                        src={heroImage || '/' + profileType + '_hero.webp'}
+                        src={heroImage || '/KNG_1564_11.jpg.jpeg'}
                         alt={`Moyo Ayaworan ${profileType === 'photography' ? 'photography' : 'fine art'} hero image`}
                         fill
                         sizes="100vw"
@@ -105,13 +102,10 @@ export default function Hero({ profileType }: HeroProps) {
                     />
                 </motion.div>
                 {showDecorativeEffects && (
-                    <>
-                        {profileType === 'photography' && <HeroImageMotion />}
-                        <ThreeAtmosphere
-                            preset={profileType}
-                            className="z-10 opacity-80 mix-blend-screen"
-                        />
-                    </>
+                    <ThreeAtmosphere
+                        preset={profileType}
+                        className="z-10 opacity-80 mix-blend-screen"
+                    />
                 )}
                 <div className="absolute inset-0 bg-background/70 z-20" />
                 <div className="absolute inset-0 z-20 bg-radial-[at_50%_52%] from-background/62 via-background/42 to-background/82" />

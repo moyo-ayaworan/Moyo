@@ -19,9 +19,9 @@ type DigitalProduct = {
 };
 
 const fallbackProducts: DigitalProduct[] = [
-    { id: 1, title: 'Editorial Presets Vol. 1', price: '$45.00', details: '10 Lightroom Presets', image: '/digital_1.webp', is_active: true },
-    { id: 2, title: 'Darkroom Masterclass', price: '$120.00', details: 'Video Course (3 Hours)', image: '/digital_2.webp', is_active: true },
-    { id: 3, title: 'Fine Art Texture Pack', price: '$30.00', details: '50 High-Res Overlays', image: '/digital_3.webp', is_active: true }
+    { id: 1, title: 'Editorial Presets Vol. 1', price: '$45.00', details: '10 Lightroom Presets', image: '/image-placeholder.svg', is_active: true },
+    { id: 2, title: 'Darkroom Masterclass', price: '$120.00', details: 'Video Course (3 Hours)', image: '/image-placeholder.svg', is_active: true },
+    { id: 3, title: 'Fine Art Texture Pack', price: '$30.00', details: '50 High-Res Overlays', image: '/image-placeholder.svg', is_active: true }
 ];
 
 export default function DigitalProducts() {

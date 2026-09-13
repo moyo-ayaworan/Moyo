@@ -706,3 +706,35 @@ h6 {
     border-color: var(--border);
   }
 }
+
+/* Keep photographic overlays readable in either site theme. */
+[data-theme] .collection-hero [class*="text-white"],
+[data-theme] .client-gallery-viewer [class*="text-white"] {
+  color: #fff !important;
+}
+[data-theme] .collection-hero [class*="bg-background/"] {
+  background: rgb(18 18 18 / 75%) !important;
+}
+[data-theme] .collection-hero .text-accent {
+  color: #f0b5bb;
+}
+[data-theme] .client-gallery-viewer {
+  background: rgb(8 8 8 / 97%);
+}
+[data-theme] .client-gallery-viewer .bg-black {
+  background: #080808;
+}
+.collection-select[aria-pressed="false"] {
+  background: rgb(0 0 0 / 40%);
+  border-color: rgb(255 255 255 / 85%);
+}
+.collection-select[aria-pressed="true"] {
+  background: #920110 !important;
+  color: #fff !important;
+  border-color: #fff !important;
+}
+
+[data-theme] .client-gallery-viewer .bg-white.text-black {
+  background: #fff !important;
+  color: #111 !important;
+}

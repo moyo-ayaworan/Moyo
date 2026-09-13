@@ -22,7 +22,7 @@
       "year": "2025",
       "medium": "Oil on Canvas",
       "size": "120x150cm",
-      "image": "/art_1.webp"
+      "image": "/image-placeholder.svg"
     },
     {
       "id": 2,
@@ -30,7 +30,7 @@
       "year": "2024",
       "medium": "Mixed Media",
       "size": "100x100cm",
-      "image": "/art_2.webp"
+      "image": "/image-placeholder.svg"
     },
     {
       "id": 3,
@@ -38,7 +38,7 @@
       "year": "2024",
       "medium": "Charcoal & Ink",
       "size": "80x120cm",
-      "image": "/art_3.webp"
+      "image": "/image-placeholder.svg"
     },
     {
       "id": 4,
@@ -46,7 +46,7 @@
       "year": "2023",
       "medium": "Digital Print",
       "size": "Limited Ed. of 5",
-      "image": "/art_4.webp"
+      "image": "/image-placeholder.svg"
     },
     {
       "id": 5,
@@ -54,7 +54,7 @@
       "year": "2023",
       "medium": "Sculpture",
       "size": "Bronze",
-      "image": "/art_5.webp"
+      "image": "/image-placeholder.svg"
     },
     {
       "id": 6,
@@ -62,7 +62,7 @@
       "year": "2022",
       "medium": "Acrylic",
       "size": "150x200cm",
-      "image": "/art_6.webp"
+      "image": "/image-placeholder.svg"
     }
   ],
   "photographyItems": [
@@ -78,35 +78,35 @@
       "title": "Identity Series",
       "category": "Editorial",
       "span": "md:col-span-2 md:row-span-2",
-      "image": "/photo_1.webp"
+      "image": "/image-placeholder.svg"
     },
     {
       "id": 2,
       "title": "Quiet Presence",
       "category": "Portrait",
       "span": "md:col-span-1 md:row-span-1",
-      "image": "/photo_2.webp"
+      "image": "/image-placeholder.svg"
     },
     {
       "id": 3,
       "title": "Urban Monolith",
       "category": "Commercial",
       "span": "md:col-span-1 md:row-span-2",
-      "image": "/photo_3.webp"
+      "image": "/image-placeholder.svg"
     },
     {
       "id": 4,
       "title": "Ethereal Form",
       "category": "Personal",
       "span": "md:col-span-1 md:row-span-1",
-      "image": "/photo_4.webp"
+      "image": "/image-placeholder.svg"
     },
     {
       "id": 5,
       "title": "London Dusk",
       "category": "Editorial",
       "span": "md:col-span-1 md:row-span-1",
-      "image": "/photo_5.webp"
+      "image": "/image-placeholder.svg"
     }
   ]
 }

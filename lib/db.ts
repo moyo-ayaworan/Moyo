@@ -27,11 +27,19 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-let initialized = false;
+let initialization: Promise<void> | undefined;
 
 async function ensureTables() {
-  if (initialized) return;
-  initialized = true;
+  if (!initialization) {
+    initialization = initializeTables().catch((error) => {
+      initialization = undefined;
+      throw error;
+    });
+  }
+  await initialization;
+}
+
+async function initializeTables() {
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS artworks (
@@ -287,6 +295,14 @@ async function ensureTables() {
   await pool.query(`
     ALTER TABLE content
       ADD COLUMN IF NOT EXISTS site_settings JSONB DEFAULT '{}'::JSONB;
+  `);
+
+  // Retried creation requests return the original record instead of inserting another.
+  await pool.query(`
+    ALTER TABLE artworks ADD COLUMN IF NOT EXISTS creation_key TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS artworks_creation_key_idx ON artworks (creation_key);
+    ALTER TABLE digital_products ADD COLUMN IF NOT EXISTS creation_key TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS digital_products_creation_key_idx ON digital_products (creation_key);
   `);
 
   // seed singleton rows

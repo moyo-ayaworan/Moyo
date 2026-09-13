@@ -3,6 +3,8 @@ import { v2 as cloudinary } from 'cloudinary';
 import type { UploadApiResponse } from 'cloudinary';
 import fs from 'fs/promises';
 import path from 'path';
+import { createHash } from 'node:crypto';
+import { uploadPublicId } from '@/lib/uploadIdentity';
 import { requireAdmin } from '@/lib/auth';
 
 export const runtime = 'nodejs';
@@ -23,24 +25,13 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-function safeFileName(name: string) {
-  const ext = path.extname(name).toLowerCase();
-  const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const base = path
-    .basename(name, ext)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60);
-
-  return `${base || 'moyo-upload'}-${unique}${ext || '.jpg'}`;
-}
-
-async function saveLocalUpload(file: File, buffer: Buffer) {
+async function saveLocalUpload(file: File, buffer: Buffer, hash: string) {
   const uploadDir = path.join(process.cwd(), 'public', 'uploads');
   await fs.mkdir(uploadDir, { recursive: true });
-  const filename = safeFileName(file.name);
-  await fs.writeFile(path.join(uploadDir, filename), buffer);
+  const extension = file.name.match(/\.[a-z0-9]{1,10}$/i)?.[0].toLowerCase() || '.bin';
+  const filename = `asset-${hash}${extension}`;
+  try { await fs.writeFile(path.join(uploadDir, filename), buffer, { flag: 'wx' }); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; }
   return `/uploads/${filename}`;
 }
 
@@ -56,9 +47,11 @@ async function uploadFile(file: File) {
 
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
+  const hash = createHash('sha256').update(buffer).digest('hex');
 
   if (!cloudinaryConfigured) {
-    const url = await saveLocalUpload(file, buffer);
+    if (process.env.VERCEL) throw new Error('Configure Cloudinary before uploading files on the hosted site.');
+    const url = await saveLocalUpload(file, buffer, hash);
     console.log('[upload] saved local file', { url });
     return url;
   }
@@ -68,11 +61,12 @@ async function uploadFile(file: File) {
     const timeout = setTimeout(() => {
       if (settled) return;
       settled = true;
+      stream.destroy();
       reject(new Error(`Upload timed out for ${file.name}`));
     }, cloudinaryUploadTimeoutMs);
 
     const stream = cloudinary.uploader.upload_stream(
-      { folder: 'moyo-admin', resource_type: 'auto', use_filename: true, unique_filename: true },
+      { folder: 'moyo-admin', resource_type: 'auto', public_id: uploadPublicId(hash, file.name, file.type), overwrite: false },
       (error, result) => {
         if (settled) return;
         settled = true;
@@ -123,7 +117,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
     }
 
-    const results = await Promise.allSettled(files.map((file) => uploadFile(file)));
+    if (files.length > 10) return NextResponse.json({ error: 'Upload no more than 10 files per server request.' }, { status: 400 });
+    const results: PromiseSettledResult<string>[] = [];
+    for (let index = 0; index < files.length; index += 2) {
+      results.push(...await Promise.allSettled(files.slice(index, index + 2).map(uploadFile)));
+    }
     const urls = results
       .filter((result): result is PromiseFulfilledResult<string> => result.status === 'fulfilled')
       .map((result) => result.value);

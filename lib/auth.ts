@@ -5,7 +5,7 @@ export function requireAdmin(req: NextRequest) {
   const cookieKey = req.cookies.get('moyo-admin-key')?.value;
   const adminKey = process.env.ADMIN_KEY;
   if (!adminKey) {
-    throw new Error('ADMIN_KEY env not configured');
+    return NextResponse.json({ error: 'Admin access is not configured.' }, { status: 503 });
   }
   if (headerKey !== adminKey && cookieKey !== adminKey) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

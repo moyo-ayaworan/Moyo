@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
@@ -48,9 +49,12 @@ async function createArtwork(body: ArtworkPayload) {
     throw new Error('Title, image, and category are required.');
   }
 
+  const creationKey = createHash('sha256').update(JSON.stringify(artwork)).digest('hex');
   const { rows } = await query(
-    `INSERT INTO artworks (title, price, image, category, year, medium, dimensions, description, is_featured, is_available)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+    `INSERT INTO artworks (title, price, image, category, year, medium, dimensions, description, is_featured, is_available, creation_key)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+     ON CONFLICT (creation_key) DO UPDATE SET creation_key = EXCLUDED.creation_key
+     RETURNING *`,
     [
       artwork.title,
       artwork.price,
@@ -62,6 +66,7 @@ async function createArtwork(body: ArtworkPayload) {
       artwork.description,
       artwork.isFeatured,
       artwork.isAvailable,
+      creationKey,
     ]
   );
 

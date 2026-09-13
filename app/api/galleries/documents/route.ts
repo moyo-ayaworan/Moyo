@@ -122,7 +122,7 @@ function escapeHtml(value: string) {
 
 function formatMoney(amount: string | number, currency: string) {
   const numeric = Number(amount || 0);
-  if (!Number.isFinite(numeric) || numeric <= 0) return '';
+  if (!Number.isFinite(numeric) || numeric < 0) return '';
   return `${currency || 'NGN'} ${numeric.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 }
 
@@ -161,21 +161,22 @@ function calculateInvoiceDetails(options: {
 }) {
   const items = options.items.map((item) => ({
     ...item,
-    total: item.quantity * item.unitPrice,
+    total: Math.round((item.quantity * item.unitPrice + Number.EPSILON) * 100) / 100,
   }));
-  const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+  const subtotal = Math.round(items.reduce((sum, item) => sum + item.total, 0) * 100) / 100;
   const discountType: 'fixed' | 'percent' = normalize(options.discountType) === 'percent' ? 'percent' : 'fixed';
   const parsedDiscount = parseAmount(options.discountValue);
   const rawDiscount = Number.isFinite(parsedDiscount) ? Math.max(0, parsedDiscount) : 0;
-  const discount =
+  const discountUnrounded =
     discountType === 'percent'
       ? Math.min(subtotal, subtotal * Math.min(rawDiscount, 100) / 100)
       : Math.min(subtotal, rawDiscount);
-  const taxableSubtotal = Math.max(0, subtotal - discount);
+  const discount = Math.round(discountUnrounded * 100) / 100;
+  const taxableSubtotal = Math.round(Math.max(0, subtotal - discount) * 100) / 100;
   const parsedTaxRate = parseAmount(options.taxRate);
   const taxRate = Number.isFinite(parsedTaxRate) ? Math.max(0, parsedTaxRate) : 0;
-  const tax = taxableSubtotal * taxRate / 100;
-  const total = taxableSubtotal + tax;
+  const tax = Math.round(taxableSubtotal * taxRate) / 100;
+  const total = Math.round((taxableSubtotal + tax) * 100) / 100;
 
   return {
     structured: true,
@@ -297,7 +298,7 @@ function pdfSafe(value: string) {
 
 function getDocumentLines(doc: GalleryDocument) {
   const calculation = getCalculatedInvoice(doc);
-  if (calculation) return calculation.items.map((item) => item.description).filter(Boolean).slice(0, 6);
+  if (calculation) return calculation.items.map((item) => item.description).filter(Boolean);
 
   const fallback =
     doc.document_type === 'contract'
@@ -309,8 +310,7 @@ function getDocumentLines(doc: GalleryDocument) {
     .replace(/\s+[-•]\s+/g, '\n')
     .split(/\n+/)
     .map((line) => line.replace(/^[-*]\s*/, '').trim())
-    .filter(Boolean)
-    .slice(0, 6);
+    .filter(Boolean);
 }
 
 function getLogoAttachment() {
@@ -406,140 +406,83 @@ function getPdfLogo() {
 }
 
 function buildPdf(doc: GalleryDocument) {
-  const label = doc.document_type === 'contract' ? 'CONTRACT' : 'INVOICE';
   const calculation = getCalculatedInvoice(doc);
-  const amount = formatMoney(calculation?.total ?? doc.amount, doc.currency);
-  const createdAt = doc.created_at ? new Date(doc.created_at) : new Date();
-  const createdDate = createdAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  const lines = getDocumentLines(doc);
-  const terms = wrapText(doc.terms || 'Contract terms, usage rights, payment, and delivery notes to be confirmed.', 62);
+  const label = doc.document_type === 'contract' ? 'CONTRACT' : 'INVOICE';
   const logo = getPdfLogo();
-  const commands: string[] = [];
-  const text = (value: string, x: number, y: number, size = 10, font = 'F1', color = '0.08 0.08 0.08') => {
-    commands.push(
-      'BT',
-      `${color} rg`,
-      `/${font} ${size} Tf`,
-      `${x} ${y} Td`,
-      `(${pdfEscape(pdfSafe(value))}) Tj`,
-      'ET'
-    );
+  const pages: string[][] = [];
+  let commands: string[] = [];
+  let y = 0;
+  const text = (value: string, x: number, at: number, size = 10, bold = false, color = '0.12 0.12 0.12') => {
+    commands.push(`BT ${color} rg /${bold ? 'F2' : 'F1'} ${size} Tf ${x} ${at} Td (${pdfEscape(pdfSafe(value))}) Tj ET`);
   };
-  const rect = (x: number, y: number, width: number, height: number, color: string) => {
-    commands.push(`${color} rg`, `${x} ${y} ${width} ${height} re`, 'f');
+  const newPage = () => {
+    commands = [];
+    pages.push(commands);
+    commands.push(`${BRAND_RED_RGB} rg 48 740 516 3 re f`);
+    if (logo) commands.push('q', `65 0 0 ${Math.round(logo.height / logo.width * 65)} 48 752 cm`, '/Logo Do', 'Q');
+    else text('MOYO', 48, 758, 16, true, BRAND_RED_RGB);
+    text(`${label} / MOYO-${doc.id}`, 340, 760, 12, true);
+    text('Ijabiken Moyo / Photography & Fine Art', 48, 35, 8);
+    text(`Page ${pages.length}`, 510, 35, 8);
+    y = 712;
   };
-  const line = (x1: number, y1: number, x2: number, y2: number, color = '0.82 0.82 0.82', width = 0.8) => {
-    commands.push(`${color} RG`, `${width} w`, `${x1} ${y1} m`, `${x2} ${y2} l`, 'S');
+  const write = (value: string, options: { bold?: boolean; size?: number; color?: string; width?: number } = {}) => {
+    for (const line of wrapText(pdfSafe(value), options.width || 78)) {
+      if (y < 65) newPage();
+      text(line, 48, y, options.size || 10, options.bold, options.color);
+      y -= (options.size || 10) + 5;
+    }
   };
-
-  rect(0, 0, 612, 792, '0.965 0.957 0.93');
-  rect(54, 48, 504, 696, '1 1 1');
-  line(54, 744, 558, 744, '0.86 0.84 0.78', 0.8);
-  line(54, 48, 558, 48, '0.86 0.84 0.78', 0.8);
-
-  if (logo) {
-    commands.push('q', `82 0 0 ${Math.round((logo.height / logo.width) * 82)} 86 694 cm`, '/Logo Do', 'Q');
-  } else {
-    rect(86, 690, 30, 24, BRAND_RED_RGB);
-    rect(94, 695, 4, 10, '1 1 1');
-    rect(102, 698, 4, 7, '1 1 1');
-    rect(110, 701, 4, 4, '1 1 1');
-    text('moyo', 86, 668, 14, 'F2', BRAND_RED_RGB);
-  }
-  text(label, 386, 698, 20, 'F2', '0.05 0.05 0.05');
-
-  text(doc.client_name || 'Client Name', 86, 642, 11, 'F2');
-  text(`Date issued: ${createdDate}`, 86, 621, 8, 'F1', '0.25 0.25 0.25');
-  text(`${label === 'INVOICE' ? 'Invoice' : 'Contract'} No: ${doc.id}`, 86, 607, 8, 'F1', '0.25 0.25 0.25');
-  text(`Client email: ${doc.client_email}`, 86, 593, 8, 'F1', '0.25 0.25 0.25');
-
-  text('Ijabiken Moyo', 386, 642, 8, 'F2', '0.12 0.12 0.12');
-  text('Photography & Fine Art', 386, 629, 8, 'F1', '0.32 0.32 0.32');
-  text('Lagos / London / Amsterdam', 386, 616, 8, 'F1', '0.32 0.32 0.32');
-  text('ijabikenm@gmail.com', 386, 603, 8, 'F1', '0.32 0.32 0.32');
-
-  line(86, 555, 526, 555, '0.82 0.82 0.82');
-  text('DESCRIPTION', 86, 568, 7, 'F2', '0.35 0.35 0.35');
-  text(label === 'INVOICE' ? 'DETAILS' : 'SCOPE', 338, 568, 7, 'F2', '0.35 0.35 0.35');
-  text('SUBTOTAL', 462, 568, 7, 'F2', '0.35 0.35 0.35');
-
-  let y = 532;
-  const pdfItems = calculation
-    ? calculation.items.slice(0, 6)
-    : lines.map((item, index) => ({
-        description: item,
-        quantity: index === 0 ? 1 : 0,
-        unitPrice: index === 0 ? Number(doc.amount || 0) : 0,
-        total: index === 0 ? Number(doc.amount || 0) : 0,
-      }));
-
-  pdfItems.forEach((item, index) => {
-    const itemLines = wrapText(item.description, 36).slice(0, 2);
-    text(itemLines[0] || item.description, 86, y, 9, index === 0 ? 'F2' : 'F1');
-    if (itemLines[1]) text(itemLines[1], 86, y - 13, 8, 'F1', '0.35 0.35 0.35');
-    text(calculation ? `Qty ${item.quantity}` : index === 0 ? (label === 'INVOICE' ? 'Service' : 'Agreement') : 'Item', 338, y, 8, 'F1', '0.35 0.35 0.35');
-    text(item.total > 0 ? formatMoneyWithZero(item.total, doc.currency) : '-', 462, y, 9, index === 0 ? 'F2' : 'F1', item.total > 0 ? BRAND_RED_RGB : '0.35 0.35 0.35');
-    y -= itemLines[1] ? 34 : 26;
-  });
-
+  newPage();
+  write(doc.title, { size: 18, bold: true, width: 44 });
+  y -= 8;
+  write(`Prepared for ${doc.client_name || 'Client'}`, { bold: true });
+  write(doc.client_email);
+  write(`Issued: ${new Date(doc.created_at || Date.now()).toLocaleDateString('en-GB')}    Due: ${doc.due_date || 'On receipt'}`);
+  y -= 18;
+  write(label === 'INVOICE' ? 'SERVICES' : 'SCOPE OF WORK', { bold: true, color: BRAND_RED_RGB });
   if (calculation) {
-    y -= 4;
-    line(338, y + 12, 526, y + 12, '0.86 0.86 0.84', 0.6);
-    text('Subtotal', 338, y, 8, 'F1', '0.35 0.35 0.35');
-    text(formatMoneyWithZero(calculation.subtotal, doc.currency), 462, y, 8, 'F1', '0.20 0.20 0.20');
-    y -= 16;
-    text('Discount', 338, y, 8, 'F1', '0.35 0.35 0.35');
-    text(`-${formatMoneyWithZero(calculation.discount, doc.currency)}`, 462, y, 8, 'F1', '0.20 0.20 0.20');
-    y -= 16;
-    text(`Tax${calculation.taxRate ? ` (${calculation.taxRate}%)` : ''}`, 338, y, 8, 'F1', '0.35 0.35 0.35');
-    text(formatMoneyWithZero(calculation.tax, doc.currency), 462, y, 8, 'F1', '0.20 0.20 0.20');
-  }
-
-  rect(54, 64, 504, 185, '0.925 0.922 0.88');
-  rect(54, 64, 4, 185, BRAND_RED_RGB);
-  line(86, 132, 526, 132, '0.74 0.74 0.70');
-  line(86, 82, 526, 82, '0.74 0.74 0.70');
-  text('PAYMENT INFO', 86, 146, 7, 'F2', '0.38 0.38 0.35');
-  text('DUE BY', 274, 146, 7, 'F2', '0.38 0.38 0.35');
-  text('TOTAL DUE', 438, 146, 7, 'F2', '0.38 0.38 0.35');
-  text('Bank transfer / studio confirmation', 86, 113, 8, 'F1', '0.20 0.20 0.19');
-  text('Invoice reference: Moyo-' + doc.id, 86, 101, 8, 'F1', '0.20 0.20 0.19');
-  text(doc.due_date || 'On receipt', 274, 108, 14, 'F1', '0.05 0.05 0.05');
-  text(amount || 'To be confirmed', 438, 108, 16, 'F2', BRAND_RED_RGB);
-
-  rect(86, 39, 7, 7, BRAND_RED_RGB);
-  text('Thank you!', 100, 39, 10, 'F1', '0.12 0.12 0.12');
-  text('ijabikenm@gmail.com', 320, 39, 7, 'F1', '0.25 0.25 0.25');
-  text('+2348148192201', 420, 39, 7, 'F1', '0.25 0.25 0.25');
-
-  if (terms.length > 0) {
-    const notesTitleY = Math.max(y - 2, 270);
-    const availableLines = Math.max(1, Math.floor((notesTitleY - 252) / 12));
-    text(label === 'INVOICE' ? 'Contract / Terms' : 'Terms', 86, notesTitleY, 8, 'F2', BRAND_RED_RGB);
-    terms.slice(0, availableLines).forEach((termLine, index) => {
-      text(termLine, 86, notesTitleY - 16 - index * 12, 8, 'F1', '0.28 0.28 0.28');
+    calculation.items.forEach((item, index) => {
+      y -= 8;
+      write(`${index + 1}. ${item.description}`, { bold: true });
+      write(`Quantity: ${item.quantity}  /  Unit: ${formatMoneyWithZero(item.unitPrice, doc.currency)}  /  Amount: ${formatMoneyWithZero(item.total, doc.currency)}`);
     });
+    y -= 16;
+    write(`Subtotal: ${formatMoneyWithZero(calculation.subtotal, doc.currency)}`);
+    write(`Discount: -${formatMoneyWithZero(calculation.discount, doc.currency)}`);
+    write(`Tax (${calculation.taxRate}%): ${formatMoneyWithZero(calculation.tax, doc.currency)}`);
+  } else {
+    write(doc.line_items || 'Photography services as agreed with the studio.');
   }
+  y -= 12;
+  if (label === 'INVOICE') {
+    write(`TOTAL DUE: ${formatMoneyWithZero(calculation?.total ?? doc.amount, doc.currency)}`, { bold: true, size: 14, color: BRAND_RED_RGB, width: 55 });
+    write(`Payment: bank transfer / studio confirmation. Reference: Moyo-${doc.id}`);
+    y -= 14;
+  }
+  if (doc.terms) {
+    write('TERMS', { bold: true, color: BRAND_RED_RGB });
+    write(doc.terms);
+    y -= 14;
+  }
+  write('Thank you for creating with Moyo.', { bold: true });
+  write('ijabikenm@gmail.com / +2348148192201');
 
-  const content = commands.join('\n');
-
-  const imageObjectNumber = logo ? 6 : null;
-  const contentObjectNumber = logo ? 7 : 6;
-  const imageResource = logo ? `/XObject << /Logo ${imageObjectNumber} 0 R >>` : '';
   const objects = [
-    '<< /Type /Catalog /Pages 2 0 R >>',
-    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> ${imageResource} >> /Contents ${contentObjectNumber} 0 R >>`,
+    '<< /Type /Catalog /Pages 2 0 R >>', '',
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>',
   ];
-  if (logo) {
-    objects.push(
-      `<< /Type /XObject /Subtype /Image /Width ${logo.width} /Height ${logo.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /ASCIIHexDecode /Length ${logo.hex.length + 1} >>\nstream\n${logo.hex}>\nendstream`
-    );
+  if (logo) objects.push(`<< /Type /XObject /Subtype /Image /Width ${logo.width} /Height ${logo.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /ASCIIHexDecode /Length ${logo.hex.length + 1} >>\nstream\n${logo.hex}>\nendstream`);
+  const pageIds: number[] = [];
+  for (const page of pages) {
+    const pageId = objects.length + 1;
+    pageIds.push(pageId);
+    const content = page.join('\n');
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> ${logo ? '/XObject << /Logo 5 0 R >>' : ''} >> /Contents ${pageId + 1} 0 R >>`);
+    objects.push(`<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`);
   }
-  objects.push(`<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`);
-
+  objects[1] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pages.length} >>`;
   let pdf = '%PDF-1.4\n';
   const offsets = [0];
   objects.forEach((object, index) => {
@@ -548,11 +491,8 @@ function buildPdf(doc: GalleryDocument) {
   });
   const xrefOffset = Buffer.byteLength(pdf);
   pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  offsets.slice(1).forEach((offset) => {
-    pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
-  });
+  offsets.slice(1).forEach((offset) => { pdf += `${String(offset).padStart(10, '0')} 00000 n \n`; });
   pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
-
   return Buffer.from(pdf);
 }
 
@@ -754,6 +694,7 @@ export async function GET(req: NextRequest) {
     return new NextResponse(pdf, {
       headers: {
         'Content-Type': 'application/pdf',
+        'Cache-Control': 'private, no-store',
         'Content-Disposition': `attachment; filename="${sanitizeFilename(`${doc.document_type}-${doc.id}-${doc.title}`)}.pdf"`,
       },
     });
@@ -781,7 +722,8 @@ export async function POST(req: NextRequest) {
   if (unauthorized) return unauthorized;
 
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return NextResponse.json({ error: 'Invalid document request.' }, { status: 400 });
     const action = normalize(body.action);
     const galleryId = Number(body.galleryId);
     const documentType = normalizeType(body.documentType);
@@ -794,7 +736,21 @@ export async function POST(req: NextRequest) {
     const dueDate = normalize(body.dueDate);
     const lineItems = truncate(normalize(body.lineItems), 3000);
     const terms = truncate(normalize(body.terms), 3000);
-    const invoiceItems = normalizeInvoiceItems(body.items || body.invoiceItems);
+    const rawItems = body.items || body.invoiceItems;
+    if (documentType === 'invoice' && action !== 'generate') {
+      if (!Array.isArray(rawItems) || rawItems.length === 0 || rawItems.length > 20 || rawItems.some((item) =>
+        !item || typeof item !== 'object' || !normalize(item.description) ||
+        normalize(item.description).length > 220 || !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0 ||
+        !Number.isFinite(Number(item.unitPrice)) || Number(item.unitPrice) < 0 || item.unitPrice === ''
+      )) return NextResponse.json({ error: 'Use 1–20 complete invoice items with a description, positive quantity, and valid price.' }, { status: 400 });
+      const discount = parseAmount(body.discountValue);
+      const tax = parseAmount(body.taxRate);
+      if (!Number.isFinite(discount) || discount < 0 || (body.discountType === 'percent' && discount > 100) ||
+          !Number.isFinite(tax) || tax < 0 || tax > 100) {
+        return NextResponse.json({ error: 'Enter a valid discount and a tax rate between 0 and 100%.' }, { status: 400 });
+      }
+    }
+    const invoiceItems = normalizeInvoiceItems(rawItems);
     const invoiceDetails = documentType === 'invoice'
       ? calculateInvoiceDetails({
           items: invoiceItems,
@@ -851,6 +807,7 @@ export async function POST(req: NextRequest) {
 
       const response = await fetch(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
         method: 'POST',
+        signal: AbortSignal.timeout(20_000),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -924,14 +881,15 @@ export async function PUT(req: NextRequest) {
 
       const transporter = nodemailer.createTransport(
         config.host
-          ? { host: config.host, port: config.port, secure: config.secure, auth: { user: config.user, pass: config.pass } }
-          : { service: 'gmail', auth: { user: config.user, pass: config.pass } }
+          ? { connectionTimeout: 10_000, greetingTimeout: 10_000, socketTimeout: 30_000, host: config.host, port: config.port, secure: config.secure, auth: { user: config.user, pass: config.pass } }
+          : { connectionTimeout: 10_000, greetingTimeout: 10_000, socketTimeout: 30_000, service: 'gmail', auth: { user: config.user, pass: config.pass } }
       );
 
       const label = doc.document_type === 'contract' ? 'Contract' : 'Invoice';
       const logoAttachment = getLogoAttachment();
-      await transporter.sendMail({
+      const delivery = await transporter.sendMail({
         from: config.from,
+        replyTo: process.env.SMTP_REPLY_TO || config.user,
         to: doc.client_email,
         subject: `${label}: ${doc.title}`,
         text: documentText(doc),
@@ -946,6 +904,10 @@ export async function PUT(req: NextRequest) {
         ],
       });
 
+      if (!delivery.accepted?.length) {
+        return NextResponse.json({ error: 'The mail server did not accept the recipient. The document has not been marked sent.' }, { status: 502 });
+      }
+
       const { rows } = await query(
         `UPDATE gallery_documents
          SET sent_at = NOW(), updated_at = NOW()
@@ -953,7 +915,7 @@ export async function PUT(req: NextRequest) {
          RETURNING *`,
         [id]
       );
-      return NextResponse.json({ document: rows[0], message: 'Document sent.' });
+      return NextResponse.json({ document: rows[0], message: 'Document accepted by the mail server.', messageId: delivery.messageId });
     }
 
     return NextResponse.json({ error: 'Unsupported action.' }, { status: 400 });

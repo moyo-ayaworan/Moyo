@@ -60,7 +60,7 @@ export default function ArtExhibitionsPage() {
                         <div className="relative aspect-square overflow-hidden bg-neutral-900">
                             <div className="absolute inset-0 z-10 bg-black/40 transition-colors group-hover:bg-black/20" />
                             <SeoImage
-                                src="/exhibition_catalog.webp"
+                                src="/image-placeholder.svg"
                                 alt="Moyo Ayaworan fine art exhibition catalogue preview"
                                 fill
                                 sizes="(min-width: 768px) 50vw, 100vw"
