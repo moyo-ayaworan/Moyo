@@ -63,12 +63,11 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
                 duration={460}
                 extraScale={1.1}
               >
-                {page}
+                {null}
               </ClickSpark>
             </>
-          ) : (
-            page
-          )}
+          ) : null}
+          {page}
         </ProfileProvider>
       </LanguageProvider>
     </ThemeProvider>

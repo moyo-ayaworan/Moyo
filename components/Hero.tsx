@@ -15,7 +15,6 @@ import SeoImage from '@/components/SeoImage';
 import { MaskedLine } from '@/components/ui/MaskedText';
 
 const ThreeAtmosphere = dynamic(() => import('@/components/ThreeAtmosphere'), { ssr: false });
-const HeroImageMotion = dynamic(() => import('@/components/HeroImageMotion'), { ssr: false });
 
 const subscribeToHydration = () => () => {};
 
@@ -55,7 +54,7 @@ export default function Hero({ profileType }: HeroProps) {
 
     const heroImage = profileType === 'art'
         ? settings.art.heroImage
-        : cmsHero?.heroImage || '/homepage-desktop.jpg';
+        : cmsHero?.heroImage || '/KNG_1564_11.jpg.jpeg';
 
     const subtext = profileType === 'photography'
         ? translateText(settings.photography.heroSubtext || t('hero.photographySub'))
@@ -94,7 +93,7 @@ export default function Hero({ profileType }: HeroProps) {
                     style={{ willChange: 'transform, opacity' }}
                 >
                     <SeoImage
-                        src={heroImage || '/homepage-desktop.jpg'}
+                        src={heroImage || '/KNG_1564_11.jpg.jpeg'}
                         alt={`Moyo Ayaworan ${profileType === 'photography' ? 'photography' : 'fine art'} hero image`}
                         fill
                         sizes="100vw"
@@ -103,13 +102,10 @@ export default function Hero({ profileType }: HeroProps) {
                     />
                 </motion.div>
                 {showDecorativeEffects && (
-                    <>
-                        {profileType === 'photography' && <HeroImageMotion />}
-                        <ThreeAtmosphere
-                            preset={profileType}
-                            className="z-10 opacity-80 mix-blend-screen"
-                        />
-                    </>
+                    <ThreeAtmosphere
+                        preset={profileType}
+                        className="z-10 opacity-80 mix-blend-screen"
+                    />
                 )}
                 <div className="absolute inset-0 bg-background/70 z-20" />
                 <div className="absolute inset-0 z-20 bg-radial-[at_50%_52%] from-background/62 via-background/42 to-background/82" />

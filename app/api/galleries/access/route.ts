@@ -64,5 +64,5 @@ export async function POST(req: NextRequest) {
       finished_count: finishedImages.length,
       upload_count: allImages.length,
     },
-  });
+  }, { headers: { 'Cache-Control': 'private, no-store' } });
 }

@@ -76,6 +76,7 @@ const ROUTE_LABELS: Record<string, string> = {
   '/photography/newsletter': 'Photography newsletter',
   '/art': 'Fine art',
   '/art/works': 'Artworks',
+  '/art/shop': 'Art shop',
   '/art/commissions': 'Art commissions',
   '/art/exhibitions': 'Exhibitions',
   '/art/about': 'Art about',
@@ -246,7 +247,8 @@ function getPageContext() {
 
   const title = document.title;
   const path = window.location.pathname;
-  const visibleText = document.body.innerText.replace(/\s+/g, ' ').trim().slice(0, 1600);
+  // Send public page identity only; never scrape client details or chat text.
+  const visibleText = '';
 
   return { title, path, visibleText };
 }
@@ -350,9 +352,10 @@ export default function EniyanChat() {
     try {
       const response = await fetch('/api/eniyan', {
         method: 'POST',
+        signal: AbortSignal.timeout(20_000),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: nextMessages.map(({ role, content }) => ({ role, content })),
+          messages: nextMessages.filter((message) => message.id !== 'welcome').slice(-10).map(({ role, content }) => ({ role, content })),
           page: { ...(getPageContext() || {}), language },
         }),
       });
@@ -381,10 +384,13 @@ export default function EniyanChat() {
   }
 
   function resetChat() {
+    if (isSending) return;
     setMessages([{ id: 'welcome', role: 'assistant', content: copy.greeting }]);
     setInput('');
     setError('');
   }
+
+  if (pathname.startsWith('/admin') || pathname.startsWith('/client/')) return null;
 
   return (
     <div className="fixed inset-x-2 bottom-2 z-[120] flex max-w-[calc(100vw-1rem)] flex-col items-stretch gap-3 pb-[env(safe-area-inset-bottom)] sm:inset-x-auto sm:bottom-4 sm:right-4 sm:max-w-[calc(100vw-2rem)] sm:items-end md:bottom-6 md:right-6">

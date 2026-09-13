@@ -9,7 +9,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { useTranslate } from '@/lib/translations';
 import GalleryMedia from '@/components/GalleryMedia';
 import GlareHover from '@/components/GlareHover';
-import { Check, ChevronLeft, ChevronRight, Maximize2, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Maximize2, X, Heart, ArrowDown, Mail } from 'lucide-react';
 
 type ClientGallery = {
     id: number;
@@ -29,6 +29,10 @@ type ClientGallery = {
 };
 
 export default function ClientGalleryPage() {
+    const [selectionOnly, setSelectionOnly] = useState(false);
+    const [lightboxCollection, setLightboxCollection] = useState<'proofs' | 'finished'>('proofs');
+    const lightboxRef = useRef<HTMLDivElement>(null);
+    const returnFocusRef = useRef<HTMLElement | null>(null);
     const [accessCode, setAccessCode] = useState('');
     const [gallery, setGallery] = useState<ClientGallery | null>(null);
     const [selectedImages, setSelectedImages] = useState<string[]>([]);
@@ -56,7 +60,9 @@ export default function ClientGalleryPage() {
         [selectedImages]
     );
     const hasSelectionChanges = selectedSelectionKey !== approvedSelectionKey;
-    const activeImage = activeImageIndex !== null ? gallery?.images[activeImageIndex] : null;
+    const lightboxImages = useMemo(() => lightboxCollection === 'finished' ? (gallery?.finished_images || []) : (gallery?.images || []), [gallery, lightboxCollection]);
+    const activeImage = activeImageIndex !== null ? lightboxImages[activeImageIndex] : null;
+    const visibleImages = (gallery?.images || []).map((image, index) => ({ image, index })).filter(({ image }) => !selectionOnly || selectedImageSet.has(image));
 
     const getFinishedDownloadUrl = (image: string) =>
         `/api/galleries/download?galleryId=${gallery?.id || ''}&accessCode=${encodeURIComponent(accessCode.trim())}&file=${encodeURIComponent(image)}`;
@@ -64,6 +70,8 @@ export default function ClientGalleryPage() {
     const openGallery = useCallback(async (code: string) => {
         setError('');
         setGallery(null);
+        setActiveImageIndex(null);
+        setSelectionOnly(false);
         setSelectedImages([]);
         setReviewRating(5);
         setReviewText('');
@@ -116,6 +124,7 @@ export default function ClientGalleryPage() {
         if (!code) return;
 
         setAccessCode(code);
+        window.history.replaceState(null, '', window.location.pathname);
         void openGallery(code);
     }, [openGallery]);
 
@@ -153,47 +162,68 @@ export default function ClientGalleryPage() {
         });
     };
 
-    const openLightbox = (index: number) => {
+    const openLightbox = (index: number, collection: 'proofs' | 'finished' = 'proofs') => {
+        returnFocusRef.current = document.activeElement as HTMLElement;
+        setLightboxCollection(collection);
         setActiveImageIndex(index);
     };
 
     const closeLightbox = useCallback(() => {
         setActiveImageIndex(null);
+        returnFocusRef.current?.focus();
     }, []);
 
     const showPreviousImage = useCallback(() => {
-        if (!gallery?.images.length) return;
+        if (!lightboxImages.length) return;
         setActiveImageIndex((current) => {
             const index = current ?? 0;
-            return (index - 1 + gallery.images.length) % gallery.images.length;
+            return (index - 1 + lightboxImages.length) % lightboxImages.length;
         });
-    }, [gallery?.images]);
+    }, [lightboxImages]);
 
     const showNextImage = useCallback(() => {
-        if (!gallery?.images.length) return;
+        if (!lightboxImages.length) return;
         setActiveImageIndex((current) => {
             const index = current ?? 0;
-            return (index + 1) % gallery.images.length;
+            return (index + 1) % lightboxImages.length;
         });
-    }, [gallery?.images]);
+    }, [lightboxImages]);
 
     useEffect(() => {
         if (activeImageIndex === null) return;
 
         const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Tab') {
+                const controls = lightboxRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], video[controls]');
+                if (controls?.length) {
+                    const first = controls[0];
+                    const last = controls[controls.length - 1];
+                    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+                    if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+                }
+            }
             if (event.key === 'Escape') closeLightbox();
             if (event.key === 'ArrowLeft') showPreviousImage();
             if (event.key === 'ArrowRight') showNextImage();
         };
 
+        const previousOverflow = document.body.style.overflow;
+        lightboxRef.current?.querySelector<HTMLElement>('button')?.focus();
         document.body.style.overflow = 'hidden';
         window.addEventListener('keydown', handleKeyDown);
 
         return () => {
-            document.body.style.overflow = '';
+            document.body.style.overflow = previousOverflow;
             window.removeEventListener('keydown', handleKeyDown);
         };
     }, [activeImageIndex, closeLightbox, showNextImage, showPreviousImage]);
+
+    useEffect(() => {
+        if (!hasSelectionChanges) return;
+        const warnBeforeLeaving = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+        window.addEventListener('beforeunload', warnBeforeLeaving);
+        return () => window.removeEventListener('beforeunload', warnBeforeLeaving);
+    }, [hasSelectionChanges]);
 
     const approveSelection = async () => {
         if (!gallery || selectedImages.length === 0 || !hasSelectionChanges) return;
@@ -312,6 +342,7 @@ export default function ClientGalleryPage() {
 
                             <form onSubmit={handleAccessSubmit} className="space-y-6">
                                 <input
+                                    aria-label="Gallery access code"
                                     type="password"
                                     autoComplete="one-time-code"
                                     autoCapitalize="characters"
@@ -338,30 +369,30 @@ export default function ClientGalleryPage() {
                                 </button>
                             </form>
 
-                            <p className="text-[10px] text-white/20 tracking-widest uppercase cursor-pointer hover:text-white transition-colors">
-                                {t('clientGallery.lostCode')}
-                            </p>
+                            <a href="mailto:ijabikenm@gmail.com?subject=Client%20gallery%20access" className="inline-flex items-center gap-2 text-[10px] text-white/60 tracking-widest uppercase hover:text-accent transition-colors">
+                                <Mail className="h-3 w-3" /> {t('clientGallery.lostCode')}
+                            </a>
                         </GlareHover>
                     </motion.div>
                 ) : (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-12 md:space-y-16">
-                        <section className="relative -mx-6 overflow-hidden border-y border-white/10 bg-black md:-mx-12">
+                        <section className="collection-hero relative min-h-[420px] -mx-6 overflow-hidden border-y border-white/10 bg-black md:-mx-12">
                             {gallery.images[0] && (
                                 <GalleryMedia
                                     src={gallery.images[0]}
                                     alt={`${gallery.client_name} ${t('clientGallery.galleryImageAlt')} 1`}
-                                    className="h-[56svh] min-h-[420px] w-full object-cover opacity-70 grayscale md:h-[68svh]"
+                                    className="h-[56svh] min-h-[420px] w-full object-cover opacity-70 md:h-[68svh]"
                                     previewWidth={1600}
                                     loading="eager"
                                     fetchPriority="high"
                                 />
                             )}
-                            <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-black/20" />
+                            <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(0,0,0,.85), rgba(0,0,0,.05) 85%)' }} />
                             <div className="absolute inset-x-0 bottom-0 px-6 py-8 md:px-12 md:py-12">
                                 <div className="mx-auto flex max-w-7xl flex-col gap-6 md:flex-row md:items-end md:justify-between">
                                     <div className="max-w-3xl space-y-4">
                                         <span className="text-accent text-[10px] tracking-[0.5em] uppercase">
-                                            {gallery.slug}
+                                            Ijabiken Moyo / A private collection
                                         </span>
                                         <h1 className="text-4xl font-heading text-white italic md:text-6xl">
                                             {gallery.client_name}
@@ -386,26 +417,41 @@ export default function ClientGalleryPage() {
 
                         {gallery.images.length > 0 ? (
                             <>
+                                <section className="flex flex-col gap-6 border-b border-white/15 pb-8 sm:flex-row sm:items-end sm:justify-between">
+                                    <div className="space-y-3">
+                                        <p className="text-[10px] uppercase tracking-[0.3em] text-accent">01 / The selection</p>
+                                        <h2 className="font-heading text-3xl italic text-white">A story only you can tell.</h2>
+                                        <p className="max-w-lg text-sm leading-relaxed text-white/60">Take your time. Open a photograph to see the full frame, mark your favourites, then send your selection to the studio.</p>
+                                    </div>
+                                    {gallery.finished_count > 0 && <a href="#finished-collection" className="inline-flex items-center gap-2 text-xs text-accent">View finished collection <ArrowDown className="h-4 w-4" /></a>}
+                                </section>
+                                <div className="flex flex-wrap items-center justify-between gap-4">
+                                    <div className="flex gap-2" aria-label="Filter photographs">
+                                        <button type="button" aria-pressed={!selectionOnly} onClick={() => setSelectionOnly(false)} className={`border px-4 py-3 text-xs ${!selectionOnly ? 'border-accent text-accent' : 'border-white/20 text-white/60'}`}>All photographs ({gallery.images.length})</button>
+                                        <button type="button" aria-pressed={selectionOnly} onClick={() => setSelectionOnly(true)} className={`inline-flex items-center gap-2 border px-4 py-3 text-xs ${selectionOnly ? 'border-accent text-accent' : 'border-white/20 text-white/60'}`}><Heart className="h-3 w-3" /> Your selection ({selectedImages.length})</button>
+                                    </div>
+                                    <p className="text-xs text-white/50" role="status">{hasSelectionChanges ? 'Selection has unsent changes' : gallery.approved_images.length ? 'Selection received by the studio' : 'Your collection, your favourites'}</p>
+                                </div>
+                                {selectionOnly && visibleImages.length === 0 && <p className="py-12 text-center text-sm text-white/60">No favourites yet. Choose All photographs to start your selection.</p>}
                                 <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 2xl:columns-4">
-                                    {gallery.images.map((image, index) => {
+                                    {visibleImages.map(({ image, index }) => {
                                         const isSelected = selectedImageSet.has(image);
-                                        const aspectClass = index % 5 === 0 ? 'aspect-[4/5]' : index % 5 === 2 ? 'aspect-[3/4]' : 'aspect-[5/6]';
 
                                         return (
                                             <figure
                                                 key={`${image}-${index}`}
-                                                className="group relative mb-4 break-inside-avoid overflow-hidden border border-white/10 bg-black transition-colors duration-500 hover:border-white/25"
+                                                className="group relative mb-4 break-inside-avoid overflow-hidden border border-white/10 bg-background transition-colors duration-500 hover:border-white/25"
                                             >
                                                 <button
                                                     type="button"
                                                     onClick={() => openLightbox(index)}
-                                                    className={`relative block w-full cursor-zoom-in overflow-hidden bg-[#050505] ${aspectClass}`}
+                                                    className={`relative block w-full cursor-zoom-in overflow-hidden bg-[#050505] `}
                                                     aria-label={`${t('ui.preview')} ${gallery.client_name} ${index + 1}`}
                                                 >
                                                     <GalleryMedia
                                                         src={image}
                                                         alt={`${gallery.client_name} ${t('clientGallery.galleryImageAlt')} ${index + 1}`}
-                                                        className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]"
+                                                        className="h-auto w-full transition duration-700 group-hover:scale-[1.025]"
                                                         previewWidth={900}
                                                         loading={index < 3 ? 'eager' : 'lazy'}
                                                         fetchPriority={index === 0 ? 'high' : 'auto'}
@@ -420,7 +466,7 @@ export default function ClientGalleryPage() {
                                                     onClick={() => toggleImageSelection(image)}
                                                     aria-pressed={isSelected}
                                                     aria-label={isSelected ? t('ui.removeImage') : t('ui.selectImage')}
-                                                    className={`absolute left-3 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-full border transition-all ${
+                                                    className={`collection-select absolute left-3 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-full border transition-all ${
                                                         isSelected
                                                             ? 'border-white bg-white text-black shadow-[0_0_18px_rgba(255,255,255,0.22)]'
                                                             : 'border-white/65 bg-black/20 hover:border-white hover:bg-white/10'
@@ -443,7 +489,7 @@ export default function ClientGalleryPage() {
                                     })}
                                 </div>
 
-                                <div className="sticky bottom-4 z-40 mx-auto max-w-3xl border border-white/10 bg-background/88 p-3 shadow-2xl backdrop-blur-xl">
+                                <div className="sticky bottom-20 z-40 mx-auto max-w-3xl border border-white/10 bg-background/88 p-3 shadow-2xl backdrop-blur-xl">
                                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                         <div className="min-w-0 px-2">
                                             <p className="text-[10px] uppercase tracking-[0.24em] text-white/35">
@@ -462,7 +508,7 @@ export default function ClientGalleryPage() {
                                         </button>
                                     </div>
                                     {error && <p className="text-red-300 text-xs leading-relaxed">{error}</p>}
-                                    {approvalMessage && <p className="text-accent text-xs leading-relaxed">{approvalMessage}</p>}
+                                    {approvalMessage && <p role="status" className="text-accent text-xs leading-relaxed">{approvalMessage}</p>}
                                 </div>
                             </>
                         ) : (
@@ -475,6 +521,8 @@ export default function ClientGalleryPage() {
                         )}
 
                         {gallery.finished_count > 0 && (
+                            <section id="finished-collection" className="scroll-mt-28">
+                            <p className="mb-6 text-center text-[10px] uppercase tracking-[0.3em] text-accent">02 / Yours to keep</p>
                             <GlareHover width="100%" height="auto" background="rgba(255,255,255,0.05)" borderRadius="2px" borderColor="rgba(255,255,255,0.1)" glareOpacity={0.16} className="mx-auto max-w-3xl" contentClassName="p-6 text-center space-y-5">
                                 <div className="space-y-2">
                                     <h2 className="text-2xl font-heading text-white italic">{t('clientGallery.finishedWorkTitle')}</h2>
@@ -493,6 +541,7 @@ export default function ClientGalleryPage() {
                                                     key={`${image}-${index}`}
                                                     className="group relative aspect-[4/5] overflow-hidden border border-white/10 bg-black transition-colors hover:border-white/25"
                                                 >
+                                                    <button type="button" onClick={() => openLightbox(index, 'finished')} className="h-full w-full cursor-zoom-in" aria-label={`Preview finished photograph ${index + 1}`}>
                                                     <GalleryMedia
                                                         src={image}
                                                         alt={`${gallery.client_name} ${t('clientGallery.finishedWorkTitle')} ${index + 1}`}
@@ -501,6 +550,7 @@ export default function ClientGalleryPage() {
                                                         loading={index < 3 ? 'eager' : 'lazy'}
                                                         fetchPriority={index === 0 ? 'high' : 'auto'}
                                                     />
+                                                    </button>
                                                     <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-black/0" />
                                                     <span className="image-overlay-chip absolute left-3 top-3 rounded-full border px-3 py-1 text-[9px] uppercase tracking-[0.18em] backdrop-blur-sm">
                                                         {t('clientGallery.finishedWorkTitle')} {index + 1}
@@ -617,6 +667,7 @@ export default function ClientGalleryPage() {
                                     </div>
                                 )}
                             </GlareHover>
+                            </section>
                         )}
 
                         <div className="flex flex-col items-center gap-8 py-12 border-t border-white/5">
@@ -632,7 +683,7 @@ export default function ClientGalleryPage() {
             </div>
 
             {activeImage && activeImageIndex !== null && gallery && (
-                <div className="fixed inset-0 z-[240] flex items-center justify-center bg-black/94 px-3 py-5 backdrop-blur-md sm:px-6">
+                <div ref={lightboxRef} role="dialog" aria-modal="true" aria-label={`${gallery.client_name} photograph viewer`} className="client-gallery-viewer fixed inset-0 z-[240] flex items-center justify-center bg-black/94 px-3 py-5 backdrop-blur-md sm:px-6">
                     <button
                         type="button"
                         onClick={closeLightbox}
@@ -644,7 +695,7 @@ export default function ClientGalleryPage() {
                         <div className="mb-3 flex items-center justify-between gap-4 text-white">
                             <div className="min-w-0">
                                 <p className="text-[10px] uppercase tracking-[0.28em] text-white/35">
-                                    {String(activeImageIndex + 1).padStart(2, '0')} / {String(gallery.images.length).padStart(2, '0')}
+                                    {String(activeImageIndex + 1).padStart(2, '0')} / {String(lightboxImages.length).padStart(2, '0')}
                                 </p>
                                 <h2 className="mt-1 truncate font-heading text-2xl italic text-white">
                                     {gallery.client_name}
@@ -662,7 +713,10 @@ export default function ClientGalleryPage() {
 
                         <div className="relative min-h-0 flex-1 overflow-hidden border border-white/10 bg-black">
                             <GalleryMedia
+                                key={activeImage}
                                 src={activeImage}
+                                controls
+                                sizes="100vw"
                                 alt={`${gallery.client_name} ${t('clientGallery.galleryImageAlt')} ${activeImageIndex + 1}`}
                                 className="h-full w-full object-contain"
                                 previewWidth={1800}
@@ -685,7 +739,7 @@ export default function ClientGalleryPage() {
                             >
                                 <ChevronRight className="h-5 w-5" />
                             </button>
-                            <button
+                            {lightboxCollection === 'proofs' ? <button
                                 type="button"
                                 onClick={() => toggleImageSelection(activeImage)}
                                 disabled={isApproving}
@@ -697,7 +751,7 @@ export default function ClientGalleryPage() {
                             >
                                 <Check className="h-4 w-4" />
                                 {selectedImageSet.has(activeImage) ? t('ui.selected') : t('ui.selectImage')}
-                            </button>
+                            </button> : <a href={getFinishedDownloadUrl(activeImage)} className="absolute bottom-3 right-3 bg-white px-5 py-4 text-xs text-black">Download original</a>}
                         </div>
                     </div>
                 </div>

@@ -8,6 +8,8 @@ import Footer from '@/components/Footer';
 import GalleryMedia from '@/components/GalleryMedia';
 import { defaultSiteSettings, type SiteSettings } from '@/lib/siteSettings';
 import { getCloudinaryPreviewUrl, getImagePreviewSrcSet } from '@/lib/mediaUrl';
+import { fileFingerprint, uploadAdminFile } from '@/lib/adminUpload';
+import { uploadPublicId } from '@/lib/uploadIdentity';
 import { createSeoImageFilename } from '@/lib/imageSeo';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -196,7 +198,7 @@ type BookingEditForm = {
 };
 type AdminSection = 'bookings' | 'artwork' | 'digital-products' | 'catalog' | 'galleries' | 'content-contact' | 'orders';
 type UploadBatchResult = { urls: string[]; failedFiles: File[] };
-type UploadProgress = { current: number; total: number };
+type UploadProgress = { current: number; total: number; percent: number; phase: 'preparing' | 'uploading' | 'processing' | 'saving' };
 
 const defaultAdminContent: Content = {
   homepage: { heroText: '', heroImage: '' },
@@ -228,7 +230,6 @@ const inputClass =
 const mediaAccept = 'image/*,video/*';
 const uploadConcurrency = 2;
 const uploadSaveChunkSize = 25;
-const uploadRequestTimeoutMs = 120_000;
 const maxCloudinaryFreeUploadBytes = 10 * 1024 * 1024;
 const compressedImageQuality = 0.82;
 const compressedImageMaxDimension = 2400;
@@ -344,21 +345,22 @@ function calculateInvoice(form: GalleryDocumentForm) {
         description,
         quantity,
         unitPrice,
-        total: quantity * unitPrice,
+        total: Math.round((quantity * unitPrice + Number.EPSILON) * 100) / 100,
       };
     })
     .filter((item) => item.description || item.quantity > 0 || item.unitPrice > 0);
 
-  const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+  const subtotal = Math.round(items.reduce((sum, item) => sum + item.total, 0) * 100) / 100;
   const rawDiscount = Math.max(0, toFiniteNumber(form.discountValue));
-  const discount =
+  const discountUnrounded =
     form.discountType === 'percent'
       ? Math.min(subtotal, subtotal * Math.min(rawDiscount, 100) / 100)
       : Math.min(subtotal, rawDiscount);
-  const taxableSubtotal = Math.max(0, subtotal - discount);
+  const discount = Math.round(discountUnrounded * 100) / 100;
+  const taxableSubtotal = Math.round(Math.max(0, subtotal - discount) * 100) / 100;
   const taxRate = Math.max(0, toFiniteNumber(form.taxRate));
-  const tax = taxableSubtotal * taxRate / 100;
-  const total = taxableSubtotal + tax;
+  const tax = Math.round(taxableSubtotal * taxRate) / 100;
+  const total = Math.round((taxableSubtotal + tax) * 100) / 100;
 
   return { items, subtotal, discount, taxableSubtotal, taxRate, tax, total };
 }
@@ -385,6 +387,9 @@ function getDocumentFormIssues(form: GalleryDocumentForm) {
   if (form.lineItems.length > 3000) issues.push('Line items are too long.');
   if (form.terms.length > 3000) issues.push('Terms are too long.');
   if (form.documentType === 'invoice') {
+    if (getDefaultInvoiceItems(form).some((item) => !item.description.trim() || !item.quantity || !item.unitPrice || !Number.isFinite(Number(item.quantity)) || !Number.isFinite(Number(item.unitPrice)))) issues.push('Complete every item description, quantity, and price.');
+    if (getDefaultInvoiceItems(form).length > 20) issues.push('Use no more than 20 invoice items.');
+    if (Number(form.taxRate) > 100) issues.push('Tax cannot exceed 100%.');
     if (!calculation.items.some((item) => item.description && item.quantity > 0 && item.unitPrice > 0)) {
       issues.push('Add at least one invoice item with a description, quantity, and price above zero.');
     }
@@ -503,10 +508,6 @@ function DocumentPreview({ gallery, form }: { gallery: Gallery; form: GalleryDoc
       </div>
     </aside>
   );
-}
-
-function formatFileSize(bytes: number) {
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function fileIdentity(file: File) {
@@ -710,8 +711,9 @@ export default function AdminPage() {
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [uploadingTargets, setUploadingTargets] = useState<Record<string, boolean>>({});
   const [uploadProgress, setUploadProgress] = useState<Record<string, UploadProgress>>({});
-  const [uploadingMediaGalleryId, setUploadingMediaGalleryId] = useState<number | null>(null);
-  const [uploadingFinishedGalleryId, setUploadingFinishedGalleryId] = useState<number | null>(null);
+  const activeTransfers = useRef(new Set<string>());
+  const activeUploadActions = useRef(new Set<string>());
+  const uploadedAssets = useRef(new Map<string, Promise<string>>());
   const [updatingGalleryIds, setUpdatingGalleryIds] = useState<Record<number, boolean>>({});
   const [openAdminSection, setOpenAdminSection] = useState<AdminSection | null>(null);
   const displayedOpenSection = activeRouteSection || openAdminSection;
@@ -800,9 +802,19 @@ export default function AdminPage() {
   const artworkInputRef = useRef<HTMLInputElement | null>(null);
   const catalogImageInputRef = useRef<HTMLInputElement | null>(null);
   const isUploading = (target: string) => Boolean(uploadingTargets[target]);
+  const getUploadTargetLabel = (target: string) => {
+    if (target.startsWith('gallery-')) {
+      const galleryId = Number(target.match(/^gallery-(\d+)/)?.[1]);
+      const name = galleries.find((gallery) => gallery.id === galleryId)?.client_name || 'Client gallery';
+      return `${name} · ${target.endsWith('-finished') ? 'Finished work' : 'Client media'}`;
+    }
+    return ({ 'artwork-image': 'Fine art catalogue', 'catalog-image': 'Photography catalogue', 'digital-product-image': 'Product image', 'digital-product-file': 'Product file' } as Record<string, string>)[target] || target.replace(/^content-/, '').replace(/-/g, ' ');
+  };
   const getUploadProgressLabel = (target: string, label: string) => {
     const progress = uploadProgress[target];
-    return progress ? `${label} ${progress.current}/${progress.total}` : label;
+    if (!progress) return label;
+    const phase = progress.phase === 'saving' ? 'Saving' : progress.phase === 'processing' ? 'Processing' : progress.phase === 'preparing' ? 'Preparing' : label;
+    return `${phase} ${progress.percent}% (${progress.current}/${progress.total})`;
   };
   const setTargetUploading = (target: string, value: boolean) => {
     setUploadingTargets((prev) => {
@@ -822,6 +834,15 @@ export default function AdminPage() {
       });
     }
   };
+  const runUploadAction = async (target: string, action: () => Promise<void>) => {
+    if (activeUploadActions.current.has(target) || activeTransfers.current.has(target)) return;
+    activeUploadActions.current.add(target);
+    setTargetUploading(target, true);
+    try { await action(); }
+    catch (error) { setMessage({ text: error instanceof Error ? error.message : 'Unable to save. Please retry.', type: 'error' }); }
+    finally { activeUploadActions.current.delete(target); setTargetUploading(target, false); }
+  };
+
   const getUploadFilenameParts = (target: string) => {
     if (target === 'artwork-image') {
       return [artForm.title, artForm.medium, artForm.category, 'Moyo Ayaworan artwork'];
@@ -1008,149 +1029,62 @@ export default function AdminPage() {
 
   const uploadFiles = async (files: File[], target = 'upload'): Promise<UploadBatchResult> => {
     if (!files.length) return { urls: [], failedFiles: [] };
-    const preserveOriginal = target.startsWith('gallery-');
+    if (activeTransfers.current.has(target)) return { urls: [], failedFiles: files };
+    activeTransfers.current.add(target);
+    const preserveOriginal = target.endsWith('-finished') || target === 'digital-product-file';
     setTargetUploading(target, true);
+    const fractions = files.map(() => 0);
+    let completedCount = 0;
+    const report = (phase: UploadProgress['phase'] = 'uploading') => {
+      const percent = Math.min(completedCount === files.length ? 100 : 99, Math.floor(fractions.reduce((sum, value) => sum + value, 0) / files.length));
+      setUploadProgress((prev) => ({ ...prev, [target]: { current: completedCount, total: files.length, percent, phase } }));
+    };
+    report('preparing');
+    const uploadedUrls: string[] = [];
+    const failedFiles: File[] = [];
+    const errors: string[] = [];
     try {
-      console.log('[admin] upload start', { count: files.length, target });
-      const uploadedUrls: string[] = [];
-      const failedFiles: File[] = [];
-      let completedCount = 0;
-      setUploadProgress((prev) => ({ ...prev, [target]: { current: completedCount, total: files.length } }));
-
       const uploadSingleFile = async (file: File, index: number) => {
-        const seoNamedFile = renameFileForSeo(file, getUploadFilenameParts(target), index);
-        const prepared = await prepareUploadFile(seoNamedFile, { preserveOriginal });
-        const formData = new FormData();
-        formData.append('file', prepared.file);
-        const controller = new AbortController();
-        const timeout = window.setTimeout(() => controller.abort(), uploadRequestTimeoutMs);
-
         try {
-          if (prepared.changed && prepared.originalSize && prepared.preparedSize) {
-            console.log('[admin] upload optimized', {
-              file: file.name,
-              originalSize: formatFileSize(prepared.originalSize),
-              preparedSize: formatFileSize(prepared.preparedSize),
+          if (!file.size) throw new Error('This file is empty.');
+          if (file.size > 100 * 1024 * 1024) throw new Error('This file exceeds 100 MB. Export a smaller file.');
+          const seoNamedFile = renameFileForSeo(file, getUploadFilenameParts(target), index);
+          const prepared = await prepareUploadFile(seoNamedFile, { preserveOriginal });
+          const hash = await fileFingerprint(prepared.file);
+          const cacheKey = uploadPublicId(hash, prepared.file.name, prepared.file.type);
+          let transfer = uploadedAssets.current.get(cacheKey);
+          if (!transfer) {
+            transfer = uploadAdminFile(prepared.file, adminKey, hash, (percent) => {
+              fractions[index] = percent;
+              report(percent === 100 ? 'processing' : 'uploading');
             });
+            uploadedAssets.current.set(cacheKey, transfer);
+            transfer.catch(() => uploadedAssets.current.delete(cacheKey));
           }
-
-          try {
-            const signatureRes = await fetch('/api/upload/signature', {
-              method: 'POST',
-              headers: { 'x-admin-key': adminKey },
-              signal: controller.signal,
-            });
-            const signatureData = (await signatureRes.json().catch(() => null)) as {
-              directUpload?: boolean;
-              cloudName?: string;
-              apiKey?: string;
-              folder?: string;
-              timestamp?: number;
-              use_filename?: boolean;
-              unique_filename?: boolean;
-              signature?: string;
-            } | null;
-
-            if (
-              signatureRes.ok &&
-              signatureData?.directUpload &&
-              signatureData.cloudName &&
-              signatureData.apiKey &&
-              signatureData.folder &&
-              signatureData.timestamp &&
-              signatureData.signature
-            ) {
-              const cloudinaryForm = new FormData();
-              cloudinaryForm.append('file', prepared.file);
-              cloudinaryForm.append('api_key', signatureData.apiKey);
-              cloudinaryForm.append('folder', signatureData.folder);
-              cloudinaryForm.append('timestamp', String(signatureData.timestamp));
-              if (signatureData.use_filename) cloudinaryForm.append('use_filename', 'true');
-              if (signatureData.unique_filename) cloudinaryForm.append('unique_filename', 'true');
-              cloudinaryForm.append('signature', signatureData.signature);
-
-              const directRes = await fetch(`https://api.cloudinary.com/v1_1/${signatureData.cloudName}/auto/upload`, {
-                method: 'POST',
-                body: cloudinaryForm,
-                signal: controller.signal,
-              });
-              const directData = await directRes.json().catch(() => ({}));
-              const directUrl = typeof directData.secure_url === 'string' ? directData.secure_url : null;
-
-              console.log('[admin] direct upload response', {
-                status: directRes.status,
-                file: file.name,
-                uploaded: directUrl ? 1 : 0,
-                error: directData.error?.message,
-              });
-
-              if (directRes.ok && directUrl) {
-                return { url: directUrl, file, index };
-              }
-            }
-          } catch (directError) {
-            console.warn('[admin] direct upload unavailable, falling back to server upload', directError);
-          }
-
-          const res = await fetch('/api/upload', {
-            method: 'POST',
-            headers: { 'x-admin-key': adminKey },
-            body: formData,
-            signal: controller.signal,
-          });
-          const data = await res.json().catch(() => ({}));
-          const urls = Array.isArray(data.urls) ? data.urls : data.url ? [data.url] : [];
-          const url = urls[0] || null;
-
-          console.log('[admin] upload batch response', {
-            status: res.status,
-            file: file.name,
-            uploaded: url ? 1 : 0,
-            error: data.error,
-          });
-
-          return res.ok && url ? { url, file, index } : { url: null, file, index };
+          const url = await transfer;
+          fractions[index] = 100;
+          return { url, file };
         } catch (error) {
-          console.error('[admin] upload batch error', error);
-          return { url: null, file, index };
+          errors.push(`${file.name}: ${error instanceof Error ? error.message : 'Upload failed.'}`);
+          return { url: null, file };
         } finally {
-          window.clearTimeout(timeout);
           completedCount += 1;
-          setUploadProgress((prev) => ({
-            ...prev,
-            [target]: { current: completedCount, total: files.length },
-          }));
+          report();
         }
       };
-
       for (let start = 0; start < files.length; start += uploadConcurrency) {
-        const batch = files.slice(start, start + uploadConcurrency);
-        const results = await Promise.all(batch.map((file, index) => uploadSingleFile(file, start + index)));
-        results
-          .sort((a, b) => a.index - b.index)
-          .forEach((result) => {
-            if (result.url) {
-              uploadedUrls.push(result.url);
-            } else {
-              failedFiles.push(result.file);
-            }
-          });
+        const results = await Promise.all(files.slice(start, start + uploadConcurrency).map((file, index) => uploadSingleFile(file, start + index)));
+        for (const result of results) {
+          if (result.url) uploadedUrls.push(result.url);
+          else failedFiles.push(result.file);
+        }
       }
-
-      if (failedFiles.length > 0) {
-        setMessage({
-          text: `${failedFiles.length} ${failedFiles.length === 1 ? 'file failed' : 'files failed'} to upload. Very large videos or non-image files may need a smaller export.`,
-          type: 'error',
-        });
-      }
-
-      return { urls: uploadedUrls, failedFiles };
-    } catch (error) {
-      console.error('[admin] upload error', error);
-      setMessage({ text: (error as Error).message, type: 'error' });
-      return { urls: [], failedFiles: files };
+      if (errors.length) setMessage({ text: errors.join(' '), type: 'error' });
+      report('saving');
+      return { urls: uniqueStrings(uploadedUrls), failedFiles };
     } finally {
-      setTargetUploading(target, false);
+      activeTransfers.current.delete(target);
+      if (!activeUploadActions.current.has(target)) setTargetUploading(target, false);
     }
   };
 
@@ -1209,7 +1143,7 @@ export default function AdminPage() {
     const localPreview = URL.createObjectURL(nextFiles[0]);
     setCatalogImagePreview(localPreview);
 
-    if (!adminKey) {
+    if (!isAuthed) {
       setMessage({ text: 'Add admin password first', type: 'error' });
       return;
     }
@@ -1225,7 +1159,7 @@ export default function AdminPage() {
     const localPreview = URL.createObjectURL(file);
     setDigitalProductPreview(localPreview);
 
-    if (!adminKey) {
+    if (!isAuthed) {
       setMessage({ text: 'Add admin password first', type: 'error' });
       return;
     }
@@ -1242,7 +1176,7 @@ export default function AdminPage() {
     setDigitalProductAssetFile(file);
     if (!file) return;
 
-    if (!adminKey) {
+    if (!isAuthed) {
       setMessage({ text: 'Add admin password first', type: 'error' });
       return;
     }
@@ -1261,7 +1195,7 @@ export default function AdminPage() {
     successMessage: string
   ) => {
     if (!file) return;
-    if (!adminKey) {
+    if (!isAuthed) {
       setMessage({ text: 'Add admin password first', type: 'error' });
       return;
     }
@@ -1331,10 +1265,15 @@ export default function AdminPage() {
     </div>
   );
 
-  const handleArtworkSubmit = async (e: React.FormEvent) => {
+  const handleArtworkSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    return runUploadAction('artwork-image', () => handleArtworkSubmitInternal(e));
+  };
+
+  const handleArtworkSubmitInternal = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage(null);
-    if (!adminKey) return setMessage({ text: 'Add admin key first', type: 'error' });
+    if (!isAuthed) return setMessage({ text: 'Sign in to the admin first', type: 'error' });
 
     let imageUrls = artForm.image.trim() ? [artForm.image.trim()] : [];
     let failedFiles: File[] = [];
@@ -1345,7 +1284,7 @@ export default function AdminPage() {
       failedFiles = uploaded.failedFiles;
     }
 
-    imageUrls = imageUrls.filter(Boolean);
+    imageUrls = uniqueStrings(imageUrls);
     if (!imageUrls.length) {
       return setMessage({ text: 'Upload artwork files or paste an image URL', type: 'error' });
     }
@@ -1370,7 +1309,7 @@ export default function AdminPage() {
     const data = await res.json();
     if (!res.ok) return setMessage({ text: data.error || 'Failed', type: 'error' });
     const createdArtworks = data.artworks || (data.artwork ? [data.artwork] : []);
-    setArtworks((prev) => [...createdArtworks, ...prev]);
+    setArtworks((prev) => [...createdArtworks, ...prev].filter((item, index, all) => all.findIndex((other) => other.id === item.id) === index));
     setEditingArtworks((prev) => ({
       ...createdArtworks.reduce((acc: Record<number, ArtworkEditForm>, artwork: Artwork) => {
         acc[artwork.id] = createArtworkEditForm(artwork);
@@ -1476,10 +1415,15 @@ export default function AdminPage() {
     }
   };
 
-  const createDigitalProduct = async (e: React.FormEvent) => {
+  const createDigitalProduct = (e: React.FormEvent) => {
+    e.preventDefault();
+    return runUploadAction('digital-product-image', () => createDigitalProductInternal(e));
+  };
+
+  const createDigitalProductInternal = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage(null);
-    if (!adminKey) return setMessage({ text: 'Add admin key first', type: 'error' });
+    if (!isAuthed) return setMessage({ text: 'Sign in to the admin first', type: 'error' });
 
     let imageUrl = digitalProductForm.image;
     if (digitalProductFile && !imageUrl) {
@@ -1502,7 +1446,7 @@ export default function AdminPage() {
     const data = await res.json();
     if (!res.ok) return setMessage({ text: data.error || 'Failed to save digital product', type: 'error' });
 
-    setDigitalProducts((prev) => [data.product, ...prev]);
+    setDigitalProducts((prev) => [data.product, ...prev.filter((item) => item.id !== data.product.id)]);
     setEditingDigitalProducts((prev) => ({
       ...prev,
       [data.product.id]: {
@@ -1582,7 +1526,7 @@ export default function AdminPage() {
 
   const createGallery = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!adminKey) return setMessage({ text: 'Add admin key first', type: 'error' });
+    if (!isAuthed) return setMessage({ text: 'Sign in to the admin first', type: 'error' });
     const res = await fetch('/api/galleries', {
       method: 'POST',
       headers,
@@ -1640,44 +1584,38 @@ export default function AdminPage() {
     return updatedGallery;
   };
 
-  const uploadGalleryImage = async (id: number) => {
+  const uploadGalleryImage = (id: number) => runUploadAction(`gallery-${id}-media`, () => uploadGalleryImageInternal(id));
+
+  const uploadGalleryImageInternal = async (id: number) => {
     const files = galleryUploads[id] || [];
     if (!files.length) return setMessage({ text: 'Choose client media files first', type: 'error' });
     const target = `gallery-${id}-media`;
-    setUploadingMediaGalleryId(id);
-    try {
-      const { urls, failedFiles } = await uploadFiles(files, target);
-      if (!urls.length) return;
-      const updatedGallery = await updateGalleryImagesInChunks(id, 'addImages', urls);
-      if (!updatedGallery) return;
-      setGalleryUploads((prev) => ({ ...prev, [id]: failedFiles }));
-      setMessage({
-        text: `${urls.length} client media ${urls.length === 1 ? 'file' : 'files'} uploaded${failedFiles.length ? `, ${failedFiles.length} failed` : ''}`,
-        type: failedFiles.length ? 'error' : 'success',
-      });
-    } finally {
-      setUploadingMediaGalleryId(null);
-    }
+    const { urls, failedFiles } = await uploadFiles(files, target);
+    if (!urls.length) return;
+    const updatedGallery = await updateGalleryImagesInChunks(id, 'addImages', urls);
+    if (!updatedGallery) return;
+    setGalleryUploads((prev) => ({ ...prev, [id]: failedFiles }));
+    if (!failedFiles.length) setMessage({
+      text: `${urls.length} client media ${urls.length === 1 ? 'file' : 'files'} uploaded${failedFiles.length ? `, ${failedFiles.length} failed` : ''}`,
+      type: failedFiles.length ? 'error' : 'success',
+    });
   };
 
-  const uploadFinishedGalleryImage = async (id: number) => {
+  const uploadFinishedGalleryImage = (id: number) => runUploadAction(`gallery-${id}-finished`, () => uploadFinishedGalleryImageInternal(id));
+
+  const uploadFinishedGalleryImageInternal = async (id: number) => {
     const files = finishedGalleryUploads[id] || [];
     if (!files.length) return setMessage({ text: 'Choose finished work files first', type: 'error' });
     const target = `gallery-${id}-finished`;
-    setUploadingFinishedGalleryId(id);
-    try {
-      const { urls, failedFiles } = await uploadFiles(files, target);
-      if (!urls.length) return;
-      const updatedGallery = await updateGalleryImagesInChunks(id, 'addFinishedImages', urls);
-      if (!updatedGallery) return;
-      setFinishedGalleryUploads((prev) => ({ ...prev, [id]: failedFiles }));
-      setMessage({
-        text: `${urls.length} finished work ${urls.length === 1 ? 'file' : 'files'} uploaded${failedFiles.length ? `, ${failedFiles.length} failed` : ''}`,
-        type: failedFiles.length ? 'error' : 'success',
-      });
-    } finally {
-      setUploadingFinishedGalleryId(null);
-    }
+    const { urls, failedFiles } = await uploadFiles(files, target);
+    if (!urls.length) return;
+    const updatedGallery = await updateGalleryImagesInChunks(id, 'addFinishedImages', urls);
+    if (!updatedGallery) return;
+    setFinishedGalleryUploads((prev) => ({ ...prev, [id]: failedFiles }));
+    if (!failedFiles.length) setMessage({
+      text: `${urls.length} finished work ${urls.length === 1 ? 'file' : 'files'} uploaded${failedFiles.length ? `, ${failedFiles.length} failed` : ''}`,
+      type: failedFiles.length ? 'error' : 'success',
+    });
   };
 
   const deleteGalleryUpload = async (id: number, image: string) => {
@@ -1802,7 +1740,7 @@ export default function AdminPage() {
         title: data.draft.title || form.title,
         ...(form.documentType === 'invoice'
           ? {
-              items: normalizeDocumentLines(data.draft.lineItems || form.lineItems, 'Photography services.').slice(0, 4).map((line) => ({
+              items: getDefaultInvoiceItems(form).some((item) => item.description.trim() || item.unitPrice) ? getDefaultInvoiceItems(form) : normalizeDocumentLines(data.draft.lineItems || form.lineItems, 'Photography services.').slice(0, 4).map((line) => ({
                 description: line,
                 quantity: '1',
                 unitPrice: '',
@@ -1840,7 +1778,7 @@ export default function AdminPage() {
           item.id === document.id ? data.document : item
         ),
       }));
-      setMessage({ text: 'Document sent to client', type: 'success' });
+      setMessage({ text: 'Document accepted by the mail server for delivery', type: 'success' });
     } catch {
       setMessage({ text: 'Unable to send document. Check email settings and try again.', type: 'error' });
     } finally {
@@ -1910,7 +1848,7 @@ export default function AdminPage() {
 
   const createCatalogCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!adminKey) return setMessage({ text: 'Add admin key first', type: 'error' });
+    if (!isAuthed) return setMessage({ text: 'Sign in to the admin first', type: 'error' });
 
     const res = await fetch('/api/photography-catalog/categories', {
       method: 'POST',
@@ -1985,9 +1923,14 @@ export default function AdminPage() {
     }
   };
 
-  const createCatalogImage = async (e: React.FormEvent) => {
+  const createCatalogImage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!adminKey) return setMessage({ text: 'Add admin key first', type: 'error' });
+    return runUploadAction('catalog-image', () => createCatalogImageInternal(e));
+  };
+
+  const createCatalogImageInternal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isAuthed) return setMessage({ text: 'Sign in to the admin first', type: 'error' });
     if (!catalogImageForm.category_id) {
       return setMessage({ text: 'Choose a category first', type: 'error' });
     }
@@ -2070,8 +2013,8 @@ export default function AdminPage() {
       await updateCatalogCategoryCover(selectedCategory, createdImages[0].image_url, { silent: true });
     }
     setCatalogImageForm({ category_id: catalogImageForm.category_id, title: '', alt_text: '', image_url: '', display_order: '' });
-    setCatalogImageFiles(failedFiles);
-    if (catalogImageInputRef.current && !failedFiles.length) catalogImageInputRef.current.value = '';
+    setCatalogImageFiles(failedSaves ? catalogImageFiles : failedFiles);
+    if (catalogImageInputRef.current && !failedFiles.length && !failedSaves) catalogImageInputRef.current.value = '';
     setCatalogImagePreview(null);
     setMessage({
       text: `${createdImages.length} catalog ${createdImages.length === 1 ? 'image' : 'images'} added${
@@ -2372,6 +2315,22 @@ export default function AdminPage() {
           </div>
         </div>
 
+        {Object.entries(uploadProgress).length > 0 && (
+          <aside aria-label="Upload progress" className="sticky top-24 z-50 mb-6 space-y-4 border border-accent/30 bg-background p-5 shadow-lg">
+            {Object.entries(uploadProgress).map(([target, progress]) => (
+              <div key={target} className="space-y-2">
+                <div className="flex justify-between gap-4 text-xs">
+                  <span>{getUploadTargetLabel(target)}</span>
+                  <span role="status">{getUploadProgressLabel(target, 'Uploading')}</span>
+                </div>
+                <div role="progressbar" aria-label={`${getUploadTargetLabel(target)} upload`} aria-valuenow={progress.percent} aria-valuemin={0} aria-valuemax={100} className="h-2 w-full overflow-hidden bg-surface">
+                  <div className="h-full bg-accent transition-[width] duration-150" style={{ width: `${progress.percent}%` }} />
+                </div>
+                {progress.phase === 'saving' && <p className="text-xs text-foreground/60">Saving files to your collection. Please keep this page open.</p>}
+              </div>
+            ))}
+          </aside>
+        )}
         {message && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -2760,7 +2719,7 @@ export default function AdminPage() {
                   disabled={isUploading('artwork-image')}
                   className="w-full bg-accent hover:bg-white text-black py-4 px-5 text-[10px] uppercase tracking-[0.22em] font-medium transition-all flex items-center justify-center gap-4 disabled:opacity-50 sm:px-8 sm:tracking-[0.4em]"
                 >
-                  {isUploading('artwork-image') ? 'Uploading...' : 'Save Catalogue Work'}
+                  {isUploading('artwork-image') ? getUploadProgressLabel('artwork-image', 'Uploading') : 'Save Catalogue Work'}
                 </button>
               </form>
             </div>
@@ -3073,7 +3032,7 @@ export default function AdminPage() {
                   disabled={isUploading('digital-product-image')}
                   className="flex w-full items-center justify-center gap-4 bg-accent px-5 py-4 text-[10px] font-medium uppercase tracking-[0.22em] text-black transition-all hover:bg-white disabled:opacity-50 sm:px-8 sm:tracking-[0.4em]"
                 >
-                  {isUploading('digital-product-image') ? 'Uploading...' : 'Save Digital Product'}
+                  {isUploading('digital-product-image') ? getUploadProgressLabel('digital-product-image', 'Uploading') : 'Save Digital Product'}
                 </button>
               </form>
             </div>
@@ -3585,8 +3544,8 @@ export default function AdminPage() {
                   {(() => {
                     const mediaTarget = `gallery-${gal.id}-media`;
                     const finishedTarget = `gallery-${gal.id}-finished`;
-                    const isMediaUploading = uploadingMediaGalleryId === gal.id;
-                    const isFinishedUploading = uploadingFinishedGalleryId === gal.id;
+                    const isMediaUploading = isUploading(`gallery-${gal.id}-media`);
+                    const isFinishedUploading = isUploading(`gallery-${gal.id}-finished`);
                     const isUpdatingGallery = Boolean(updatingGalleryIds[gal.id]);
                     return (
                       <>
@@ -3745,9 +3704,10 @@ export default function AdminPage() {
                         multiple
                         disabled={isMediaUploading}
                         onChange={(e) => {
+                          const selectedFiles = Array.from(e.currentTarget.files || []);
                           setGalleryUploads((prev) => ({
                             ...prev,
-                            [gal.id]: mergeSelectedFiles(prev[gal.id], Array.from(e.target.files || [])),
+                            [gal.id]: mergeSelectedFiles(prev[gal.id], selectedFiles),
                           }));
                           e.currentTarget.value = '';
                         }}
@@ -3795,9 +3755,10 @@ export default function AdminPage() {
                           multiple
                           disabled={isFinishedUploading}
                           onChange={(e) => {
+                            const selectedFiles = Array.from(e.currentTarget.files || []);
                             setFinishedGalleryUploads((prev) => ({
                               ...prev,
-                              [gal.id]: mergeSelectedFiles(prev[gal.id], Array.from(e.target.files || [])),
+                              [gal.id]: mergeSelectedFiles(prev[gal.id], selectedFiles),
                             }));
                             e.currentTarget.value = '';
                           }}

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth';
 import { query } from '@/lib/db';
@@ -38,11 +39,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Title, price, and image are required.' }, { status: 400 });
   }
 
+  const creationKey = createHash('sha256').update(JSON.stringify({ title, price, details, image, productUrl, displayOrder, isActive })).digest('hex');
   const { rows } = await query(
-    `INSERT INTO digital_products (title, price, details, image, product_url, display_order, is_active)
-     VALUES ($1,$2,$3,$4,$5,$6,$7)
+    `INSERT INTO digital_products (title, price, details, image, product_url, display_order, is_active, creation_key)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+     ON CONFLICT (creation_key) DO UPDATE SET creation_key = EXCLUDED.creation_key
      RETURNING *`,
-    [title, price, details, image, productUrl, displayOrder, isActive]
+    [title, price, details, image, productUrl, displayOrder, isActive, creationKey]
   );
 
   return NextResponse.json({ product: rows[0] });

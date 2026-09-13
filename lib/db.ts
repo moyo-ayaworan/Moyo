@@ -297,6 +297,14 @@ async function initializeTables() {
       ADD COLUMN IF NOT EXISTS site_settings JSONB DEFAULT '{}'::JSONB;
   `);
 
+  // Retried creation requests return the original record instead of inserting another.
+  await pool.query(`
+    ALTER TABLE artworks ADD COLUMN IF NOT EXISTS creation_key TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS artworks_creation_key_idx ON artworks (creation_key);
+    ALTER TABLE digital_products ADD COLUMN IF NOT EXISTS creation_key TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS digital_products_creation_key_idx ON digital_products (creation_key);
+  `);
+
   // seed singleton rows
   await pool.query(`INSERT INTO content (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);
   await pool.query(`INSERT INTO contact (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);

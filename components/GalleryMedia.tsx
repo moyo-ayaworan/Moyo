@@ -3,6 +3,7 @@
 import { getCloudinaryPreviewUrl, getImagePreviewSrcSet, isVideoUrl } from '@/lib/mediaUrl';
 
 type GalleryMediaProps = {
+    controls?: boolean;
     src: string;
     alt: string;
     className?: string;
@@ -19,6 +20,7 @@ export function isVideoMedia(src: string) {
 
 export default function GalleryMedia({
     src,
+    controls = false,
     alt,
     className = 'h-full w-full object-cover',
     sizes = '(min-width: 1280px) 25vw, (min-width: 768px) 33vw, (min-width: 640px) 50vw, 100vw',
@@ -34,7 +36,8 @@ export default function GalleryMedia({
                     src={src}
                     className={className}
                     preload="none"
-                    muted
+                    muted={!controls}
+                    controls={controls}
                     playsInline
                     aria-label={alt}
                 />
