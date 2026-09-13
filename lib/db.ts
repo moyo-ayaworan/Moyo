@@ -42,12 +42,16 @@ async function ensureTables() {
 async function initializeSafely() {
   const connection = await pool.connect();
   try {
-    // Serverless instances must not run schema changes concurrently.
-    await connection.query('SELECT pg_advisory_lock(178931, 1)');
+    await connection.query('BEGIN');
+    // Transaction locks also work with pooled production database connections.
+    await connection.query('SELECT pg_advisory_xact_lock(178931, 1)');
     await initializeTables(connection);
+    await connection.query('COMMIT');
+  } catch (error) {
+    await connection.query('ROLLBACK');
+    throw error;
   } finally {
-    try { await connection.query('SELECT pg_advisory_unlock(178931, 1)'); }
-    finally { connection.release(); }
+    connection.release();
   }
 }
 
