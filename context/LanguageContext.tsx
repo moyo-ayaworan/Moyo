@@ -1,10 +1,26 @@
 'use client';
 
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useSyncExternalStore, ReactNode, useEffect } from 'react';
 import { getStorageItem, setStorageItem } from '@/lib/browserStorage';
 
 export type LanguageCode = 'EN' | 'FR' | 'ES' | 'DE' | 'PT' | 'AR' | 'ZH' | 'YO' | 'IG' | 'HA';
 const LANGUAGE_CODES: LanguageCode[] = ['EN', 'FR', 'ES', 'DE', 'PT', 'AR', 'ZH', 'YO', 'IG', 'HA'];
+
+let fallbackLanguage: LanguageCode = 'EN';
+
+function getLanguage(): LanguageCode {
+    const saved = getStorageItem('local', 'moyo_lang');
+    return LANGUAGE_CODES.includes(saved as LanguageCode) ? saved as LanguageCode : fallbackLanguage;
+}
+
+function subscribeToLanguage(onChange: () => void) {
+    window.addEventListener('storage', onChange);
+    window.addEventListener('moyo-language-change', onChange);
+    return () => {
+        window.removeEventListener('storage', onChange);
+        window.removeEventListener('moyo-language-change', onChange);
+    };
+}
 
 interface LanguageContextType {
     language: LanguageCode;
@@ -14,11 +30,7 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-    const [language, setLanguage] = useState<LanguageCode>(() => {
-        if (typeof window === 'undefined') return 'EN';
-        const saved = getStorageItem('local', 'moyo_lang');
-        return LANGUAGE_CODES.includes(saved as LanguageCode) ? (saved as LanguageCode) : 'EN';
-    });
+    const language = useSyncExternalStore(subscribeToLanguage, getLanguage, (): LanguageCode => 'EN');
 
     useEffect(() => {
         document.documentElement.dir = language === 'AR' ? 'rtl' : 'ltr';
@@ -26,8 +38,9 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     }, [language]);
 
     const handleSetLanguage = (lang: LanguageCode) => {
-        setLanguage(lang);
+        fallbackLanguage = lang;
         setStorageItem('local', 'moyo_lang', lang);
+        window.dispatchEvent(new Event('moyo-language-change'));
     };
 
     return (
