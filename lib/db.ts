@@ -248,6 +248,8 @@ async function initializeTables(connection: PoolClient) {
     );
   `);
 
+  await connection.query(`ALTER TABLE gallery_documents ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;`);
+
   await connection.query(`
     UPDATE galleries
     SET images = COALESCE(images, ARRAY[]::TEXT[]),

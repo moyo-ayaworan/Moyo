@@ -20,6 +20,7 @@ type GalleryDocument = {
   line_items: string;
   terms: string;
   sent_at: string | null;
+  paid_at?: string | null;
   created_at: string;
   client_name?: string;
   access_code?: string;
@@ -221,7 +222,7 @@ function getCalculatedInvoice(doc: GalleryDocument): CalculatedInvoice | null {
 }
 
 function documentText(doc: GalleryDocument) {
-  const label = doc.document_type === 'contract' ? 'Contract' : 'Invoice';
+  const label = doc.document_type === 'contract' ? 'Contract' : doc.paid_at ? 'Receipt' : 'Invoice';
   const calculation = getCalculatedInvoice(doc);
   const amount = formatMoney(calculation?.total ?? doc.amount, doc.currency);
   const itemText = calculation
@@ -236,7 +237,7 @@ function documentText(doc: GalleryDocument) {
       ].join('\n')
     : doc.line_items || (doc.document_type === 'contract' ? 'Agreement details to be confirmed by both parties.' : 'Photography services.');
   return [
-    'Ijabiken Moyo',
+    'MOYO AYAWORAN',
     label,
     '',
     doc.title,
@@ -247,6 +248,10 @@ function documentText(doc: GalleryDocument) {
     '',
     itemText,
     '',
+    doc.paid_at ? `PAID: ${new Date(doc.paid_at).toLocaleDateString('en-GB')} / Balance: ${formatMoneyWithZero(0, doc.currency)}` : '',
+    'Thank you creating with Moyo Ayaworan.',
+    'Ijabiken Moyosoreoluwa',
+    'Creative Director, MOYO AYAWORAN',
     doc.terms || 'Contract terms, usage rights, payment, and delivery notes to be confirmed.',
   ]
     .filter((line) => line !== '')
@@ -407,7 +412,7 @@ function getPdfLogo() {
 
 function buildPdf(doc: GalleryDocument) {
   const calculation = getCalculatedInvoice(doc);
-  const label = doc.document_type === 'contract' ? 'CONTRACT' : 'INVOICE';
+  const label = doc.document_type === 'contract' ? 'CONTRACT' : doc.paid_at ? 'RECEIPT' : 'INVOICE';
   const logo = getPdfLogo();
   const pages: string[][] = [];
   let commands: string[] = [];
@@ -424,7 +429,7 @@ function buildPdf(doc: GalleryDocument) {
     else text('MOYO', 48, 758, 16, true, BRAND_RED_RGB);
     text(label, 355, 763, 26);
     text(`MOYO-${doc.id}`, 355, 749, 8);
-    text('Ijabiken Moyo / Photography & Fine Art', 48, 35, 8);
+    text('MOYO AYAWORAN / Photography & Fine Art', 48, 35, 8);
     text(`Page ${pages.length}`, 510, 35, 8);
     y = 712;
   };
@@ -481,9 +486,18 @@ function buildPdf(doc: GalleryDocument) {
     write(doc.line_items || 'Photography services as agreed with the studio.');
   }
   y -= 12;
-  if (label === 'INVOICE') {
-    write(`TOTAL DUE: ${formatMoneyWithZero(calculation?.total ?? doc.amount, doc.currency)}`, { bold: true, size: 14, color: '0.88 0.40 0.45', width: 55 });
-    write(`Payment: bank transfer / studio confirmation. Reference: Moyo-${doc.id}`);
+  if (doc.document_type === 'invoice') {
+    write(`${doc.paid_at ? 'TOTAL PAID' : 'TOTAL DUE'}: ${formatMoneyWithZero(calculation?.total ?? doc.amount, doc.currency)}`, { bold: true, size: 14, color: '0.88 0.40 0.45', width: 55 });
+    if (doc.paid_at) {
+      if (y < 160) newPage();
+      y -= 12;
+      commands.push('q', `${BRAND_RED_RGB} RG 3 w 350 ${y - 36} 150 48 re S`, 'Q');
+      text('PAID', 386, y - 23, 26, true, '0.88 0.40 0.45');
+      y -= 60;
+      write(`Payment confirmed: ${new Date(doc.paid_at).toLocaleDateString('en-GB')}`);
+      write(`Balance: ${formatMoneyWithZero(0, doc.currency)}`);
+    }
+    write(`Payment: studio confirmation. Reference: Moyo-${doc.id}`);
     y -= 14;
   }
   if (doc.terms) {
@@ -491,7 +505,9 @@ function buildPdf(doc: GalleryDocument) {
     write(doc.terms);
     y -= 14;
   }
-  write('Thank you for creating with Moyo.', { bold: true });
+  write('Thank you creating with Moyo Ayaworan.', { bold: true });
+  write('Ijabiken Moyosoreoluwa');
+  write('Creative Director, MOYO AYAWORAN');
   write('ijabikenm@gmail.com / +2348148192201');
 
   const objects = [
@@ -525,7 +541,7 @@ function buildPdf(doc: GalleryDocument) {
 function emailHtml(doc: GalleryDocument) {
   const calculation = getCalculatedInvoice(doc);
   const amount = formatMoney(calculation?.total ?? doc.amount, doc.currency);
-  const label = doc.document_type === 'contract' ? 'Contract' : 'Invoice';
+  const label = doc.document_type === 'contract' ? 'Contract' : doc.paid_at ? 'Receipt' : 'Invoice';
   const detailLabel = doc.document_type === 'contract' ? 'Agreement' : 'Service';
   const emailItems = calculation
     ? calculation.items
@@ -591,7 +607,7 @@ function emailHtml(doc: GalleryDocument) {
                         <p style="margin:0;color:#a5a5ab;font-size:13px;line-height:1.65;">${escapeHtml(doc.title)}<br/>${escapeHtml(doc.client_email)}</p>
                       </td>
                       <td valign="top" width="48%" align="right" style="padding:0 0 34px 20px;color:#a5a5ab;font-size:13px;line-height:1.65;">
-                        <strong style="color:#eeeae5;">Ijabiken Moyo</strong><br/>
+                        <strong style="color:#eeeae5;">MOYO AYAWORAN</strong><br/>
                         Photography & Fine Art<br/>
                         ijabikenm@gmail.com
                       </td>
@@ -625,13 +641,14 @@ function emailHtml(doc: GalleryDocument) {
                         <p style="margin:0;color:#eeeae5;font-size:14px;line-height:1.4;">${escapeHtml(doc.due_date || 'On receipt')}</p>
                       </td>
                       <td valign="top" width="36%" align="right" style="padding:18px 0 18px 12px;">
-                        <p style="margin:0 0 10px;color:#a5a5ab;font-size:10px;line-height:1.3;letter-spacing:2px;text-transform:uppercase;">Total due</p>
+                        <p style="margin:0 0 10px;color:#a5a5ab;font-size:10px;line-height:1.3;letter-spacing:2px;text-transform:uppercase;">${doc.paid_at ? 'Total paid' : 'Total due'}</p>
                         <p style="margin:0;color:#e06673;font-size:20px;line-height:1.25;font-weight:700;">${escapeHtml(amount || 'To be confirmed')}</p>
                       </td>
                     </tr>
                   </table>
+                  ${doc.paid_at && doc.document_type === 'invoice' ? `<div style="margin-top:24px;text-align:right;"><span style="display:inline-block;border:3px solid #920110;padding:10px 24px;color:#e06673;font-size:30px;font-weight:bold;letter-spacing:5px;">PAID</span><p style="color:#a5a5ab;font-size:12px;">Payment confirmed ${escapeHtml(new Date(doc.paid_at).toLocaleDateString('en-GB'))}<br/>Balance: ${escapeHtml(formatMoneyWithZero(0, doc.currency))}</p></div>` : ''}
                   ${doc.terms ? `<div style="margin:22px 0 0;padding:16px 0 0;border-top:1px solid #303135;"><p style="margin:0 0 8px;color:#a5a5ab;font-size:10px;line-height:1.3;letter-spacing:2px;text-transform:uppercase;">${label === 'Invoice' ? 'Contract / Terms' : 'Terms'}</p><p style="margin:0;color:#a5a5ab;font-size:12px;line-height:1.7;white-space:pre-line;">${escapeHtml(doc.terms)}</p></div>` : ''}
-                  <p style="margin:26px 0 0;color:#eeeae5;font-size:13px;line-height:1.6;">Thank you! A PDF copy is attached.</p>
+                  <p style="margin:26px 0 0;color:#eeeae5;font-size:13px;line-height:1.6;">Thank you creating with Moyo Ayaworan.<br/><br/>Ijabiken Moyosoreoluwa<br/>Creative Director, MOYO AYAWORAN<br/><br/>A PDF copy is attached.</p>
                 </td>
               </tr>
             </table>
@@ -725,7 +742,7 @@ export async function GET(req: NextRequest) {
       headers: {
         'Content-Type': 'application/pdf',
         'Cache-Control': 'private, no-store',
-        'Content-Disposition': `attachment; filename="${sanitizeFilename(`${doc.document_type}-${doc.id}-${doc.title}`)}.pdf"`,
+        'Content-Disposition': `attachment; filename="${sanitizeFilename(`${doc.paid_at ? 'receipt' : doc.document_type}-${doc.id}-${doc.title}`)}.pdf"`,
       },
     });
   }
@@ -902,6 +919,16 @@ export async function PUT(req: NextRequest) {
     const action = normalize(body.action);
     if (!id) return NextResponse.json({ error: 'Missing document id.' }, { status: 400 });
 
+    if (action === 'markPaid') {
+      const doc = await getDocument(id);
+      if (!doc) return NextResponse.json({ error: 'Document not found.' }, { status: 404 });
+      if (doc.document_type !== 'invoice' || Number(doc.amount) <= 0) return NextResponse.json({ error: 'Only invoices with a positive total can be marked paid.' }, { status: 400 });
+      const { rows } = await query(
+        `UPDATE gallery_documents SET paid_at = COALESCE(paid_at, NOW()), updated_at = NOW() WHERE id = $1 RETURNING *`, [id]
+      );
+      return NextResponse.json({ document: rows[0] });
+    }
+
     if (action === 'send') {
       const doc = await getDocument(id);
       if (!doc) return NextResponse.json({ error: 'Document not found.' }, { status: 404 });
@@ -915,7 +942,7 @@ export async function PUT(req: NextRequest) {
           : { connectionTimeout: 10_000, greetingTimeout: 10_000, socketTimeout: 30_000, service: 'gmail', auth: { user: config.user, pass: config.pass } }
       );
 
-      const label = doc.document_type === 'contract' ? 'Contract' : 'Invoice';
+      const label = doc.document_type === 'contract' ? 'Contract' : doc.paid_at ? 'Receipt' : 'Invoice';
       const logoAttachment = getLogoAttachment();
       const delivery = await transporter.sendMail({
         from: config.from,
@@ -927,7 +954,7 @@ export async function PUT(req: NextRequest) {
         attachments: [
           ...(logoAttachment ? [logoAttachment] : []),
           {
-            filename: `${sanitizeFilename(`${doc.document_type}-${doc.id}-${doc.title}`)}.pdf`,
+            filename: `${sanitizeFilename(`${doc.paid_at ? 'receipt' : doc.document_type}-${doc.id}-${doc.title}`)}.pdf`,
             content: buildPdf(doc),
             contentType: 'application/pdf',
           },

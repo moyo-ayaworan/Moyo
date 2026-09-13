@@ -286,3 +286,43 @@ test('repeated artwork and product creation requests carry stable database dedup
     assert.equal(keys[0], keys[1]);
   }
 });
+
+test('a completed invoice form saves with blank optional discount and tax fields', async () => {
+  let inserted;
+  const route = documentRoute(async (sql, params) => {
+    if (sql.startsWith('SELECT')) return { rows: [{ client_name: 'Client' }] };
+    inserted = params;
+    return { rows: [{ id: 42, gallery_id: params[0], amount: params[4] }] };
+  });
+  const result = await route.POST(request({ ...invoiceBody, title: 'Photography Invoice', dueDate: '2026-10-01', discountType: 'fixed', discountValue: '', taxRate: '', terms: 'Delivery after payment.', items: [{ description: 'Portrait session', quantity: '1', unitPrice: '500000' }] }));
+  assert.equal(result.status, 200);
+  assert.equal(result.body.document.id, 42);
+  assert.equal(inserted[4], 500000);
+});
+
+test('payment confirmation is invoice-specific and keeps the original payment date', async () => {
+  let updateSql;
+  const route = documentRoute(async sql => {
+    if (sql.includes('UPDATE')) updateSql = sql;
+    return { rows: [savedInvoice] };
+  });
+  assert.equal((await route.PUT(request({ id: 1, action: 'markPaid' }))).status, 200);
+  assert.ok(updateSql.includes('paid_at = COALESCE(paid_at, NOW())'));
+  const contract = documentRoute(async () => ({ rows: [{ ...savedInvoice, document_type: 'contract' }] }));
+  assert.equal((await contract.PUT(request({ id: 1, action: 'markPaid' }))).status, 400);
+});
+
+test('only confirmed payments produce stamped receipts with the full studio signature', async () => {
+  for (const paid_at of [null, '2026-09-13T12:00:00Z']) {
+    let email;
+    const route = documentRoute(async () => ({ rows: [{ ...savedInvoice, paid_at }] }), async message => { email = message; return { accepted: ['client@example.test'] }; });
+    assert.equal((await route.PUT(request({ id: 1, action: 'send' }))).status, 200);
+    const pdf = email.attachments.find(item => item.contentType === 'application/pdf').content.toString();
+    assert.equal(email.html.includes('>PAID</span>'), Boolean(paid_at));
+    assert.equal(pdf.includes('(PAID)'), Boolean(paid_at));
+    assert.ok(email.subject.startsWith(paid_at ? 'Receipt:' : 'Invoice:'));
+    assert.ok(pdf.includes('Thank you creating with Moyo Ayaworan.'));
+    assert.ok(pdf.includes('Ijabiken Moyosoreoluwa'));
+    assert.ok(email.html.includes('Creative Director, MOYO AYAWORAN'));
+  }
+});

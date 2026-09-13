@@ -117,6 +117,7 @@ type GalleryDocument = {
   line_items: string;
   terms: string;
   sent_at: string | null;
+  paid_at?: string | null;
   created_at: string;
 };
 
@@ -389,6 +390,7 @@ function getDocumentFormIssues(form: GalleryDocumentForm) {
   if (form.terms.length > 3000) issues.push('Terms are too long.');
   if (form.documentType === 'invoice') {
     if (getDefaultInvoiceItems(form).some((item) => !item.description.trim() || !item.quantity || !item.unitPrice || !Number.isFinite(Number(item.quantity)) || !Number.isFinite(Number(item.unitPrice)))) issues.push('Complete every item description, quantity, and price.');
+    if (getDefaultInvoiceItems(form).some(item => item.description.trim().length > 220)) issues.push('Keep each item description under 220 characters.');
     if (getDefaultInvoiceItems(form).length > 20) issues.push('Use no more than 20 invoice items.');
     if (Number(form.taxRate) > 100) issues.push('Tax cannot exceed 100%.');
     if (!calculation.items.some((item) => item.description && item.quantity > 0 && item.unitPrice > 0)) {
@@ -408,7 +410,7 @@ function getDocumentFormIssues(form: GalleryDocumentForm) {
   return issues;
 }
 
-function DocumentManager({ gallery, galleries = [], documents, actions, onSend, onDownload, onDelete, onNew, children }: {
+function DocumentManager({ gallery, galleries = [], documents, actions, onSend, onDownload, onDelete, onPaid, onNew, children }: {
   gallery?: Gallery;
   galleries?: Gallery[];
   documents: GalleryDocument[];
@@ -416,6 +418,7 @@ function DocumentManager({ gallery, galleries = [], documents, actions, onSend, 
   onSend: (document: GalleryDocument) => void;
   onDownload: (document: GalleryDocument) => void;
   onDelete: (document: GalleryDocument) => void;
+  onPaid: (document: GalleryDocument) => void;
   onNew: () => void;
   children: React.ReactNode;
 }) {
@@ -425,9 +428,20 @@ function DocumentManager({ gallery, galleries = [], documents, actions, onSend, 
   const [year, setYear] = useState('all');
   const [editing, setEditing] = useState(false);
   const editorRef = useRef<HTMLDetailsElement>(null);
+  const previousDocumentCount = useRef(documents.length);
+  useEffect(() => {
+    if (documents.length > previousDocumentCount.current) {
+      setFilter('all');
+      setSearch('');
+      setYear('all');
+      setEditing(false);
+      requestAnimationFrame(() => editorRef.current?.closest('section')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
+    previousDocumentCount.current = documents.length;
+  }, [documents.length]);
   const years = [...new Set(documents.map(doc => new Date(doc.created_at).getFullYear()).filter(Number.isFinite))].sort((a, b) => b - a);
   const scoped = documents.filter(doc => (year === 'all' || String(new Date(doc.created_at).getFullYear()) === year) && `${doc.title} ${doc.client_email} Moyo-${doc.id} ${clientName(doc)}`.toLowerCase().includes(search.toLowerCase()));
-  const visible = scoped.filter(doc => filter === 'all' || (filter === 'sent' ? Boolean(doc.sent_at) : !doc.sent_at)).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  const visible = scoped.filter(doc => filter === 'all' || (filter === 'paid' ? Boolean(doc.paid_at) : filter === 'sent' ? Boolean(doc.sent_at) : !doc.sent_at)).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   const groups = visible.reduce<Record<string, GalleryDocument[]>>((result, doc) => {
     const month = new Date(doc.created_at).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
     (result[month] ||= []).push(doc);
@@ -444,8 +458,8 @@ function DocumentManager({ gallery, galleries = [], documents, actions, onSend, 
         <label className="flex items-center gap-3 rounded border border-white/20 px-3 text-xs text-white/60">Year<select aria-label="Filter documents by year" value={year} onChange={e => setYear(e.target.value)} className="bg-[#101113] py-3 text-sm text-white"><option value="all">All years</option>{years.map(value => <option key={value}>{value}</option>)}</select></label>
         <input aria-label="Search documents" placeholder="Search name, title, or invoice number…" value={search} onChange={e => setSearch(e.target.value)} className="min-w-0 flex-1 rounded border border-white/20 bg-[#18191c] px-4 py-3 text-sm text-white placeholder:text-white/50" />
       </div>
-      <div className="grid grid-cols-3 gap-2 rounded-lg border border-white/10 bg-[#18191c] p-2" aria-label="Document status filters">
-        {[['all', 'All', scoped.length], ['sent', 'Sent', scoped.filter(doc => doc.sent_at).length], ['unsent', 'Unsent', scoped.filter(doc => !doc.sent_at).length]].map(([value, title, count]) => <button type="button" key={value} aria-pressed={filter === value} onClick={() => setFilter(String(value))} className={`flex flex-wrap items-center justify-between gap-2 rounded px-3 py-3 text-sm ${filter === value ? 'bg-[#920110] text-white' : 'text-white/70 hover:bg-white/5'}`}><span>{title}</span><span className="rounded-full bg-white/10 px-2 py-0.5 text-xs">{count}</span></button>)}
+      <div className="grid grid-cols-2 gap-2 rounded-lg border border-white/10 bg-[#18191c] p-2" aria-label="Document status filters">
+        {[['all', 'All', scoped.length], ['sent', 'Sent', scoped.filter(doc => doc.sent_at).length], ['unsent', 'Unsent', scoped.filter(doc => !doc.sent_at).length], ['paid', 'Paid', scoped.filter(doc => doc.paid_at).length]].map(([value, title, count]) => <button type="button" key={value} aria-pressed={filter === value} onClick={() => setFilter(String(value))} className={`flex flex-wrap items-center justify-between gap-2 rounded px-3 py-3 text-sm ${filter === value ? 'bg-[#920110] text-white' : 'text-white/70 hover:bg-white/5'}`}><span>{title}</span><span className="rounded-full bg-white/10 px-2 py-0.5 text-xs">{count}</span></button>)}
       </div>
       <div className="space-y-4">
         {Object.entries(groups).map(([month, docs]) => {
@@ -455,10 +469,10 @@ function DocumentManager({ gallery, galleries = [], documents, actions, onSend, 
             <div className="divide-y divide-white/10">{docs.map(doc => <article key={doc.id} className="p-4">
               <div className="flex items-start gap-3 sm:gap-4">
                 <div className="w-12 shrink-0 rounded border border-[#920110]/60 bg-[#920110]/20 py-2 text-center text-white"><p className="text-[10px] uppercase text-white/60">{new Date(doc.created_at).toLocaleDateString('en-GB', { month: 'short' })}</p><p className="mt-1 text-xl font-semibold">{new Date(doc.created_at).getDate()}</p></div>
-                <div className="min-w-0 flex-1"><p className="text-base font-semibold text-white [overflow-wrap:anywhere]">{clientName(doc)}</p><p className="mt-1 text-xs text-white/60 [overflow-wrap:anywhere]">{doc.title}</p><div className="mt-2 flex flex-wrap items-center gap-2 text-xs"><span className="text-white/50">Moyo-{doc.id}</span><span className="rounded-full border border-white/15 bg-white/5 px-2 py-1 text-white/80">{doc.sent_at ? 'Sent' : 'Unsent'}</span><span className="capitalize text-white/50">{doc.document_type}</span></div></div>
+                <div className="min-w-0 flex-1"><p className="text-base font-semibold text-white [overflow-wrap:anywhere]">{clientName(doc)}</p><p className="mt-1 text-xs text-white/60 [overflow-wrap:anywhere]">{doc.title}</p><div className="mt-2 flex flex-wrap items-center gap-2 text-xs"><span className="text-white/50">Moyo-{doc.id}</span><span className="rounded-full border border-white/15 bg-white/5 px-2 py-1 text-white/80">{doc.paid_at ? 'Paid' : doc.sent_at ? 'Sent' : 'Unsent'}</span><span className="capitalize text-white/50">{doc.document_type}</span></div></div>
                 <div className="max-w-[40%] text-right"><p className="text-sm font-semibold tabular-nums text-white [overflow-wrap:anywhere]">{doc.document_type === 'invoice' ? formatDocumentAmount(Number(doc.amount), doc.currency) : 'Contract'}</p>{doc.due_date && <p className="mt-2 text-xs text-white/50">Due {doc.due_date}</p>}</div>
               </div>
-              <div className="mt-4 flex flex-wrap gap-2 sm:pl-16"><button type="button" className={button} disabled={Boolean(actions[`send-${doc.id}`])} onClick={() => onSend(doc)}>{actions[`send-${doc.id}`] ? 'Sending…' : doc.sent_at ? 'Resend email' : 'Send email'}</button><button type="button" className={button} disabled={Boolean(actions[`download-${doc.id}`])} onClick={() => onDownload(doc)}>{actions[`download-${doc.id}`] ? 'Downloading…' : 'Download PDF'}</button><button type="button" className={`${button} !text-red-300`} disabled={Boolean(actions[`delete-${doc.id}`])} onClick={() => onDelete(doc)}>Delete</button></div>
+              <div className="mt-4 flex flex-wrap gap-2 sm:pl-16"><button type="button" className={button} disabled={Boolean(actions[`send-${doc.id}`])} onClick={() => onSend(doc)}>{actions[`send-${doc.id}`] ? 'Sending…' : doc.paid_at ? 'Email receipt' : doc.sent_at ? 'Resend email' : 'Send email'}</button><button type="button" className={button} disabled={Boolean(actions[`download-${doc.id}`])} onClick={() => onDownload(doc)}>{actions[`download-${doc.id}`] ? 'Downloading…' : doc.paid_at ? 'Download receipt' : 'Download PDF'}</button>{doc.document_type === 'invoice' && !doc.paid_at && <button type="button" className={button} disabled={Boolean(actions[`paid-${doc.id}`])} onClick={() => onPaid(doc)}>{actions[`paid-${doc.id}`] ? 'Confirming…' : 'Confirm full payment'}</button>}<button type="button" className={`${button} !text-red-300`} disabled={Boolean(actions[`delete-${doc.id}`])} onClick={() => onDelete(doc)}>Delete</button></div>
             </article>)}</div>
           </div>;
         })}
@@ -494,7 +508,7 @@ function DocumentPreview({ gallery, form }: { gallery: Gallery; form: GalleryDoc
       <div className="flex min-w-0 flex-col gap-7 p-5 sm:p-7">
         <div className="flex flex-wrap items-start justify-between gap-6 pb-3">
           <div>
-            <p className="text-sm font-semibold">Ijabiken Moyo<span className="text-[#d44958]">.</span></p>
+            <p className="text-sm font-semibold">MOYO AYAWORAN<span className="text-[#d44958]">.</span></p>
             <p className="mt-2 text-[11px] leading-relaxed text-[#a5a5ab]">Photography & Fine Art<br />ijabikenm@gmail.com</p>
           </div>
           <div className="text-right">
@@ -544,7 +558,7 @@ function DocumentPreview({ gallery, form }: { gallery: Gallery; form: GalleryDoc
           {form.documentType === 'invoice' && <p className="mt-2 text-xs text-[#eeeae5]">Bank transfer / studio confirmation</p>}
           <p className="mt-3 whitespace-pre-wrap text-xs leading-relaxed text-[#a5a5ab] [overflow-wrap:anywhere]">{terms}</p>
         </div>
-        <p className="pt-6 text-[9px] uppercase tracking-[0.2em] text-[#a5a5ab]">Thank you for creating with Moyo.</p>
+        <p className="pt-6 text-[9px] uppercase tracking-[0.2em] text-[#a5a5ab]">Thank you creating with Moyo Ayaworan.<br /><br />Ijabiken Moyosoreoluwa<br />Creative Director, MOYO AYAWORAN</p>
       </div>
     </aside>
   );
@@ -763,6 +777,7 @@ export default function AdminPage() {
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [digitalProducts, setDigitalProducts] = useState<DigitalProduct[]>([]);
+  const [documentFeedback, setDocumentFeedback] = useState<Record<number, { text: string; type: 'success' | 'error' }>>({});
   const [invoiceGalleryId, setInvoiceGalleryId] = useState('');
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [catalogCategories, setCatalogCategories] = useState<PhotographyCatalogCategory[]>([]);
@@ -1724,16 +1739,33 @@ export default function AdminPage() {
     });
   };
 
+  const markInvoicePaid = async (document: GalleryDocument) => {
+    if (!window.confirm(`Confirm that full payment of ${formatDocumentAmount(Number(document.amount), document.currency)} has been received for Moyo-${document.id}? This will issue a paid receipt.`)) return;
+    const actionId = `paid-${document.id}`;
+    setDocumentActionIds(prev => ({ ...prev, [actionId]: true }));
+    try {
+      const res = await fetch('/api/galleries/documents', { method: 'PUT', headers, body: JSON.stringify({ id: document.id, action: 'markPaid' }) });
+      const data = await readJsonResponse<{ document?: GalleryDocument }>(res, 'Unable to confirm payment');
+      if (!data.document) throw new Error('Unable to confirm payment');
+      setGalleryDocuments(prev => ({ ...prev, [document.gallery_id]: (prev[document.gallery_id] || []).map(item => item.id === document.id ? data.document! : item) }));
+      setMessage({ text: 'Payment confirmed. Your paid receipt is ready to download or email.', type: 'success' });
+    } catch (error) {
+      setMessage({ text: error instanceof Error ? error.message : 'Unable to confirm payment', type: 'error' });
+    } finally { setDocumentActionIds(prev => { const next = { ...prev }; delete next[actionId]; return next; }); }
+  };
+
   const createGalleryDocument = async (gallery: Gallery) => {
+    const feedback = (value: { text: string; type: 'success' | 'error' }) => setDocumentFeedback(prev => ({ ...prev, [gallery.id]: value }));
     const form = getGalleryDocumentForm(gallery);
     const issues = getDocumentFormIssues(form);
-    if (issues.length) return setMessage({ text: issues[0], type: 'error' });
+    if (issues.length) return feedback({ text: issues[0], type: 'error' });
 
     const actionId = `create-${gallery.id}`;
     setDocumentActionIds((prev) => ({ ...prev, [actionId]: true }));
     try {
       const res = await fetch('/api/galleries/documents', {
         method: 'POST',
+        signal: AbortSignal.timeout(30_000),
         headers,
         body: JSON.stringify({
           galleryId: gallery.id,
@@ -1742,16 +1774,16 @@ export default function AdminPage() {
           lineItems: form.documentType === 'invoice' ? invoiceItemsToText(form) : form.lineItems,
         }),
       });
-      const data = await res.json();
-      if (!res.ok || !data.document) return setMessage({ text: data.error || 'Unable to create document', type: 'error' });
+      const data = await readJsonResponse<{ document?: GalleryDocument; error?: string }>(res, 'Unable to create document');
+      if (!res.ok || !data.document) return feedback({ text: data.error || 'Unable to create document', type: 'error' });
       setGalleryDocuments((prev) => ({
         ...prev,
-        [gallery.id]: [data.document, ...(prev[gallery.id] || [])],
+        [gallery.id]: [data.document!, ...(prev[gallery.id] || [])],
       }));
       setGalleryDocumentForms((prev) => ({ ...prev, [gallery.id]: defaultDocumentForm }));
-      setMessage({ text: `${form.documentType === 'contract' ? 'Contract' : 'Invoice'} created`, type: 'success' });
-    } catch {
-      setMessage({ text: 'Unable to create document. Check your connection and try again.', type: 'error' });
+      feedback({ text: `${form.documentType === 'contract' ? 'Contract' : 'Invoice'} created`, type: 'success' });
+    } catch (error) {
+      feedback({ text: error instanceof Error ? error.message : 'Unable to create document. Check your connection and try again.', type: 'error' });
     } finally {
       setDocumentActionIds((prev) => {
         const next = { ...prev };
@@ -1844,7 +1876,7 @@ export default function AdminPage() {
       const url = URL.createObjectURL(blob);
       const link = window.document.createElement('a');
       link.href = url;
-      link.download = `${sanitizeFilename(`${document.document_type}-${document.id}-${document.title}`)}.pdf`;
+      link.download = `${sanitizeFilename(`${document.paid_at ? 'receipt' : document.document_type}-${document.id}-${document.title}`)}.pdf`;
       link.style.display = 'none';
       window.document.body.appendChild(link);
       link.click();
@@ -2407,11 +2439,12 @@ export default function AdminPage() {
                               />
                               {getDocumentFormIssues(docForm).length > 0 && (
                                 <div className="space-y-1 border border-yellow-400/25 bg-yellow-400/[0.06] p-3 text-xs leading-relaxed text-yellow-100/80">
-                                  {getDocumentFormIssues(docForm).slice(0, 3).map((issue) => (
+                                  {getDocumentFormIssues(docForm).map((issue) => (
                                     <p key={issue}>{issue}</p>
                                   ))}
                                 </div>
                               )}
+                              {documentFeedback[gal.id] && <p role={documentFeedback[gal.id].type === 'error' ? 'alert' : 'status'} className={`rounded border p-3 text-sm ${documentFeedback[gal.id].type === 'error' ? 'border-red-400/40 text-red-200' : 'border-green-400/40 text-green-200'}`}>{documentFeedback[gal.id].text}</p>}
                               <div className="grid gap-3 sm:grid-cols-2">
                                 <button
                                   type="button"
@@ -2423,7 +2456,7 @@ export default function AdminPage() {
                                 </button>
                                 <button
                                   type="button"
-                                  disabled={Boolean(documentActionIds[`create-${gal.id}`]) || getDocumentFormIssues(docForm).length > 0}
+                                  disabled={Boolean(documentActionIds[`create-${gal.id}`])}
                                   onClick={() => createGalleryDocument(gal)}
                                   className="bg-white px-4 py-3 text-[10px] font-bold uppercase tracking-[0.22em] text-black transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
                                 >
@@ -2639,7 +2672,7 @@ export default function AdminPage() {
 
         <div className="space-y-4">
           {shouldShowSection('invoices') && (
-            <DocumentManager galleries={galleries} documents={Object.values(galleryDocuments).flat()} actions={documentActionIds} onSend={sendGalleryDocument} onDownload={downloadGalleryDocument} onDelete={deleteGalleryDocument} onNew={() => {
+            <DocumentManager galleries={galleries} documents={Object.values(galleryDocuments).flat()} actions={documentActionIds} onSend={sendGalleryDocument} onDownload={downloadGalleryDocument} onDelete={deleteGalleryDocument} onPaid={markInvoicePaid} onNew={() => {
               const selected = galleries.find(gal => String(gal.id) === invoiceGalleryId);
               if (selected) updateGalleryDocumentForm(selected.id, { documentType: 'invoice', title: 'Photography Invoice' });
             }}>
@@ -4111,7 +4144,7 @@ export default function AdminPage() {
                       const docs = galleryDocuments[gal.id] || [];
                       return (
                         <>
-                          <DocumentManager gallery={gal} documents={docs} actions={documentActionIds} onSend={sendGalleryDocument} onDownload={downloadGalleryDocument} onDelete={deleteGalleryDocument} onNew={() => updateGalleryDocumentForm(gal.id, { documentType: 'invoice', title: 'Photography Invoice' })}>
+                          <DocumentManager gallery={gal} documents={docs} actions={documentActionIds} onSend={sendGalleryDocument} onDownload={downloadGalleryDocument} onDelete={deleteGalleryDocument} onPaid={markInvoicePaid} onNew={() => updateGalleryDocumentForm(gal.id, { documentType: 'invoice', title: 'Photography Invoice' })}>
                           {renderDocumentEditor(gal)}
 
                           </DocumentManager>
