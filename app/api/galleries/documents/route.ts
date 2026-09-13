@@ -57,7 +57,7 @@ const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 const BRAND_RED_RGB = '0.572 0.004 0.063';
 const LOGO_PATH = path.join(process.cwd(), 'public', 'brand', 'moyo-logo-red.png');
-const PDF_LOGO_BACKGROUND = { r: 255, g: 255, b: 255 };
+const PDF_LOGO_BACKGROUND = { r: 21, g: 22, b: 24 };
 let cachedPdfLogo: { width: number; height: number; hex: string } | null | undefined;
 
 function normalize(value: unknown) {
@@ -412,16 +412,18 @@ function buildPdf(doc: GalleryDocument) {
   const pages: string[][] = [];
   let commands: string[] = [];
   let y = 0;
-  const text = (value: string, x: number, at: number, size = 10, bold = false, color = '0.12 0.12 0.12') => {
+  const text = (value: string, x: number, at: number, size = 10, bold = false, color = '0.93 0.92 0.90') => {
     commands.push(`BT ${color} rg /${bold ? 'F2' : 'F1'} ${size} Tf ${x} ${at} Td (${pdfEscape(pdfSafe(value))}) Tj ET`);
   };
   const newPage = () => {
     commands = [];
     pages.push(commands);
+    commands.push('0.0824 0.0863 0.0941 rg 0 0 612 792 re f');
     commands.push(`${BRAND_RED_RGB} rg 48 740 516 3 re f`);
     if (logo) commands.push('q', `65 0 0 ${Math.round(logo.height / logo.width * 65)} 48 752 cm`, '/Logo Do', 'Q');
     else text('MOYO', 48, 758, 16, true, BRAND_RED_RGB);
-    text(`${label} / MOYO-${doc.id}`, 340, 760, 12, true);
+    text(label, 355, 763, 26);
+    text(`MOYO-${doc.id}`, 355, 749, 8);
     text('Ijabiken Moyo / Photography & Fine Art', 48, 35, 8);
     text(`Page ${pages.length}`, 510, 35, 8);
     y = 712;
@@ -440,12 +442,36 @@ function buildPdf(doc: GalleryDocument) {
   write(doc.client_email);
   write(`Issued: ${new Date(doc.created_at || Date.now()).toLocaleDateString('en-GB')}    Due: ${doc.due_date || 'On receipt'}`);
   y -= 18;
-  write(label === 'INVOICE' ? 'SERVICES' : 'SCOPE OF WORK', { bold: true, color: BRAND_RED_RGB });
+  write(label === 'INVOICE' ? 'SERVICES' : 'SCOPE OF WORK', { bold: true, color: '0.88 0.40 0.45' });
   if (calculation) {
-    calculation.items.forEach((item, index) => {
+    const tableHeader = () => {
+      text('ITEM', 48, y, 8);
+      text('QTY', 320, y, 8);
+      text('RATE', 365, y, 8);
+      text('AMOUNT', 465, y, 8);
+      y -= 10;
+      commands.push(`0.20 0.20 0.22 RG 0.5 w 48 ${y} m 564 ${y} l S`);
+      y -= 18;
+    };
+    tableHeader();
+    calculation.items.forEach((item) => {
+      const description = wrapText(pdfSafe(item.description), 42);
+      const rate = wrapText(pdfSafe(formatMoneyWithZero(item.unitPrice, doc.currency)), 17);
+      const total = wrapText(pdfSafe(formatMoneyWithZero(item.total, doc.currency)), 17);
+      const quantity = wrapText(String(item.quantity), 7);
+      const rowLines = Math.max(description.length, rate.length, total.length, quantity.length);
+      if (y - Math.min(rowLines, 35) * 15 < 75) { newPage(); tableHeader(); }
+      for (let line = 0; line < rowLines; line += 1) {
+        if (y < 75) { newPage(); tableHeader(); }
+        if (description[line]) text(description[line], 48, y, 10);
+        if (quantity[line]) text(quantity[line], 320, y, 9);
+        if (rate[line]) text(rate[line], 365, y, 9);
+        if (total[line]) text(total[line], 465, y, 9);
+        y -= 15;
+      }
       y -= 8;
-      write(`${index + 1}. ${item.description}`, { bold: true });
-      write(`Quantity: ${item.quantity}  /  Unit: ${formatMoneyWithZero(item.unitPrice, doc.currency)}  /  Amount: ${formatMoneyWithZero(item.total, doc.currency)}`);
+      commands.push(`0.20 0.20 0.22 RG 0.5 w 48 ${y} m 564 ${y} l S`);
+      y -= 18;
     });
     y -= 16;
     write(`Subtotal: ${formatMoneyWithZero(calculation.subtotal, doc.currency)}`);
@@ -456,12 +482,12 @@ function buildPdf(doc: GalleryDocument) {
   }
   y -= 12;
   if (label === 'INVOICE') {
-    write(`TOTAL DUE: ${formatMoneyWithZero(calculation?.total ?? doc.amount, doc.currency)}`, { bold: true, size: 14, color: BRAND_RED_RGB, width: 55 });
+    write(`TOTAL DUE: ${formatMoneyWithZero(calculation?.total ?? doc.amount, doc.currency)}`, { bold: true, size: 14, color: '0.88 0.40 0.45', width: 55 });
     write(`Payment: bank transfer / studio confirmation. Reference: Moyo-${doc.id}`);
     y -= 14;
   }
   if (doc.terms) {
-    write('TERMS', { bold: true, color: BRAND_RED_RGB });
+    write('TERMS', { bold: true, color: '0.88 0.40 0.45' });
     write(doc.terms);
     y -= 14;
   }
@@ -506,15 +532,17 @@ function emailHtml(doc: GalleryDocument) {
     : getDocumentLines(doc).map((item, index) => ({
         description: item,
         quantity: index === 0 ? 1 : 0,
+        unitPrice: index === 0 ? Number(doc.amount || 0) : 0,
         total: index === 0 ? Number(doc.amount || 0) : 0,
       }));
   const itemRows = emailItems
     .map(
       (item, index) => `
         <tr>
-          <td width="55%" style="padding:14px 12px 14px 0;border-top:1px solid #dedbd3;color:#151515;font-size:13px;line-height:1.45;font-weight:${index === 0 ? '700' : '400'};word-break:break-word;">${escapeHtml(item.description)}</td>
-          <td width="20%" style="padding:14px 8px;border-top:1px solid #dedbd3;color:#6f6f6f;font-size:12px;line-height:1.45;text-align:center;">${calculation ? `Qty ${item.quantity}` : index === 0 ? detailLabel : 'Item'}</td>
-          <td width="25%" style="padding:14px 0 14px 12px;border-top:1px solid #dedbd3;color:${item.total > 0 ? '#920110' : '#6f6f6f'};font-size:13px;line-height:1.45;font-weight:${item.total > 0 ? '700' : '400'};text-align:right;white-space:nowrap;">${item.total > 0 ? escapeHtml(formatMoneyWithZero(item.total, doc.currency)) : '-'}</td>
+          <td width="40%" style="padding:14px 12px 14px 0;border-top:1px solid #303135;color:#eeeae5;font-size:13px;line-height:1.45;font-weight:${index === 0 ? '700' : '400'};word-break:break-word;">${escapeHtml(item.description)}</td>
+          <td width="10%" style="padding:14px 8px;border-top:1px solid #303135;color:#a5a5ab;font-size:12px;line-height:1.45;text-align:center;">${calculation ? `Qty ${item.quantity}` : index === 0 ? detailLabel : 'Item'}</td>
+          <td width="25%" style="padding:14px 8px;border-top:1px solid #303135;color:#a5a5ab;font-size:12px;text-align:right;word-break:break-word;">${calculation ? escapeHtml(formatMoneyWithZero(item.unitPrice, doc.currency)) : '—'}</td>
+          <td width="25%" style="padding:14px 0 14px 12px;border-top:1px solid #303135;color:${item.total > 0 ? '#e06673' : '#a5a5ab'};font-size:13px;line-height:1.45;font-weight:${item.total > 0 ? '700' : '400'};text-align:right;overflow-wrap:anywhere;word-break:break-word;">${item.total > 0 ? escapeHtml(formatMoneyWithZero(item.total, doc.currency)) : '-'}</td>
         </tr>
       `
     )
@@ -522,35 +550,36 @@ function emailHtml(doc: GalleryDocument) {
   const summaryRows = calculation
     ? `
       <tr>
-        <td colspan="2" align="right" style="padding:14px 12px 0 0;color:#555555;font-size:12px;line-height:1.5;">Subtotal</td>
-        <td align="right" style="padding:14px 0 0 12px;color:#222222;font-size:12px;line-height:1.5;white-space:nowrap;">${escapeHtml(formatMoneyWithZero(calculation.subtotal, doc.currency))}</td>
+        <td colspan="3" align="right" style="padding:14px 12px 0 0;color:#a5a5ab;font-size:12px;line-height:1.5;">Subtotal</td>
+        <td align="right" style="padding:14px 0 0 12px;color:#eeeae5;font-size:12px;line-height:1.5;overflow-wrap:anywhere;word-break:break-word;">${escapeHtml(formatMoneyWithZero(calculation.subtotal, doc.currency))}</td>
       </tr>
       <tr>
-        <td colspan="2" align="right" style="padding:8px 12px 0 0;color:#555555;font-size:12px;line-height:1.5;">Discount</td>
-        <td align="right" style="padding:8px 0 0 12px;color:#222222;font-size:12px;line-height:1.5;white-space:nowrap;">-${escapeHtml(formatMoneyWithZero(calculation.discount, doc.currency))}</td>
+        <td colspan="3" align="right" style="padding:8px 12px 0 0;color:#a5a5ab;font-size:12px;line-height:1.5;">Discount</td>
+        <td align="right" style="padding:8px 0 0 12px;color:#eeeae5;font-size:12px;line-height:1.5;overflow-wrap:anywhere;word-break:break-word;">-${escapeHtml(formatMoneyWithZero(calculation.discount, doc.currency))}</td>
       </tr>
       <tr>
-        <td colspan="2" align="right" style="padding:8px 12px 0 0;color:#555555;font-size:12px;line-height:1.5;">Tax${calculation.taxRate ? ` (${calculation.taxRate}%)` : ''}</td>
-        <td align="right" style="padding:8px 0 0 12px;color:#222222;font-size:12px;line-height:1.5;white-space:nowrap;">${escapeHtml(formatMoneyWithZero(calculation.tax, doc.currency))}</td>
+        <td colspan="3" align="right" style="padding:8px 12px 0 0;color:#a5a5ab;font-size:12px;line-height:1.5;">Tax${calculation.taxRate ? ` (${calculation.taxRate}%)` : ''}</td>
+        <td align="right" style="padding:8px 0 0 12px;color:#eeeae5;font-size:12px;line-height:1.5;overflow-wrap:anywhere;word-break:break-word;">${escapeHtml(formatMoneyWithZero(calculation.tax, doc.currency))}</td>
       </tr>
     `
     : '';
   return `
-    <body style="margin:0;padding:0;background:#f5f3ee;color:#151515;font-family:Arial,Helvetica,sans-serif;">
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;background:#f5f3ee;">
+    <head><meta name="color-scheme" content="dark"><meta name="supported-color-schemes" content="dark"></head>
+    <body style="margin:0;padding:0;background:#0b0c0e;color:#eeeae5;font-family:Arial,Helvetica,sans-serif;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;background:#0b0c0e;">
         <tr>
           <td align="center" style="padding:24px 12px;">
-            <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="width:100%;max-width:600px;border-collapse:collapse;background:#ffffff;border:1px solid #e1ded6;">
+            <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="width:100%;max-width:600px;border-collapse:collapse;background:#151618;border:1px solid #303135;border-top:3px solid #920110;">
               <tr>
-                <td style="padding:34px 38px 28px;background:#ffffff;">
+                <td style="padding:34px 24px 28px;background:#151618;">
                   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;">
                     <tr>
                       <td valign="middle" style="padding:0 0 38px;">
                         <img src="cid:moyo-logo" width="82" alt="Moyo" style="display:block;width:82px;height:auto;border:0;outline:none;text-decoration:none;" />
                       </td>
                       <td valign="middle" align="right" style="padding:0 0 38px;">
-                        <h1 style="margin:0;color:#111111;font-size:22px;line-height:1.2;letter-spacing:2px;text-transform:uppercase;">${escapeHtml(label)}</h1>
-                        <p style="margin:8px 0 0;color:#777777;font-size:12px;line-height:1.5;">Moyo-${doc.id}</p>
+                        <h1 style="margin:0;color:#eeeae5;font-size:32px;font-weight:300;line-height:1.2;letter-spacing:5px;text-transform:uppercase;">${escapeHtml(label)}</h1>
+                        <p style="margin:8px 0 0;color:#a5a5ab;font-size:12px;line-height:1.5;">Moyo-${doc.id}</p>
                       </td>
                     </tr>
                   </table>
@@ -558,11 +587,11 @@ function emailHtml(doc: GalleryDocument) {
                   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;">
                     <tr>
                       <td valign="top" width="52%" style="padding:0 20px 34px 0;">
-                        <h2 style="margin:0 0 10px;color:#111111;font-size:17px;line-height:1.3;">${escapeHtml(doc.client_name || 'Client Name')}</h2>
-                        <p style="margin:0;color:#555555;font-size:13px;line-height:1.65;">${escapeHtml(doc.title)}<br/>${escapeHtml(doc.client_email)}</p>
+                        <h2 style="margin:0 0 10px;color:#eeeae5;font-size:17px;line-height:1.3;">${escapeHtml(doc.client_name || 'Client Name')}</h2>
+                        <p style="margin:0;color:#a5a5ab;font-size:13px;line-height:1.65;">${escapeHtml(doc.title)}<br/>${escapeHtml(doc.client_email)}</p>
                       </td>
-                      <td valign="top" width="48%" align="right" style="padding:0 0 34px 20px;color:#555555;font-size:13px;line-height:1.65;">
-                        <strong style="color:#111111;">Ijabiken Moyo</strong><br/>
+                      <td valign="top" width="48%" align="right" style="padding:0 0 34px 20px;color:#a5a5ab;font-size:13px;line-height:1.65;">
+                        <strong style="color:#eeeae5;">Ijabiken Moyo</strong><br/>
                         Photography & Fine Art<br/>
                         ijabikenm@gmail.com
                       </td>
@@ -572,9 +601,10 @@ function emailHtml(doc: GalleryDocument) {
                   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;table-layout:fixed;">
                     <thead>
                       <tr>
-                        <th width="55%" align="left" style="padding:0 12px 12px 0;color:#777777;font-size:10px;line-height:1.3;letter-spacing:2px;text-transform:uppercase;">Description</th>
-                        <th width="20%" align="center" style="padding:0 8px 12px;color:#777777;font-size:10px;line-height:1.3;letter-spacing:2px;text-transform:uppercase;">Details</th>
-                        <th width="25%" align="right" style="padding:0 0 12px 12px;color:#777777;font-size:10px;line-height:1.3;letter-spacing:2px;text-transform:uppercase;">Subtotal</th>
+                        <th width="40%" align="left" style="padding:0 12px 12px 0;color:#a5a5ab;font-size:10px;line-height:1.3;letter-spacing:2px;text-transform:uppercase;">Description</th>
+                        <th width="10%" align="center" style="padding:0 8px 12px;color:#a5a5ab;font-size:10px;line-height:1.3;letter-spacing:2px;text-transform:uppercase;">Qty</th>
+                        <th width="25%" align="right" style="padding:0 8px 12px;color:#a5a5ab;font-size:10px;letter-spacing:2px;text-transform:uppercase;">Rate</th>
+                        <th width="25%" align="right" style="padding:0 0 12px 12px;color:#a5a5ab;font-size:10px;line-height:1.3;letter-spacing:2px;text-transform:uppercase;">Amount</th>
                       </tr>
                     </thead>
                     <tbody>${itemRows}${summaryRows}</tbody>
@@ -583,25 +613,25 @@ function emailHtml(doc: GalleryDocument) {
               </tr>
 
               <tr>
-                <td style="padding:28px 38px 34px;background:#eceae3;">
-                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;border-top:1px solid #cbc7bd;border-bottom:1px solid #cbc7bd;">
+                <td style="padding:28px 24px 34px;background:#151618;">
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;border-top:1px solid #303135;border-bottom:1px solid #303135;">
                     <tr>
                       <td valign="top" width="39%" style="padding:18px 12px 18px 0;">
-                        <p style="margin:0 0 10px;color:#777777;font-size:10px;line-height:1.3;letter-spacing:2px;text-transform:uppercase;">Payment info</p>
-                        <p style="margin:0;color:#222222;font-size:12px;line-height:1.6;">Bank transfer / studio confirmation<br/>Reference: Moyo-${doc.id}</p>
+                        <p style="margin:0 0 10px;color:#a5a5ab;font-size:10px;line-height:1.3;letter-spacing:2px;text-transform:uppercase;">Payment info</p>
+                        <p style="margin:0;color:#eeeae5;font-size:12px;line-height:1.6;">Bank transfer / studio confirmation<br/>Reference: Moyo-${doc.id}</p>
                       </td>
                       <td valign="top" width="25%" style="padding:18px 12px;">
-                        <p style="margin:0 0 10px;color:#777777;font-size:10px;line-height:1.3;letter-spacing:2px;text-transform:uppercase;">Due by</p>
-                        <p style="margin:0;color:#111111;font-size:14px;line-height:1.4;">${escapeHtml(doc.due_date || 'On receipt')}</p>
+                        <p style="margin:0 0 10px;color:#a5a5ab;font-size:10px;line-height:1.3;letter-spacing:2px;text-transform:uppercase;">Due by</p>
+                        <p style="margin:0;color:#eeeae5;font-size:14px;line-height:1.4;">${escapeHtml(doc.due_date || 'On receipt')}</p>
                       </td>
                       <td valign="top" width="36%" align="right" style="padding:18px 0 18px 12px;">
-                        <p style="margin:0 0 10px;color:#777777;font-size:10px;line-height:1.3;letter-spacing:2px;text-transform:uppercase;">Total due</p>
-                        <p style="margin:0;color:#920110;font-size:20px;line-height:1.25;font-weight:700;">${escapeHtml(amount || 'To be confirmed')}</p>
+                        <p style="margin:0 0 10px;color:#a5a5ab;font-size:10px;line-height:1.3;letter-spacing:2px;text-transform:uppercase;">Total due</p>
+                        <p style="margin:0;color:#e06673;font-size:20px;line-height:1.25;font-weight:700;">${escapeHtml(amount || 'To be confirmed')}</p>
                       </td>
                     </tr>
                   </table>
-                  ${doc.terms ? `<div style="margin:22px 0 0;padding:16px 0 0;border-top:1px solid #cbc7bd;"><p style="margin:0 0 8px;color:#777777;font-size:10px;line-height:1.3;letter-spacing:2px;text-transform:uppercase;">${label === 'Invoice' ? 'Contract / Terms' : 'Terms'}</p><p style="margin:0;color:#555555;font-size:12px;line-height:1.7;white-space:pre-line;">${escapeHtml(doc.terms)}</p></div>` : ''}
-                  <p style="margin:26px 0 0;color:#222222;font-size:13px;line-height:1.6;">Thank you! A PDF copy is attached.</p>
+                  ${doc.terms ? `<div style="margin:22px 0 0;padding:16px 0 0;border-top:1px solid #303135;"><p style="margin:0 0 8px;color:#a5a5ab;font-size:10px;line-height:1.3;letter-spacing:2px;text-transform:uppercase;">${label === 'Invoice' ? 'Contract / Terms' : 'Terms'}</p><p style="margin:0;color:#a5a5ab;font-size:12px;line-height:1.7;white-space:pre-line;">${escapeHtml(doc.terms)}</p></div>` : ''}
+                  <p style="margin:26px 0 0;color:#eeeae5;font-size:13px;line-height:1.6;">Thank you! A PDF copy is attached.</p>
                 </td>
               </tr>
             </table>

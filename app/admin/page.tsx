@@ -196,7 +196,7 @@ type BookingEditForm = {
   internalNotes: string;
   galleryId: string;
 };
-type AdminSection = 'bookings' | 'artwork' | 'digital-products' | 'catalog' | 'galleries' | 'content-contact' | 'orders';
+type AdminSection = 'invoices' | 'bookings' | 'artwork' | 'digital-products' | 'catalog' | 'galleries' | 'content-contact' | 'orders';
 type UploadBatchResult = { urls: string[]; failedFiles: File[] };
 type UploadProgress = { current: number; total: number; percent: number; phase: 'preparing' | 'uploading' | 'processing' | 'saving' };
 
@@ -214,11 +214,12 @@ const adminSections: Array<{
   description: string;
   href: string;
 }> = [
+  { id: 'invoices', title: 'Invoices', description: 'Create, find, and send invoices across all clients.', href: '/admin/invoices' },
   { id: 'bookings', title: 'Bookings', description: 'Run client requests, reminders, portal notes, and project handoff.', href: '/admin/bookings' },
   { id: 'artwork', title: 'Artwork', description: 'Create and manage fine art catalogue entries.', href: '/admin/artwork' },
   { id: 'digital-products', title: 'Digital Products', description: 'Manage downloadable products and assets.', href: '/admin/digital-products' },
   { id: 'catalog', title: 'Photography Catalog', description: 'Upload and organize portfolio categories.', href: '/admin/catalog' },
-  { id: 'galleries', title: 'Client Galleries', description: 'Handle galleries, documents, invoices, and access.', href: '/admin/galleries' },
+  { id: 'galleries', title: 'Client Galleries', description: 'Manage client images, delivery, and gallery access.', href: '/admin/galleries' },
   { id: 'content-contact', title: 'Content & Contact', description: 'Update homepage copy, contact details, and socials.', href: '/admin/content-contact' },
   { id: 'orders', title: 'Orders', description: 'Review and update customer order status.', href: '/admin/orders' },
 ];
@@ -407,6 +408,70 @@ function getDocumentFormIssues(form: GalleryDocumentForm) {
   return issues;
 }
 
+function DocumentManager({ gallery, galleries = [], documents, actions, onSend, onDownload, onDelete, onNew, children }: {
+  gallery?: Gallery;
+  galleries?: Gallery[];
+  documents: GalleryDocument[];
+  actions: Record<string, boolean>;
+  onSend: (document: GalleryDocument) => void;
+  onDownload: (document: GalleryDocument) => void;
+  onDelete: (document: GalleryDocument) => void;
+  onNew: () => void;
+  children: React.ReactNode;
+}) {
+  const clientName = (doc: GalleryDocument) => gallery?.client_name || galleries.find(item => item.id === doc.gallery_id)?.client_name || doc.client_email;
+  const [filter, setFilter] = useState('all');
+  const [search, setSearch] = useState('');
+  const [year, setYear] = useState('all');
+  const [editing, setEditing] = useState(false);
+  const editorRef = useRef<HTMLDetailsElement>(null);
+  const years = [...new Set(documents.map(doc => new Date(doc.created_at).getFullYear()).filter(Number.isFinite))].sort((a, b) => b - a);
+  const scoped = documents.filter(doc => (year === 'all' || String(new Date(doc.created_at).getFullYear()) === year) && `${doc.title} ${doc.client_email} Moyo-${doc.id} ${clientName(doc)}`.toLowerCase().includes(search.toLowerCase()));
+  const visible = scoped.filter(doc => filter === 'all' || (filter === 'sent' ? Boolean(doc.sent_at) : !doc.sent_at)).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  const groups = visible.reduce<Record<string, GalleryDocument[]>>((result, doc) => {
+    const month = new Date(doc.created_at).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+    (result[month] ||= []).push(doc);
+    return result;
+  }, {});
+  const button = 'rounded border border-white/20 px-3 py-2 text-xs text-white/80 transition-colors hover:border-white/50 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-40';
+  return (
+    <section className="min-w-0 space-y-6 rounded-lg border border-white/15 bg-[#101113] p-4 sm:p-6" aria-label={gallery ? `Invoices for ${gallery.client_name}` : 'All client invoices'}>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div><h3 className="font-heading text-2xl text-white">Invoices & contracts</h3><p className="mt-2 text-sm text-white/60">Create, send, and manage documents {gallery ? `for ${gallery.client_name}` : 'across all your clients'}.</p></div>
+        <button type="button" aria-expanded={editing} onClick={() => { onNew(); setEditing(true); requestAnimationFrame(() => { editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); editorRef.current?.querySelector<HTMLElement>('select, input')?.focus({ preventScroll: true }); }); }} className="rounded bg-[#920110] px-5 py-3 text-sm font-semibold text-white hover:bg-[#b41426]">+ New invoice</button>
+      </div>
+      <div className="flex flex-wrap gap-3">
+        <label className="flex items-center gap-3 rounded border border-white/20 px-3 text-xs text-white/60">Year<select aria-label="Filter documents by year" value={year} onChange={e => setYear(e.target.value)} className="bg-[#101113] py-3 text-sm text-white"><option value="all">All years</option>{years.map(value => <option key={value}>{value}</option>)}</select></label>
+        <input aria-label="Search documents" placeholder="Search name, title, or invoice number…" value={search} onChange={e => setSearch(e.target.value)} className="min-w-0 flex-1 rounded border border-white/20 bg-[#18191c] px-4 py-3 text-sm text-white placeholder:text-white/50" />
+      </div>
+      <div className="grid grid-cols-3 gap-2 rounded-lg border border-white/10 bg-[#18191c] p-2" aria-label="Document status filters">
+        {[['all', 'All', scoped.length], ['sent', 'Sent', scoped.filter(doc => doc.sent_at).length], ['unsent', 'Unsent', scoped.filter(doc => !doc.sent_at).length]].map(([value, title, count]) => <button type="button" key={value} aria-pressed={filter === value} onClick={() => setFilter(String(value))} className={`flex flex-wrap items-center justify-between gap-2 rounded px-3 py-3 text-sm ${filter === value ? 'bg-[#920110] text-white' : 'text-white/70 hover:bg-white/5'}`}><span>{title}</span><span className="rounded-full bg-white/10 px-2 py-0.5 text-xs">{count}</span></button>)}
+      </div>
+      <div className="space-y-4">
+        {Object.entries(groups).map(([month, docs]) => {
+          const totals = docs.filter(doc => doc.document_type === 'invoice').reduce<Record<string, number>>((sum, doc) => { sum[doc.currency] = (sum[doc.currency] || 0) + Number(doc.amount || 0); return sum; }, {});
+          return <div key={month} className="overflow-hidden rounded-lg border border-white/15 bg-[#191a1d]">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-4"><h4 className="text-base font-semibold text-white">{month}</h4><div className="flex flex-wrap gap-2">{Object.entries(totals).map(([currency, total]) => <span key={currency} className="rounded-full border border-white/20 px-3 py-1 text-xs tabular-nums text-white/80">Invoice total · {formatDocumentAmount(total, currency)}</span>)}</div></div>
+            <div className="divide-y divide-white/10">{docs.map(doc => <article key={doc.id} className="p-4">
+              <div className="flex items-start gap-3 sm:gap-4">
+                <div className="w-12 shrink-0 rounded border border-[#920110]/60 bg-[#920110]/20 py-2 text-center text-white"><p className="text-[10px] uppercase text-white/60">{new Date(doc.created_at).toLocaleDateString('en-GB', { month: 'short' })}</p><p className="mt-1 text-xl font-semibold">{new Date(doc.created_at).getDate()}</p></div>
+                <div className="min-w-0 flex-1"><p className="text-base font-semibold text-white [overflow-wrap:anywhere]">{clientName(doc)}</p><p className="mt-1 text-xs text-white/60 [overflow-wrap:anywhere]">{doc.title}</p><div className="mt-2 flex flex-wrap items-center gap-2 text-xs"><span className="text-white/50">Moyo-{doc.id}</span><span className="rounded-full border border-white/15 bg-white/5 px-2 py-1 text-white/80">{doc.sent_at ? 'Sent' : 'Unsent'}</span><span className="capitalize text-white/50">{doc.document_type}</span></div></div>
+                <div className="max-w-[40%] text-right"><p className="text-sm font-semibold tabular-nums text-white [overflow-wrap:anywhere]">{doc.document_type === 'invoice' ? formatDocumentAmount(Number(doc.amount), doc.currency) : 'Contract'}</p>{doc.due_date && <p className="mt-2 text-xs text-white/50">Due {doc.due_date}</p>}</div>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2 sm:pl-16"><button type="button" className={button} disabled={Boolean(actions[`send-${doc.id}`])} onClick={() => onSend(doc)}>{actions[`send-${doc.id}`] ? 'Sending…' : doc.sent_at ? 'Resend email' : 'Send email'}</button><button type="button" className={button} disabled={Boolean(actions[`download-${doc.id}`])} onClick={() => onDownload(doc)}>{actions[`download-${doc.id}`] ? 'Downloading…' : 'Download PDF'}</button><button type="button" className={`${button} !text-red-300`} disabled={Boolean(actions[`delete-${doc.id}`])} onClick={() => onDelete(doc)}>Delete</button></div>
+            </article>)}</div>
+          </div>;
+        })}
+        {!visible.length && <div className="rounded-lg border border-dashed border-white/20 px-5 py-10 text-center"><p className="text-sm font-medium text-white">{documents.length ? 'No matching documents' : 'Your first invoice starts here'}</p><p className="mt-2 text-xs text-white/60">{documents.length ? 'Try another search or status filter.' : 'Create an invoice, then send it or download a PDF.'}</p></div>}
+      </div>
+      <details ref={editorRef} open={editing} onToggle={e => setEditing(e.currentTarget.open)} className="border-t border-white/15 pt-5">
+        <summary className="cursor-pointer text-sm font-medium text-white">Invoice & contract editor</summary>
+        <div className="mt-5">{children}</div>
+      </details>
+    </section>
+  );
+}
+
 function DocumentPreview({ gallery, form }: { gallery: Gallery; form: GalleryDocumentForm }) {
   const labelText = form.documentType === 'contract' ? 'Contract' : 'Invoice';
   const label = labelText.toUpperCase();
@@ -424,87 +489,62 @@ function DocumentPreview({ gallery, form }: { gallery: Gallery; form: GalleryDoc
   const terms = form.terms.trim() || 'Contract terms, usage rights, payment, and delivery notes will appear here.';
 
   return (
-    <aside className="min-w-0 overflow-hidden border border-white/10 bg-[#f6f3eb] text-[#141414]">
-      <div className="flex min-w-0 flex-col gap-6 p-4 sm:p-5">
-        <div className="flex min-w-0 flex-wrap items-start justify-between gap-4 border-b border-black/10 pb-5">
+    <aside className="min-w-0 overflow-hidden border border-white/10 bg-[#151618] text-[#eeeae5] shadow-2xl" style={{ colorScheme: 'dark' }}>
+      <div className="h-1 bg-[#920110]" />
+      <div className="flex min-w-0 flex-col gap-7 p-5 sm:p-7">
+        <div className="flex flex-wrap items-start justify-between gap-6 pb-3">
+          <div>
+            <p className="text-sm font-semibold">Ijabiken Moyo<span className="text-[#d44958]">.</span></p>
+            <p className="mt-2 text-[11px] leading-relaxed text-[#a5a5ab]">Photography & Fine Art<br />ijabikenm@gmail.com</p>
+          </div>
+          <div className="text-right">
+            <p className="text-2xl font-light tracking-[0.18em] sm:text-3xl">{label}</p>
+            <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-[#a5a5ab]">Draft · Live preview</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-5 border-y border-white/10 py-5 text-xs">
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-accent">Live preview</p>
-            <h4 className="mt-2 font-heading text-2xl italic leading-tight [overflow-wrap:anywhere]">{title}</h4>
-            <p className="mt-2 text-xs leading-relaxed text-black/55 [overflow-wrap:anywhere]">
-              {gallery.client_name || 'Client'} · {email}
-            </p>
+            <p className="text-[9px] uppercase tracking-[0.2em] text-[#a5a5ab]">Billed to</p>
+            <p className="mt-2 font-semibold [overflow-wrap:anywhere]">{gallery.client_name || 'Client'}</p>
+            <p className="mt-1 text-[#a5a5ab] [overflow-wrap:anywhere]">{email}</p>
           </div>
-          <div className="shrink-0 text-right">
-            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-black/45">{label}</p>
-            <p className="mt-2 text-xs text-black/50">Draft</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div><p className="text-[9px] uppercase tracking-[0.2em] text-[#a5a5ab]">Currency</p><p className="mt-2">{form.currency || 'NGN'}</p></div>
+            <div><p className="text-[9px] uppercase tracking-[0.2em] text-[#a5a5ab]">Due by</p><p className="mt-2 [overflow-wrap:anywhere]">{dueDate}</p></div>
           </div>
         </div>
-
-        <div className="grid min-w-0 gap-3 text-xs sm:grid-cols-3">
-          <div className="min-w-0 border border-black/10 bg-white/70 p-3">
-            <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-black/40">Client</p>
-            <p className="mt-2 font-medium [overflow-wrap:anywhere]">{gallery.client_name || 'Client'}</p>
-          </div>
-          <div className="min-w-0 border border-black/10 bg-white/70 p-3">
-            <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-black/40">Due by</p>
-            <p className="mt-2 font-medium [overflow-wrap:anywhere]">{dueDate}</p>
-          </div>
-          <div className="min-w-0 border border-black/10 bg-white/70 p-3">
-            <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-black/40">Total</p>
-            <p className="mt-2 font-bold text-accent [overflow-wrap:anywhere]">{amount}</p>
-          </div>
+        <div className="min-w-0">
+          <p className="mb-4 text-xs text-[#a5a5ab] [overflow-wrap:anywhere]">{title}</p>
+          <table className="w-full table-fixed text-left text-[11px]">
+            <thead className="border-b border-white/10 text-[8px] uppercase tracking-[0.16em] text-[#a5a5ab]">
+              <tr><th className="w-[40%] pb-3 font-normal">{form.documentType === 'contract' ? 'Scope' : 'Item'}</th><th className="w-[10%] pb-3 text-right font-normal">Qty</th><th className="w-[25%] pb-3 text-right font-normal">Rate</th><th className="w-[25%] pb-3 text-right font-normal">Amount</th></tr>
+            </thead>
+            <tbody className="divide-y divide-white/10">
+              {lines.map((line, index) => (
+                <tr key={index} className="align-top">
+                  <td className="py-4 pr-3 leading-relaxed [overflow-wrap:anywhere]">{line.description || 'Untitled item'}</td>
+                  <td className="py-4 text-right tabular-nums [overflow-wrap:anywhere]">{form.documentType === 'invoice' ? line.quantity : '—'}</td>
+                  <td className="py-4 pl-2 text-right tabular-nums text-[#a5a5ab] [overflow-wrap:anywhere]">{form.documentType === 'invoice' ? formatDocumentAmount(line.unitPrice, form.currency) : '—'}</td>
+                  <td className="py-4 pl-2 text-right tabular-nums [overflow-wrap:anywhere]">{form.documentType === 'invoice' ? formatDocumentAmount(line.total, form.currency) : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-
-        <div className="min-w-0 overflow-hidden border border-black/10 bg-white">
-          <div className="grid grid-cols-[minmax(0,1fr)_3rem_5.5rem] gap-3 border-b border-black/10 px-3 py-2 text-[9px] font-bold uppercase tracking-[0.16em] text-black/38">
-            <span>{form.documentType === 'contract' ? 'Scope' : 'Description'}</span>
-            <span className="text-right">Qty</span>
-            <span className="text-right">Subtotal</span>
-          </div>
-          <div className="divide-y divide-black/10">
-            {lines.map((line, index) => (
-              <div key={`${line.description}-${index}`} className="grid min-w-0 grid-cols-[minmax(0,1fr)_3rem_5.5rem] gap-3 px-3 py-3 text-sm">
-                <p className={`min-w-0 leading-relaxed [overflow-wrap:anywhere] ${index === 0 ? 'font-semibold' : 'text-black/70'}`}>
-                  {line.description || 'Untitled item'}
-                </p>
-                <p className="text-right text-xs leading-relaxed text-black/45 [overflow-wrap:anywhere]">
-                  {form.documentType === 'invoice' ? line.quantity : '-'}
-                </p>
-                <p className={`text-right text-xs leading-relaxed [overflow-wrap:anywhere] ${index === 0 ? 'font-bold text-accent' : 'text-black/45'}`}>
-                  {form.documentType === 'invoice' ? formatDocumentAmount(line.total, form.currency) : '-'}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-
         {form.documentType === 'invoice' && (
-          <div className="grid gap-2 text-xs text-black/62">
-            <div className="flex justify-between gap-4">
-              <span>Subtotal</span>
-              <span className="font-medium">{formatDocumentAmount(calculation.subtotal, form.currency)}</span>
-            </div>
-            <div className="flex justify-between gap-4">
-              <span>Discount</span>
-              <span className="font-medium">-{formatDocumentAmount(calculation.discount, form.currency, `${form.currency || 'NGN'} 0`)}</span>
-            </div>
-            <div className="flex justify-between gap-4">
-              <span>Tax {calculation.taxRate ? `(${calculation.taxRate}%)` : ''}</span>
-              <span className="font-medium">{formatDocumentAmount(calculation.tax, form.currency, `${form.currency || 'NGN'} 0`)}</span>
-            </div>
-            <div className="flex justify-between gap-4 border-t border-black/10 pt-3 text-sm text-black">
-              <span className="font-bold">Total due</span>
-              <span className="font-bold text-accent">{amount}</span>
-            </div>
+          <div className="ml-auto grid w-full max-w-[280px] gap-3 text-xs tabular-nums text-[#a5a5ab]">
+            <div className="flex justify-between gap-4"><span>Subtotal</span><span>{formatDocumentAmount(calculation.subtotal, form.currency)}</span></div>
+            <div className="flex justify-between gap-4"><span>Discount</span><span>-{formatDocumentAmount(calculation.discount, form.currency, `${form.currency || 'NGN'} 0`)}</span></div>
+            <div className="flex justify-between gap-4"><span>Tax {calculation.taxRate ? `(${calculation.taxRate}%)` : ''}</span><span>{formatDocumentAmount(calculation.tax, form.currency, `${form.currency || 'NGN'} 0`)}</span></div>
+            <div className="flex justify-between gap-4 border-t border-[#920110] pt-4 text-base text-[#eeeae5]"><span>Total due</span><span className="font-semibold">{amount}</span></div>
           </div>
         )}
-
-        <div className="min-w-0 border-l-4 border-accent bg-black/[0.035] p-4">
-          <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-black/40">
-            {form.documentType === 'contract' ? 'Terms' : 'Contract / Terms'}
-          </p>
-          <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-black/68 [overflow-wrap:anywhere]">{terms}</p>
+        <div className="mt-3 border-t border-white/10 pt-5">
+          <p className="text-[9px] uppercase tracking-[0.2em] text-[#a5a5ab]">{form.documentType === 'contract' ? 'Terms' : 'Payment & Terms'}</p>
+          {form.documentType === 'invoice' && <p className="mt-2 text-xs text-[#eeeae5]">Bank transfer / studio confirmation</p>}
+          <p className="mt-3 whitespace-pre-wrap text-xs leading-relaxed text-[#a5a5ab] [overflow-wrap:anywhere]">{terms}</p>
         </div>
+        <p className="pt-6 text-[9px] uppercase tracking-[0.2em] text-[#a5a5ab]">Thank you for creating with Moyo.</p>
       </div>
     </aside>
   );
@@ -723,6 +763,7 @@ export default function AdminPage() {
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [digitalProducts, setDigitalProducts] = useState<DigitalProduct[]>([]);
+  const [invoiceGalleryId, setInvoiceGalleryId] = useState('');
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [catalogCategories, setCatalogCategories] = useState<PhotographyCatalogCategory[]>([]);
   const [content, setContent] = useState<Content>(defaultAdminContent);
@@ -2191,11 +2232,216 @@ export default function AdminPage() {
     setMessage({ text: `Gallery created for ${booking.name}`, type: 'success' });
   };
 
+  const renderDocumentEditor = (gal: Gallery) => {
+    const docForm = getGalleryDocumentForm(gal);
+    return (
+<div className="grid min-w-0 gap-4 border border-white/10 bg-white/[0.02] p-3 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.82fr)] xl:items-start">
+                            <div className="grid min-w-0 gap-3">
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                <select
+                                  className={inputClass}
+                                  value={docForm.documentType}
+                                  onChange={(e) =>
+                                    updateGalleryDocumentForm(gal.id, {
+                                      documentType: e.target.value === 'contract' ? 'contract' : 'invoice',
+                                      title: e.target.value === 'contract' ? 'Photography Contract' : 'Photography Invoice',
+                                    })
+                                  }
+                                >
+                                  <option value="invoice">Invoice</option>
+                                  <option value="contract">Contract</option>
+                                </select>
+                                <input
+                                  className={inputClass}
+                                  type="email"
+                                  placeholder="Client email"
+                                  value={docForm.clientEmail}
+                                  onChange={(e) => updateGalleryDocumentForm(gal.id, { clientEmail: e.target.value })}
+                                />
+                              </div>
+                              <input
+                                className={inputClass}
+                                maxLength={140}
+                                placeholder="Document title"
+                                value={docForm.title}
+                                onChange={(e) => updateGalleryDocumentForm(gal.id, { title: e.target.value })}
+                              />
+                              <div className="grid gap-3 sm:grid-cols-[96px_minmax(0,1fr)]">
+                                <input
+                                  className={inputClass}
+                                  maxLength={5}
+                                  placeholder="NGN"
+                                  value={docForm.currency}
+                                  onChange={(e) => updateGalleryDocumentForm(gal.id, { currency: e.target.value.toUpperCase().replace(/[^A-Z]/g, '') })}
+                                />
+                                <input
+                                  className={inputClass}
+                                  type="date"
+                                  value={docForm.dueDate}
+                                  onChange={(e) => updateGalleryDocumentForm(gal.id, { dueDate: e.target.value })}
+                                />
+                              </div>
+                              {docForm.documentType === 'invoice' ? (
+                                <div className="min-w-0 space-y-3 border border-white/10 bg-black/20 p-3">
+                                  <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <p className="text-[10px] uppercase tracking-[0.22em] text-white/45">Invoice items</p>
+                                    <button
+                                      type="button"
+                                      onClick={() => addGalleryDocumentItem(gal.id)}
+                                      className="border border-white/15 px-3 py-2 text-[9px] uppercase tracking-[0.16em] text-white/60 transition-colors hover:border-accent hover:text-accent"
+                                    >
+                                      Add item
+                                    </button>
+                                  </div>
+                                  <div className="space-y-3">
+                                    {getDefaultInvoiceItems(docForm).map((item, index) => {
+                                      const rowTotal = Math.max(0, toFiniteNumber(item.quantity)) * Math.max(0, toFiniteNumber(item.unitPrice));
+                                      return (
+                                        <div key={index} className="grid min-w-0 gap-2 border border-white/10 bg-white/[0.025] p-3">
+                                          <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_90px_120px]">
+                                            <input
+                                              className={inputClass}
+                                              placeholder="Description"
+                                              value={item.description}
+                                              onChange={(e) => updateGalleryDocumentItem(gal.id, index, { description: e.target.value })}
+                                            />
+                                            <input
+                                              className={inputClass}
+                                              type="number"
+                                              min="0"
+                                              step="0.01"
+                                              inputMode="decimal"
+                                              placeholder="Qty"
+                                              value={item.quantity}
+                                              onChange={(e) => updateGalleryDocumentItem(gal.id, index, { quantity: e.target.value })}
+                                            />
+                                            <input
+                                              className={inputClass}
+                                              type="number"
+                                              min="0"
+                                              step="0.01"
+                                              inputMode="decimal"
+                                              placeholder="Unit price"
+                                              value={item.unitPrice}
+                                              onChange={(e) => updateGalleryDocumentItem(gal.id, index, { unitPrice: e.target.value })}
+                                            />
+                                          </div>
+                                          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-white/45">
+                                            <span>Total: {formatDocumentAmount(rowTotal, docForm.currency, `${docForm.currency || 'NGN'} 0`)}</span>
+                                            <button
+                                              type="button"
+                                              onClick={() => removeGalleryDocumentItem(gal.id, index)}
+                                              className="text-[9px] uppercase tracking-[0.16em] text-red-300 transition-colors hover:text-red-200"
+                                            >
+                                              Remove
+                                            </button>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                                    <select
+                                      className={inputClass}
+                                      value={docForm.discountType}
+                                      onChange={(e) => updateGalleryDocumentForm(gal.id, { discountType: e.target.value === 'percent' ? 'percent' : 'fixed' })}
+                                    >
+                                      <option value="fixed">Fixed discount</option>
+                                      <option value="percent">Percent discount</option>
+                                    </select>
+                                    <input
+                                      className={inputClass}
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      inputMode="decimal"
+                                      placeholder={docForm.discountType === 'percent' ? 'Discount %' : 'Discount'}
+                                      value={docForm.discountValue}
+                                      onChange={(e) => updateGalleryDocumentForm(gal.id, { discountValue: e.target.value })}
+                                    />
+                                    <input
+                                      className={inputClass}
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      inputMode="decimal"
+                                      placeholder="Tax %"
+                                      value={docForm.taxRate}
+                                      onChange={(e) => updateGalleryDocumentForm(gal.id, { taxRate: e.target.value })}
+                                    />
+                                  </div>
+                                  <div className="grid gap-2 border-t border-white/10 pt-3 text-xs text-white/55">
+                                    <div className="flex justify-between gap-4">
+                                      <span>Subtotal</span>
+                                      <span>{formatDocumentAmount(calculateInvoice(docForm).subtotal, docForm.currency, `${docForm.currency || 'NGN'} 0`)}</span>
+                                    </div>
+                                    <div className="flex justify-between gap-4">
+                                      <span>Discount</span>
+                                      <span>-{formatDocumentAmount(calculateInvoice(docForm).discount, docForm.currency, `${docForm.currency || 'NGN'} 0`)}</span>
+                                    </div>
+                                    <div className="flex justify-between gap-4">
+                                      <span>Tax</span>
+                                      <span>{formatDocumentAmount(calculateInvoice(docForm).tax, docForm.currency, `${docForm.currency || 'NGN'} 0`)}</span>
+                                    </div>
+                                    <div className="flex justify-between gap-4 text-sm font-bold text-white">
+                                      <span>Total due</span>
+                                      <span className="text-accent">{formatDocumentAmount(calculateInvoice(docForm).total, docForm.currency)}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <textarea
+                                  className={`${inputClass} min-h-28 resize-y`}
+                                  maxLength={3000}
+                                  placeholder="Contract terms / scope"
+                                  value={docForm.lineItems}
+                                  onChange={(e) => updateGalleryDocumentForm(gal.id, { lineItems: e.target.value })}
+                                />
+                              )}
+                              <textarea
+                                className={`${inputClass} min-h-24 resize-y`}
+                                maxLength={3000}
+                                placeholder="Contract terms, usage rights, payment terms, delivery notes..."
+                                value={docForm.terms}
+                                onChange={(e) => updateGalleryDocumentForm(gal.id, { terms: e.target.value })}
+                              />
+                              {getDocumentFormIssues(docForm).length > 0 && (
+                                <div className="space-y-1 border border-yellow-400/25 bg-yellow-400/[0.06] p-3 text-xs leading-relaxed text-yellow-100/80">
+                                  {getDocumentFormIssues(docForm).slice(0, 3).map((issue) => (
+                                    <p key={issue}>{issue}</p>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                <button
+                                  type="button"
+                                  disabled={Boolean(documentActionIds[`generate-${gal.id}`])}
+                                  onClick={() => generateGalleryDocumentDraft(gal)}
+                                  className="border border-accent/55 bg-accent/10 px-4 py-3 text-[10px] font-bold uppercase tracking-[0.2em] text-accent transition-colors hover:bg-accent hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  {documentActionIds[`generate-${gal.id}`] ? 'Drafting...' : 'Draft with Gemini'}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={Boolean(documentActionIds[`create-${gal.id}`]) || getDocumentFormIssues(docForm).length > 0}
+                                  onClick={() => createGalleryDocument(gal)}
+                                  className="bg-white px-4 py-3 text-[10px] font-bold uppercase tracking-[0.22em] text-black transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  {documentActionIds[`create-${gal.id}`] ? 'Saving...' : 'Create Document'}
+                                </button>
+                              </div>
+                            </div>
+                            <DocumentPreview gallery={gal} form={docForm} />
+                          </div>
+    );
+  };
+
   const getAdminSectionMetric = (section: AdminSection) => {
     if (section === 'bookings') return `${bookings.length} ${bookings.length === 1 ? 'booking' : 'bookings'}`;
     if (section === 'artwork') return `${artworks.length} ${artworks.length === 1 ? 'work' : 'works'}`;
     if (section === 'digital-products') return `${digitalProducts.length} products`;
     if (section === 'catalog') return `${catalogCategories.length} categories`;
+    if (section === 'invoices') return `${Object.values(galleryDocuments).flat().filter(doc => doc.document_type === 'invoice').length} invoices`;
     if (section === 'galleries') return `${galleries.length} galleries`;
     if (section === 'content-contact') return `${socials.length} social links`;
     return `${orders.length} orders`;
@@ -2346,19 +2592,21 @@ export default function AdminPage() {
           </motion.div>
         )}
 
-        <div className="mb-12 grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className={isSectionRoute ? "mb-6 flex flex-wrap gap-2" : "mb-12 grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-4"}>
           {adminSections.map((section) => {
             const isActive = activeRouteSection === section.id;
             return (
               <Link
                 key={section.id}
                 href={section.href}
-                className={`group relative min-h-44 min-w-0 overflow-hidden border p-5 transition duration-300 sm:p-6 ${
+                aria-current={isActive ? 'page' : undefined}
+                className={`group relative min-w-0 overflow-hidden border transition duration-300 ${isSectionRoute ? 'rounded px-4 py-3 text-sm' : 'min-h-44 p-5 sm:p-6'} ${
                   isActive
                     ? 'border-accent bg-accent/12 text-white shadow-2xl shadow-accent/10'
                     : 'border-white/10 bg-white/[0.035] text-white/76 hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/[0.06] hover:text-white'
                 }`}
               >
+                {isSectionRoute ? section.title : <>
                 <span className="absolute right-5 top-5 text-[10px] uppercase tracking-[0.18em] text-white/30">
                   {getAdminSectionMetric(section.id)}
                 </span>
@@ -2375,6 +2623,7 @@ export default function AdminPage() {
                   Open workspace
                   <span aria-hidden="true" className="transition-transform group-hover:translate-x-1">&rarr;</span>
                 </span>
+                </>}
               </Link>
             );
           })}
@@ -2389,6 +2638,22 @@ export default function AdminPage() {
         )}
 
         <div className="space-y-4">
+          {shouldShowSection('invoices') && (
+            <DocumentManager galleries={galleries} documents={Object.values(galleryDocuments).flat()} actions={documentActionIds} onSend={sendGalleryDocument} onDownload={downloadGalleryDocument} onDelete={deleteGalleryDocument} onNew={() => {
+              const selected = galleries.find(gal => String(gal.id) === invoiceGalleryId);
+              if (selected) updateGalleryDocumentForm(selected.id, { documentType: 'invoice', title: 'Photography Invoice' });
+            }}>
+              <div className="mb-5 space-y-2">
+                <label htmlFor="invoice-client" className="block text-sm font-medium text-white">Client / project</label>
+                <select id="invoice-client" className={inputClass} value={invoiceGalleryId} onChange={e => setInvoiceGalleryId(e.target.value)}>
+                  <option value="" className="bg-[#151618]">Choose a client to create an invoice</option>
+                  {galleries.map(gal => <option className="bg-[#151618]" key={gal.id} value={gal.id}>{gal.client_name} · Project {gal.id}</option>)}
+                </select>
+                {!galleries.length && <p className="text-sm text-white/60">Add a client project in <Link className="text-white underline" href="/admin/galleries">Client Galleries</Link> to create their first invoice.</p>}
+              </div>
+              {(() => { const selected = galleries.find(gal => String(gal.id) === invoiceGalleryId); return selected ? renderDocumentEditor(selected) : null; })()}
+            </DocumentManager>
+          )}
           {/* Bookings */}
           {shouldShowSection('bookings') && (
           <AdminAccordionPanel
@@ -3843,267 +4108,13 @@ export default function AdminPage() {
                   </div>
                   <div className="min-w-0 space-y-4 border-t border-white/5 pt-4">
                     {(() => {
-                      const docForm = getGalleryDocumentForm(gal);
                       const docs = galleryDocuments[gal.id] || [];
                       return (
                         <>
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                              <p className="text-[10px] uppercase tracking-[0.28em] text-accent">Documents</p>
-                              <p className="mt-1 text-xs text-white/40">
-                                Create first. Then use the Send Email or Download PDF buttons under saved documents.
-                              </p>
-                            </div>
-                            <span className="text-[10px] uppercase tracking-[0.2em] text-white/35">
-                              {docs.length} saved
-                            </span>
-                          </div>
+                          <DocumentManager gallery={gal} documents={docs} actions={documentActionIds} onSend={sendGalleryDocument} onDownload={downloadGalleryDocument} onDelete={deleteGalleryDocument} onNew={() => updateGalleryDocumentForm(gal.id, { documentType: 'invoice', title: 'Photography Invoice' })}>
+                          {renderDocumentEditor(gal)}
 
-                          <div className="grid min-w-0 gap-4 border border-white/10 bg-white/[0.02] p-3 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.82fr)] xl:items-start">
-                            <div className="grid min-w-0 gap-3">
-                              <div className="grid gap-3 sm:grid-cols-2">
-                                <select
-                                  className={inputClass}
-                                  value={docForm.documentType}
-                                  onChange={(e) =>
-                                    updateGalleryDocumentForm(gal.id, {
-                                      documentType: e.target.value === 'contract' ? 'contract' : 'invoice',
-                                      title: e.target.value === 'contract' ? 'Photography Contract' : 'Photography Invoice',
-                                    })
-                                  }
-                                >
-                                  <option value="invoice">Invoice</option>
-                                  <option value="contract">Contract</option>
-                                </select>
-                                <input
-                                  className={inputClass}
-                                  type="email"
-                                  placeholder="Client email"
-                                  value={docForm.clientEmail}
-                                  onChange={(e) => updateGalleryDocumentForm(gal.id, { clientEmail: e.target.value })}
-                                />
-                              </div>
-                              <input
-                                className={inputClass}
-                                maxLength={140}
-                                placeholder="Document title"
-                                value={docForm.title}
-                                onChange={(e) => updateGalleryDocumentForm(gal.id, { title: e.target.value })}
-                              />
-                              <div className="grid gap-3 sm:grid-cols-[96px_minmax(0,1fr)]">
-                                <input
-                                  className={inputClass}
-                                  maxLength={5}
-                                  placeholder="NGN"
-                                  value={docForm.currency}
-                                  onChange={(e) => updateGalleryDocumentForm(gal.id, { currency: e.target.value.toUpperCase().replace(/[^A-Z]/g, '') })}
-                                />
-                                <input
-                                  className={inputClass}
-                                  type="date"
-                                  value={docForm.dueDate}
-                                  onChange={(e) => updateGalleryDocumentForm(gal.id, { dueDate: e.target.value })}
-                                />
-                              </div>
-                              {docForm.documentType === 'invoice' ? (
-                                <div className="min-w-0 space-y-3 border border-white/10 bg-black/20 p-3">
-                                  <div className="flex flex-wrap items-center justify-between gap-3">
-                                    <p className="text-[10px] uppercase tracking-[0.22em] text-white/45">Invoice items</p>
-                                    <button
-                                      type="button"
-                                      onClick={() => addGalleryDocumentItem(gal.id)}
-                                      className="border border-white/15 px-3 py-2 text-[9px] uppercase tracking-[0.16em] text-white/60 transition-colors hover:border-accent hover:text-accent"
-                                    >
-                                      Add item
-                                    </button>
-                                  </div>
-                                  <div className="space-y-3">
-                                    {getDefaultInvoiceItems(docForm).map((item, index) => {
-                                      const rowTotal = Math.max(0, toFiniteNumber(item.quantity)) * Math.max(0, toFiniteNumber(item.unitPrice));
-                                      return (
-                                        <div key={index} className="grid min-w-0 gap-2 border border-white/10 bg-white/[0.025] p-3">
-                                          <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_90px_120px]">
-                                            <input
-                                              className={inputClass}
-                                              placeholder="Description"
-                                              value={item.description}
-                                              onChange={(e) => updateGalleryDocumentItem(gal.id, index, { description: e.target.value })}
-                                            />
-                                            <input
-                                              className={inputClass}
-                                              type="number"
-                                              min="0"
-                                              step="0.01"
-                                              inputMode="decimal"
-                                              placeholder="Qty"
-                                              value={item.quantity}
-                                              onChange={(e) => updateGalleryDocumentItem(gal.id, index, { quantity: e.target.value })}
-                                            />
-                                            <input
-                                              className={inputClass}
-                                              type="number"
-                                              min="0"
-                                              step="0.01"
-                                              inputMode="decimal"
-                                              placeholder="Unit price"
-                                              value={item.unitPrice}
-                                              onChange={(e) => updateGalleryDocumentItem(gal.id, index, { unitPrice: e.target.value })}
-                                            />
-                                          </div>
-                                          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-white/45">
-                                            <span>Total: {formatDocumentAmount(rowTotal, docForm.currency, `${docForm.currency || 'NGN'} 0`)}</span>
-                                            <button
-                                              type="button"
-                                              onClick={() => removeGalleryDocumentItem(gal.id, index)}
-                                              className="text-[9px] uppercase tracking-[0.16em] text-red-300 transition-colors hover:text-red-200"
-                                            >
-                                              Remove
-                                            </button>
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
-                                    <select
-                                      className={inputClass}
-                                      value={docForm.discountType}
-                                      onChange={(e) => updateGalleryDocumentForm(gal.id, { discountType: e.target.value === 'percent' ? 'percent' : 'fixed' })}
-                                    >
-                                      <option value="fixed">Fixed discount</option>
-                                      <option value="percent">Percent discount</option>
-                                    </select>
-                                    <input
-                                      className={inputClass}
-                                      type="number"
-                                      min="0"
-                                      step="0.01"
-                                      inputMode="decimal"
-                                      placeholder={docForm.discountType === 'percent' ? 'Discount %' : 'Discount'}
-                                      value={docForm.discountValue}
-                                      onChange={(e) => updateGalleryDocumentForm(gal.id, { discountValue: e.target.value })}
-                                    />
-                                    <input
-                                      className={inputClass}
-                                      type="number"
-                                      min="0"
-                                      step="0.01"
-                                      inputMode="decimal"
-                                      placeholder="Tax %"
-                                      value={docForm.taxRate}
-                                      onChange={(e) => updateGalleryDocumentForm(gal.id, { taxRate: e.target.value })}
-                                    />
-                                  </div>
-                                  <div className="grid gap-2 border-t border-white/10 pt-3 text-xs text-white/55">
-                                    <div className="flex justify-between gap-4">
-                                      <span>Subtotal</span>
-                                      <span>{formatDocumentAmount(calculateInvoice(docForm).subtotal, docForm.currency, `${docForm.currency || 'NGN'} 0`)}</span>
-                                    </div>
-                                    <div className="flex justify-between gap-4">
-                                      <span>Discount</span>
-                                      <span>-{formatDocumentAmount(calculateInvoice(docForm).discount, docForm.currency, `${docForm.currency || 'NGN'} 0`)}</span>
-                                    </div>
-                                    <div className="flex justify-between gap-4">
-                                      <span>Tax</span>
-                                      <span>{formatDocumentAmount(calculateInvoice(docForm).tax, docForm.currency, `${docForm.currency || 'NGN'} 0`)}</span>
-                                    </div>
-                                    <div className="flex justify-between gap-4 text-sm font-bold text-white">
-                                      <span>Total due</span>
-                                      <span className="text-accent">{formatDocumentAmount(calculateInvoice(docForm).total, docForm.currency)}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              ) : (
-                                <textarea
-                                  className={`${inputClass} min-h-28 resize-y`}
-                                  maxLength={3000}
-                                  placeholder="Contract terms / scope"
-                                  value={docForm.lineItems}
-                                  onChange={(e) => updateGalleryDocumentForm(gal.id, { lineItems: e.target.value })}
-                                />
-                              )}
-                              <textarea
-                                className={`${inputClass} min-h-24 resize-y`}
-                                maxLength={3000}
-                                placeholder="Contract terms, usage rights, payment terms, delivery notes..."
-                                value={docForm.terms}
-                                onChange={(e) => updateGalleryDocumentForm(gal.id, { terms: e.target.value })}
-                              />
-                              {getDocumentFormIssues(docForm).length > 0 && (
-                                <div className="space-y-1 border border-yellow-400/25 bg-yellow-400/[0.06] p-3 text-xs leading-relaxed text-yellow-100/80">
-                                  {getDocumentFormIssues(docForm).slice(0, 3).map((issue) => (
-                                    <p key={issue}>{issue}</p>
-                                  ))}
-                                </div>
-                              )}
-                              <div className="grid gap-3 sm:grid-cols-2">
-                                <button
-                                  type="button"
-                                  disabled={Boolean(documentActionIds[`generate-${gal.id}`])}
-                                  onClick={() => generateGalleryDocumentDraft(gal)}
-                                  className="border border-accent/55 bg-accent/10 px-4 py-3 text-[10px] font-bold uppercase tracking-[0.2em] text-accent transition-colors hover:bg-accent hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  {documentActionIds[`generate-${gal.id}`] ? 'Drafting...' : 'Draft with Gemini'}
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={Boolean(documentActionIds[`create-${gal.id}`]) || getDocumentFormIssues(docForm).length > 0}
-                                  onClick={() => createGalleryDocument(gal)}
-                                  className="bg-white px-4 py-3 text-[10px] font-bold uppercase tracking-[0.22em] text-black transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  {documentActionIds[`create-${gal.id}`] ? 'Saving...' : 'Create Document'}
-                                </button>
-                              </div>
-                            </div>
-                            <DocumentPreview gallery={gal} form={docForm} />
-                          </div>
-
-                          {docs.length > 0 && (
-                            <div className="min-w-0 space-y-2 border border-accent/20 bg-accent/[0.035] p-3">
-                              <p className="text-[10px] uppercase tracking-[0.28em] text-accent">Saved documents</p>
-                              {docs.map((document) => (
-                                <div key={document.id} className="min-w-0 border border-white/10 bg-black/20 p-3">
-                                  <div className="grid min-w-0 gap-3">
-                                    <div className="min-w-0">
-                                      <p className="text-sm font-medium text-white [overflow-wrap:anywhere]">
-                                        {document.title}
-                                      </p>
-                                      <p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-white/40 [overflow-wrap:anywhere] sm:tracking-[0.18em]">
-                                        {document.document_type} • {document.client_email}
-                                        {document.sent_at ? ` • sent ${new Date(document.sent_at).toLocaleDateString()}` : ''}
-                                      </p>
-                                    </div>
-                                    <div className="grid gap-2 sm:grid-cols-3">
-                                      <button
-                                        type="button"
-                                        disabled={Boolean(documentActionIds[`send-${document.id}`])}
-                                        onClick={() => sendGalleryDocument(document)}
-                                        className="border border-accent/50 px-3 py-3 text-[9px] font-bold uppercase tracking-[0.18em] text-accent transition-colors hover:bg-accent hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
-                                      >
-                                        {documentActionIds[`send-${document.id}`] ? 'Sending...' : 'Send Email'}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        disabled={Boolean(documentActionIds[`download-${document.id}`])}
-                                        onClick={() => downloadGalleryDocument(document)}
-                                        className="border border-white/20 bg-white/5 px-3 py-3 text-[9px] font-bold uppercase tracking-[0.18em] text-white/75 transition-colors hover:border-white hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                                      >
-                                        Download PDF
-                                      </button>
-                                      <button
-                                        type="button"
-                                        disabled={Boolean(documentActionIds[`delete-${document.id}`])}
-                                        onClick={() => deleteGalleryDocument(document)}
-                                        className="border border-red-500/40 px-3 py-3 text-[9px] uppercase tracking-[0.18em] text-red-300 transition-colors hover:bg-red-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                                      >
-                                        Delete
-                                      </button>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                          </DocumentManager>
                         </>
                       );
                     })()}
