@@ -44,7 +44,7 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider
       attribute="data-theme"
-      defaultTheme="light"
+      defaultTheme="dark"
       enableSystem={false}
       storageKey="moyo-theme"
       disableTransitionOnChange
