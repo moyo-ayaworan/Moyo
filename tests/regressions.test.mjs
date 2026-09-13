@@ -76,6 +76,7 @@ test('database initialization is shared and retries after failure', async () => 
   let release;
   const first = new Promise((resolve) => { release = resolve; });
   const db = load('lib/db.ts', { pg: { Pool: class {
+    async connect() { return { query: this.query.bind(this), release() {} }; }
     async query(sql) {
       calls++;
       if (calls === 1) { await first; throw Error('temporary failure'); }
@@ -84,6 +85,7 @@ test('database initialization is shared and retries after failure', async () => 
   } } });
   const a = db.query('SELECT 1');
   const b = db.query('SELECT 2');
+  await new Promise(setImmediate);
   assert.equal(calls, 1);
   const results = Promise.allSettled([a, b]);
   release();

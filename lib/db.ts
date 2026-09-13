@@ -1,4 +1,4 @@
-import { Pool } from 'pg';
+import { Pool, type PoolClient } from 'pg';
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -31,7 +31,7 @@ let initialization: Promise<void> | undefined;
 
 async function ensureTables() {
   if (!initialization) {
-    initialization = initializeTables().catch((error) => {
+    initialization = initializeSafely().catch((error) => {
       initialization = undefined;
       throw error;
     });
@@ -39,9 +39,21 @@ async function ensureTables() {
   await initialization;
 }
 
-async function initializeTables() {
+async function initializeSafely() {
+  const connection = await pool.connect();
+  try {
+    // Serverless instances must not run schema changes concurrently.
+    await connection.query('SELECT pg_advisory_lock(178931, 1)');
+    await initializeTables(connection);
+  } finally {
+    try { await connection.query('SELECT pg_advisory_unlock(178931, 1)'); }
+    finally { connection.release(); }
+  }
+}
 
-  await pool.query(`
+async function initializeTables(connection: PoolClient) {
+
+  await connection.query(`
     CREATE TABLE IF NOT EXISTS artworks (
       id SERIAL PRIMARY KEY,
       title TEXT NOT NULL,
@@ -202,7 +214,7 @@ async function initializeTables() {
     );
   `);
 
-  await pool.query(`
+  await connection.query(`
     ALTER TABLE galleries
       ADD COLUMN IF NOT EXISTS finished_images TEXT[] DEFAULT ARRAY[]::TEXT[],
       ADD COLUMN IF NOT EXISTS payment_verified BOOLEAN DEFAULT FALSE,
@@ -214,7 +226,7 @@ async function initializeTables() {
       ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT FALSE;
   `);
 
-  await pool.query(`
+  await connection.query(`
     CREATE TABLE IF NOT EXISTS gallery_documents (
       id SERIAL PRIMARY KEY,
       gallery_id INTEGER NOT NULL REFERENCES galleries(id) ON DELETE CASCADE,
@@ -232,14 +244,14 @@ async function initializeTables() {
     );
   `);
 
-  await pool.query(`
+  await connection.query(`
     UPDATE galleries
     SET images = COALESCE(images, ARRAY[]::TEXT[]),
         approved_images = COALESCE(approved_images, ARRAY[]::TEXT[]),
         finished_images = COALESCE(finished_images, ARRAY[]::TEXT[]);
   `);
 
-  await pool.query(`
+  await connection.query(`
     ALTER TABLE digital_products
       ADD COLUMN IF NOT EXISTS product_url TEXT DEFAULT '',
       ADD COLUMN IF NOT EXISTS display_order INTEGER DEFAULT 0,
@@ -247,7 +259,7 @@ async function initializeTables() {
       ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
   `);
 
-  await pool.query(`
+  await connection.query(`
     ALTER TABLE bookings
       ADD COLUMN IF NOT EXISTS phone TEXT DEFAULT '',
       ADD COLUMN IF NOT EXISTS message TEXT DEFAULT '',
@@ -270,18 +282,18 @@ async function initializeTables() {
       WHERE status <> 'cancelled';
   `);
 
-  await pool.query(`
+  await connection.query(`
     UPDATE bookings
     SET manage_token = lower(substr(md5(random()::text || clock_timestamp()::text || id::text), 1, 24))
     WHERE manage_token IS NULL OR manage_token = '';
   `);
 
-  await pool.query(`
+  await connection.query(`
     ALTER TABLE photography_categories
       ADD COLUMN IF NOT EXISTS cover_image_url TEXT DEFAULT '';
   `);
 
-  await pool.query(`
+  await connection.query(`
     DELETE FROM photography_category_images a
     USING photography_category_images b
     WHERE a.id > b.id
@@ -292,13 +304,13 @@ async function initializeTables() {
       ON photography_category_images (category_id, image_url);
   `);
 
-  await pool.query(`
+  await connection.query(`
     ALTER TABLE content
       ADD COLUMN IF NOT EXISTS site_settings JSONB DEFAULT '{}'::JSONB;
   `);
 
   // Retried creation requests return the original record instead of inserting another.
-  await pool.query(`
+  await connection.query(`
     ALTER TABLE artworks ADD COLUMN IF NOT EXISTS creation_key TEXT;
     CREATE UNIQUE INDEX IF NOT EXISTS artworks_creation_key_idx ON artworks (creation_key);
     ALTER TABLE digital_products ADD COLUMN IF NOT EXISTS creation_key TEXT;
@@ -306,8 +318,8 @@ async function initializeTables() {
   `);
 
   // seed singleton rows
-  await pool.query(`INSERT INTO content (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);
-  await pool.query(`INSERT INTO contact (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);
+  await connection.query(`INSERT INTO content (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);
+  await connection.query(`INSERT INTO contact (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);
 }
 
 export async function query(text: string, params?: unknown[]) {
