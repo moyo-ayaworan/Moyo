@@ -102,6 +102,7 @@ type Gallery = {
   review_text: string;
   review_submitted_at: string | null;
   review_featured: boolean;
+  gallery_design: 'editorial' | 'classic' | 'proofing';
   is_locked: boolean;
 };
 
@@ -330,7 +331,7 @@ async function readJsonResponse<T>(res: Response, fallbackMessage: string): Prom
 
 function formatDocumentAmount(amount: string | number, currency: string, zeroLabel = 'To be confirmed') {
   const numeric = toFiniteNumber(amount);
-  if (!Number.isFinite(numeric) || numeric <= 0) return zeroLabel;
+  if (!Number.isFinite(numeric) || numeric < 0) return zeroLabel;
   return `${(currency || 'NGN').trim().toUpperCase()} ${numeric.toLocaleString(undefined, {
     minimumFractionDigits: Number.isInteger(numeric) ? 0 : 2,
     maximumFractionDigits: 2,
@@ -367,14 +368,6 @@ function calculateInvoice(form: GalleryDocumentForm) {
   return { items, subtotal, discount, taxableSubtotal, taxRate, tax, total };
 }
 
-function invoiceItemsToText(form: GalleryDocumentForm) {
-  const calculation = calculateInvoice(form);
-  return calculation.items
-    .filter((item) => item.description)
-    .map((item) => `${item.description} — Qty ${item.quantity || 0} × ${formatDocumentAmount(item.unitPrice, form.currency)} = ${formatDocumentAmount(item.total, form.currency)}`)
-    .join('\n');
-}
-
 function getDocumentFormIssues(form: GalleryDocumentForm) {
   const issues: string[] = [];
   const email = form.clientEmail.trim();
@@ -388,7 +381,14 @@ function getDocumentFormIssues(form: GalleryDocumentForm) {
   if (form.title.length > 140) issues.push('Keep the title under 140 characters.');
   if (form.lineItems.length > 3000) issues.push('Line items are too long.');
   if (form.terms.length > 3000) issues.push('Terms are too long.');
+  if (form.documentType === 'contract') {
+    if (!form.lineItems.trim()) issues.push('Add the contract scope.');
+    if (!form.terms.trim()) issues.push('Add the contract terms.');
+  }
   if (form.documentType === 'invoice') {
+    if (!Number.isFinite(Number(form.discountValue)) || !Number.isFinite(Number(form.taxRate))) issues.push('Enter valid discount and tax numbers.');
+    if (form.discountType === 'fixed' && Number(form.discountValue) > calculation.subtotal) issues.push('Discount cannot exceed the subtotal.');
+    if (!Number.isFinite(calculation.total) || calculation.subtotal > Number.MAX_SAFE_INTEGER / 100 || calculation.total > Number.MAX_SAFE_INTEGER / 100) issues.push('Invoice amounts are too large.');
     if (getDefaultInvoiceItems(form).some((item) => !item.description.trim() || !item.quantity || !item.unitPrice || !Number.isFinite(Number(item.quantity)) || !Number.isFinite(Number(item.unitPrice)))) issues.push('Complete every item description, quantity, and price.');
     if (getDefaultInvoiceItems(form).some(item => item.description.trim().length > 220)) issues.push('Keep each item description under 220 characters.');
     if (getDefaultInvoiceItems(form).length > 20) issues.push('Use no more than 20 invoice items.');
@@ -470,9 +470,9 @@ function DocumentManager({ gallery, galleries = [], documents, actions, onSend, 
               <div className="flex items-start gap-3 sm:gap-4">
                 <div className="w-12 shrink-0 rounded border border-[#920110]/60 bg-[#920110]/20 py-2 text-center text-white"><p className="text-[10px] uppercase text-white/60">{new Date(doc.created_at).toLocaleDateString('en-GB', { month: 'short' })}</p><p className="mt-1 text-xl font-semibold">{new Date(doc.created_at).getDate()}</p></div>
                 <div className="min-w-0 flex-1"><p className="text-base font-semibold text-white [overflow-wrap:anywhere]">{clientName(doc)}</p><p className="mt-1 text-xs text-white/60 [overflow-wrap:anywhere]">{doc.title}</p><div className="mt-2 flex flex-wrap items-center gap-2 text-xs"><span className="text-white/50">Moyo-{doc.id}</span><span className="rounded-full border border-white/15 bg-white/5 px-2 py-1 text-white/80">{doc.paid_at ? 'Paid' : doc.sent_at ? 'Sent' : 'Unsent'}</span><span className="capitalize text-white/50">{doc.document_type}</span></div></div>
-                <div className="max-w-[40%] text-right"><p className="text-sm font-semibold tabular-nums text-white [overflow-wrap:anywhere]">{doc.document_type === 'invoice' ? formatDocumentAmount(Number(doc.amount), doc.currency) : 'Contract'}</p>{doc.due_date && <p className="mt-2 text-xs text-white/50">Due {doc.due_date}</p>}</div>
+                <div className="max-w-[40%] text-right"><p className="text-sm font-semibold tabular-nums text-white [overflow-wrap:anywhere]">{doc.document_type === 'invoice' ? formatDocumentAmount(Number(doc.amount), doc.currency) : 'Contract'}</p>{doc.document_type === 'invoice' && !doc.paid_at && doc.due_date && <p className="mt-2 text-xs text-white/50">Due {doc.due_date}</p>}</div>
               </div>
-              <div className="mt-4 flex flex-wrap gap-2 sm:pl-16"><button type="button" className={button} disabled={Boolean(actions[`send-${doc.id}`])} onClick={() => onSend(doc)}>{actions[`send-${doc.id}`] ? 'Sending…' : doc.paid_at ? 'Email receipt' : doc.sent_at ? 'Resend email' : 'Send email'}</button><button type="button" className={button} disabled={Boolean(actions[`download-${doc.id}`])} onClick={() => onDownload(doc)}>{actions[`download-${doc.id}`] ? 'Downloading…' : doc.paid_at ? 'Download receipt' : 'Download PDF'}</button>{doc.document_type === 'invoice' && !doc.paid_at && <button type="button" className={button} disabled={Boolean(actions[`paid-${doc.id}`])} onClick={() => onPaid(doc)}>{actions[`paid-${doc.id}`] ? 'Confirming…' : 'Confirm full payment'}</button>}<button type="button" className={`${button} !text-red-300`} disabled={Boolean(actions[`delete-${doc.id}`])} onClick={() => onDelete(doc)}>Delete</button></div>
+              <div className="mt-4 flex flex-wrap gap-2 sm:pl-16"><button type="button" className={button} disabled={Boolean(actions[`send-${doc.id}`])} onClick={() => onSend(doc)}>{actions[`send-${doc.id}`] ? 'Sending…' : doc.paid_at ? 'Email receipt' : doc.sent_at ? 'Resend email' : 'Send email'}</button><button type="button" className={button} disabled={Boolean(actions[`download-${doc.id}`])} onClick={() => onDownload(doc)}>{actions[`download-${doc.id}`] ? 'Downloading…' : doc.paid_at ? 'Download receipt' : 'Download PDF'}</button>{doc.document_type === 'invoice' && !doc.paid_at && Number(doc.amount) > 0 && <button type="button" className={button} disabled={Boolean(actions[`paid-${doc.id}`])} onClick={() => onPaid(doc)}>{actions[`paid-${doc.id}`] ? 'Confirming…' : 'Confirm full payment'}</button>}<button type="button" className={`${button} !text-red-300`} disabled={Boolean(actions[`delete-${doc.id}`])} onClick={() => onDelete(doc)}>Delete</button></div>
             </article>)}</div>
           </div>;
         })}
@@ -493,10 +493,7 @@ function DocumentPreview({ gallery, form }: { gallery: Gallery; form: GalleryDoc
   const amount = formatDocumentAmount(calculation.total, form.currency);
   const lines = form.documentType === 'invoice'
     ? calculation.items
-    : normalizeDocumentLines(
-      form.lineItems,
-      'Photography service agreement and creative usage terms.'
-    ).slice(0, 6).map((line) => ({ description: line, quantity: 1, unitPrice: 0, total: 0 }));
+    : (form.lineItems || 'Photography service agreement and creative usage terms.').split('\n').map((line) => ({ description: line, quantity: 1, unitPrice: 0, total: 0 }));
   const dueDate = form.dueDate || 'On receipt';
   const title = form.title.trim() || `Photography ${labelText}`;
   const email = form.clientEmail.trim() || 'client@email.com';
@@ -518,20 +515,20 @@ function DocumentPreview({ gallery, form }: { gallery: Gallery; form: GalleryDoc
         </div>
         <div className="grid grid-cols-2 gap-5 border-y border-white/10 py-5 text-xs">
           <div className="min-w-0">
-            <p className="text-[9px] uppercase tracking-[0.2em] text-[#a5a5ab]">Billed to</p>
+            <p className="text-[9px] uppercase tracking-[0.2em] text-[#a5a5ab]">{form.documentType === 'contract' ? 'Prepared for' : 'Billed to'}</p>
             <p className="mt-2 font-semibold [overflow-wrap:anywhere]">{gallery.client_name || 'Client'}</p>
             <p className="mt-1 text-[#a5a5ab] [overflow-wrap:anywhere]">{email}</p>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          {form.documentType === 'invoice' && <div className="grid grid-cols-2 gap-3">
             <div><p className="text-[9px] uppercase tracking-[0.2em] text-[#a5a5ab]">Currency</p><p className="mt-2">{form.currency || 'NGN'}</p></div>
             <div><p className="text-[9px] uppercase tracking-[0.2em] text-[#a5a5ab]">Due by</p><p className="mt-2 [overflow-wrap:anywhere]">{dueDate}</p></div>
-          </div>
+          </div>}
         </div>
         <div className="min-w-0">
           <p className="mb-4 text-xs text-[#a5a5ab] [overflow-wrap:anywhere]">{title}</p>
-          <table className="w-full table-fixed text-left text-[11px]">
+          {form.documentType === 'contract' ? <div className="space-y-3 text-xs leading-relaxed [overflow-wrap:anywhere]"><p className="text-[9px] uppercase tracking-[0.2em] text-[#a5a5ab]">Scope of work</p>{lines.map((line, index) => <p key={index}>{line.description}</p>)}</div> : <table className="w-full table-fixed text-left text-[11px]">
             <thead className="border-b border-white/10 text-[8px] uppercase tracking-[0.16em] text-[#a5a5ab]">
-              <tr><th className="w-[40%] pb-3 font-normal">{form.documentType === 'contract' ? 'Scope' : 'Item'}</th><th className="w-[10%] pb-3 text-right font-normal">Qty</th><th className="w-[25%] pb-3 text-right font-normal">Rate</th><th className="w-[25%] pb-3 text-right font-normal">Amount</th></tr>
+              <tr><th className="w-[40%] pb-3 font-normal">Item</th><th className="w-[10%] pb-3 text-right font-normal">Qty</th><th className="w-[25%] pb-3 text-right font-normal">Rate</th><th className="w-[25%] pb-3 text-right font-normal">Amount</th></tr>
             </thead>
             <tbody className="divide-y divide-white/10">
               {lines.map((line, index) => (
@@ -543,7 +540,7 @@ function DocumentPreview({ gallery, form }: { gallery: Gallery; form: GalleryDoc
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table>}
         </div>
         {form.documentType === 'invoice' && (
           <div className="ml-auto grid w-full max-w-[280px] gap-3 text-xs tabular-nums text-[#a5a5ab]">
@@ -558,7 +555,7 @@ function DocumentPreview({ gallery, form }: { gallery: Gallery; form: GalleryDoc
           {form.documentType === 'invoice' && <p className="mt-2 text-xs text-[#eeeae5]">Bank transfer / studio confirmation</p>}
           <p className="mt-3 whitespace-pre-wrap text-xs leading-relaxed text-[#a5a5ab] [overflow-wrap:anywhere]">{terms}</p>
         </div>
-        <p className="pt-6 text-[9px] uppercase tracking-[0.2em] text-[#a5a5ab]">Thank you creating with Moyo Ayaworan.<br /><br />Ijabiken Moyosoreoluwa<br />Creative Director, MOYO AYAWORAN</p>
+        <p className="pt-6 text-[9px] uppercase tracking-[0.2em] text-[#a5a5ab]">Thank you for creating with Moyo Ayaworan.<br /><br />Ijabiken Moyosoreoluwa<br />Creative Director, MOYO AYAWORAN</p>
       </div>
     </aside>
   );
@@ -820,7 +817,7 @@ export default function AdminPage() {
     isActive: boolean;
   }>>({});
 
-  const [galleryForm, setGalleryForm] = useState({ clientName: '', slug: '', access_code: '' });
+  const [galleryForm, setGalleryForm] = useState({ clientName: '', slug: '', access_code: '', galleryDesign: 'editorial' });
   const [catalogCategoryForm, setCatalogCategoryForm] = useState({
     name: '',
     slug: '',
@@ -1592,7 +1589,7 @@ export default function AdminPage() {
     if (!res.ok) return setMessage({ text: data.error || 'Failed', type: 'error' });
     setGalleries((prev) => [data.gallery, ...prev]);
     setGalleryPaymentUrls((prev) => ({ ...prev, [data.gallery.id]: data.gallery.payment_url || '' }));
-    setGalleryForm({ clientName: '', slug: '', access_code: '' });
+    setGalleryForm({ clientName: '', slug: '', access_code: '', galleryDesign: 'editorial' });
     setMessage({ text: 'Gallery created', type: 'success' });
   };
 
@@ -1771,7 +1768,7 @@ export default function AdminPage() {
           galleryId: gallery.id,
           ...form,
           amount: form.documentType === 'invoice' ? calculateInvoice(form).total : 0,
-          lineItems: form.documentType === 'invoice' ? invoiceItemsToText(form) : form.lineItems,
+          lineItems: form.documentType === 'invoice' ? '' : form.lineItems,
         }),
       });
       const data = await readJsonResponse<{ document?: GalleryDocument; error?: string }>(res, 'Unable to create document');
@@ -1894,6 +1891,7 @@ export default function AdminPage() {
   };
 
   const deleteGalleryDocument = async (document: GalleryDocument) => {
+    if (!window.confirm(`Permanently delete Moyo-${document.id}: ${document.title}? This also removes it from the client portal and cannot be undone.`)) return;
     const actionId = `delete-${document.id}`;
     setDocumentActionIds((prev) => ({ ...prev, [actionId]: true }));
     try {
@@ -2299,8 +2297,9 @@ export default function AdminPage() {
                                 onChange={(e) => updateGalleryDocumentForm(gal.id, { title: e.target.value })}
                               />
                               <div className="grid gap-3 sm:grid-cols-[96px_minmax(0,1fr)]">
-                                <input
+                                {docForm.documentType === 'invoice' && <><input
                                   className={inputClass}
+                                  aria-label="Invoice currency"
                                   maxLength={5}
                                   placeholder="NGN"
                                   value={docForm.currency}
@@ -2309,9 +2308,10 @@ export default function AdminPage() {
                                 <input
                                   className={inputClass}
                                   type="date"
+                                  aria-label="Invoice due date"
                                   value={docForm.dueDate}
                                   onChange={(e) => updateGalleryDocumentForm(gal.id, { dueDate: e.target.value })}
-                                />
+                                /></>}
                               </div>
                               {docForm.documentType === 'invoice' ? (
                                 <div className="min-w-0 space-y-3 border border-white/10 bg-black/20 p-3">
@@ -3323,7 +3323,7 @@ export default function AdminPage() {
                     checked={digitalProductForm.isActive}
                     onChange={(e) => setDigitalProductForm({ ...digitalProductForm, isActive: e.target.checked })}
                   />
-                  Show on homepage
+                  Show on homepage and shop
                 </label>
                 <button
                   type="submit"
@@ -3818,6 +3818,36 @@ export default function AdminPage() {
                     </div>
                   </div>
                 </div>
+                <fieldset className="space-y-3">
+                  <legend className={label}>Gallery design</legend>
+                  <p className="text-xs leading-relaxed text-white/40">Choose the first impression and browsing layout. You can change it later without affecting the photos.</p>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {([
+                      { id: 'editorial', name: 'Editorial', note: 'Cinematic cover', pattern: 'grid-cols-[1fr_1.6fr]' },
+                      { id: 'classic', name: 'Classic', note: 'Balanced grid', pattern: 'grid-cols-2' },
+                      { id: 'proofing', name: 'Proofing', note: 'Fast selection', pattern: 'grid-cols-3' },
+                    ] as const).map((design) => {
+                      const active = galleryForm.galleryDesign === design.id;
+                      return (
+                        <button
+                          key={design.id}
+                          type="button"
+                          onClick={() => setGalleryForm({ ...galleryForm, galleryDesign: design.id })}
+                          aria-pressed={active}
+                          className={`p-2 text-left transition-colors ${active ? 'bg-accent text-black ring-1 ring-accent' : 'border border-white/10 bg-black text-white hover:border-white/35'}`}
+                        >
+                          <span className={`mb-3 grid h-16 gap-1 overflow-hidden ${design.pattern}`} aria-hidden="true">
+                            {Array.from({ length: design.id === 'proofing' ? 6 : 4 }).map((_, index) => (
+                              <span key={index} className={`${active ? 'bg-black/25' : 'bg-white/15'} ${design.id === 'editorial' && index === 1 ? 'row-span-2' : ''}`} />
+                            ))}
+                          </span>
+                          <span className="block text-[10px] font-semibold uppercase tracking-[0.16em]">{design.name}</span>
+                          <span className={`mt-1 block text-[9px] ${active ? 'text-black/60' : 'text-white/35'}`}>{design.note}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </fieldset>
                 <button
                   type="submit"
                   className="w-full bg-accent hover:bg-white text-black py-4 px-5 text-[10px] uppercase tracking-[0.22em] font-medium transition-all sm:px-8 sm:tracking-[0.4em]"
@@ -3883,6 +3913,34 @@ export default function AdminPage() {
                     <span className={gal.is_locked ? 'text-red-200' : 'text-green-300'}>
                       {gal.is_locked ? 'Client access locked' : 'Client access open'}
                     </span>
+                  </div>
+                  <div className="space-y-3 border border-white/10 bg-black/20 p-3">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-white/70">Gallery design</p>
+                      <p className="mt-1 text-xs text-white/35">Pick a look for this client. Changes appear the next time the gallery opens.</p>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      {([
+                        { id: 'editorial', name: 'Editorial', note: 'Video-inspired cinematic cover' },
+                        { id: 'classic', name: 'Classic', note: 'Spacious balanced grid' },
+                        { id: 'proofing', name: 'Proofing', note: 'More photos, faster choices' },
+                      ] as const).map((design) => {
+                        const active = (gal.gallery_design || 'editorial') === design.id;
+                        return (
+                          <button
+                            key={design.id}
+                            type="button"
+                            disabled={isUpdatingGallery}
+                            onClick={() => updateGallery(gal.id.toString(), 'design', { design: design.id })}
+                            aria-pressed={active}
+                            className={`min-h-20 p-3 text-left transition-colors disabled:opacity-50 ${active ? 'border border-accent bg-accent/10 text-accent' : 'border border-white/10 text-white/55 hover:border-white/35 hover:text-white'}`}
+                          >
+                            <span className="block text-[10px] font-semibold uppercase tracking-[0.18em]">{active ? '✓ ' : ''}{design.name}</span>
+                            <span className="mt-2 block text-[10px] leading-relaxed opacity-65">{design.note}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                   {gal.review_submitted_at && (
                     <div className="space-y-3 border border-accent/25 bg-accent/[0.04] p-3">

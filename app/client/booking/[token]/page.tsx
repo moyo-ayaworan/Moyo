@@ -35,6 +35,7 @@ type PortalDocument = {
   currency: string;
   due_date: string;
   sent_at: string | null;
+  paid_at: string | null;
   created_at: string;
 };
 
@@ -216,7 +217,7 @@ export default function ClientBookingPortalPage() {
                   <div className="border border-white/10 bg-white/[0.025] p-4">
                     <div className="flex items-center gap-2">
                       <FileText size={16} className="text-accent" />
-                      <p className="text-[10px] uppercase tracking-[0.22em] text-white/35">Contract & Invoice</p>
+                      <p className="text-[10px] uppercase tracking-[0.22em] text-white/35">Contracts, Invoices & Receipts</p>
                     </div>
                     <div className="mt-4 space-y-2">
                       {documents.length > 0 ? documents.map((document) => (
@@ -229,7 +230,7 @@ export default function ClientBookingPortalPage() {
                         >
                           <span className="min-w-0">
                             <span className="block truncate">{document.title}</span>
-                            <span className="mt-1 block text-[10px] uppercase tracking-[0.16em] text-white/35">{document.document_type}</span>
+                            <span className="mt-1 block text-[10px] uppercase tracking-[0.16em] text-white/35">{document.document_type === 'invoice' && document.paid_at ? 'Receipt · Paid' : document.document_type}</span>
                           </span>
                           <Download size={15} className="shrink-0" />
                         </a>

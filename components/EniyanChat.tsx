@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { setStorageItem } from '@/lib/browserStorage';
+import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { ENIYAN_ROUTES as ROUTE_LABELS, ENIYAN_MESSAGE_LIMIT, getEniyanLinks } from '@/lib/eniyanNavigation';
 import {
   ArrowRight,
   CalendarCheck,
@@ -11,14 +12,13 @@ import {
   LockKeyhole,
   Mail,
   MessageCircle,
-  Minimize2,
   Palette,
   RotateCcw,
   Send,
   Images,
   X,
 } from 'lucide-react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useTheme } from 'next-themes';
 import { usePathname } from 'next/navigation';
 import { LanguageCode, useLanguage } from '@/context/LanguageContext';
@@ -29,9 +29,8 @@ type ChatMessage = {
   id: string;
   role: ChatRole;
   content: string;
+  mode?: 'ai' | 'guided';
 };
-
-const DISMISS_KEY = 'eniyan-chat-dismissed-at';
 
 const FEATURE_CARDS = [
   {
@@ -66,23 +65,6 @@ const FEATURE_CARDS = [
   },
 ] as const;
 
-const ROUTE_LABELS: Record<string, string> = {
-  '/': 'Home',
-  '/photography': 'Photography',
-  '/photography/portfolio': 'Photography portfolio',
-  '/photography/bookings': 'Book photography',
-  '/photography/client-gallery': 'Client gallery',
-  '/photography/about': 'Photography about',
-  '/photography/newsletter': 'Photography newsletter',
-  '/art': 'Fine art',
-  '/art/works': 'Artworks',
-  '/art/shop': 'Art shop',
-  '/art/commissions': 'Art commissions',
-  '/art/exhibitions': 'Exhibitions',
-  '/art/about': 'Art about',
-  '/art/newsletter': 'Art newsletter',
-};
-
 const ENIYAN_COPY: Record<LanguageCode, {
   eyebrow: string;
   title: string;
@@ -96,7 +78,7 @@ const ENIYAN_COPY: Record<LanguageCode, {
   EN: {
     eyebrow: 'Site companion',
     title: 'Eniyan',
-    subtitle: 'Human site guide',
+    subtitle: 'AI studio guide',
     placeholder: 'Ask Eniyan...',
     thinking: 'Thinking',
     greeting: "Mo ki o. I'm Eniyan, your guide around Ijabiken Moyo's world. Tell me what you want to do and I'll help you find the right page or next step.",
@@ -113,7 +95,7 @@ const ENIYAN_COPY: Record<LanguageCode, {
   FR: {
     eyebrow: 'Compagnon du site',
     title: 'Eniyan',
-    subtitle: 'Guide humain du site',
+    subtitle: 'Guide IA du studio',
     placeholder: 'Demandez a Eniyan...',
     thinking: 'Reflexion',
     greeting: "Bonjour. Je suis Eniyan, votre guide sur le site d'Ijabiken Moyo. Dites-moi ce que vous voulez faire.",
@@ -127,7 +109,7 @@ const ENIYAN_COPY: Record<LanguageCode, {
   ES: {
     eyebrow: 'Guia del sitio',
     title: 'Eniyan',
-    subtitle: 'Guia humano del sitio',
+    subtitle: 'Guía de IA del estudio',
     placeholder: 'Pregunta a Eniyan...',
     thinking: 'Pensando',
     greeting: 'Hola. Soy Eniyan, tu guia en el sitio de Ijabiken Moyo. Dime que quieres hacer.',
@@ -141,7 +123,7 @@ const ENIYAN_COPY: Record<LanguageCode, {
   DE: {
     eyebrow: 'Website-Begleiter',
     title: 'Eniyan',
-    subtitle: 'Menschlicher Website-Guide',
+    subtitle: 'KI-Studioguide',
     placeholder: 'Frag Eniyan...',
     thinking: 'Denke nach',
     greeting: 'Hallo. Ich bin Eniyan, dein Guide auf der Website von Ijabiken Moyo. Sag mir, was du tun moechtest.',
@@ -155,7 +137,7 @@ const ENIYAN_COPY: Record<LanguageCode, {
   PT: {
     eyebrow: 'Guia do site',
     title: 'Eniyan',
-    subtitle: 'Guia humano do site',
+    subtitle: 'Guia de IA do estúdio',
     placeholder: 'Pergunte ao Eniyan...',
     thinking: 'Pensando',
     greeting: 'Ola. Sou Eniyan, seu guia no site de Ijabiken Moyo. Diga-me o que quer fazer.',
@@ -169,7 +151,7 @@ const ENIYAN_COPY: Record<LanguageCode, {
   AR: {
     eyebrow: 'دليل الموقع',
     title: 'Eniyan',
-    subtitle: 'دليل إنساني للموقع',
+    subtitle: 'دليل الاستوديو بالذكاء الاصطناعي',
     placeholder: 'اسأل Eniyan...',
     thinking: 'يفكر',
     greeting: 'مرحبا. أنا Eniyan، دليلك في موقع Ijabiken Moyo. أخبرني بما تريد فعله.',
@@ -183,7 +165,7 @@ const ENIYAN_COPY: Record<LanguageCode, {
   ZH: {
     eyebrow: '网站向导',
     title: 'Eniyan',
-    subtitle: '人性化网站向导',
+    subtitle: 'AI 工作室向导',
     placeholder: '问 Eniyan...',
     thinking: '思考中',
     greeting: '你好。我是 Eniyan，是你浏览 Ijabiken Moyo 网站的向导。告诉我你想做什么。',
@@ -197,7 +179,7 @@ const ENIYAN_COPY: Record<LanguageCode, {
   YO: {
     eyebrow: 'Oluranlowo oju opo',
     title: 'Eniyan',
-    subtitle: 'Olutoju oju opo',
+    subtitle: 'Olùrànlọ́wọ́ AI',
     placeholder: 'Beere lowo Eniyan...',
     thinking: 'N ronu',
     greeting: 'Mo ki o. Emi ni Eniyan, olutoju re lori oju opo Ijabiken Moyo. So ohun ti o fe se fun mi.',
@@ -211,7 +193,7 @@ const ENIYAN_COPY: Record<LanguageCode, {
   IG: {
     eyebrow: 'Nduzi saịtị',
     title: 'Eniyan',
-    subtitle: 'Nduzi mmadu maka saịtị',
+    subtitle: 'Nduzi AI',
     placeholder: 'Juo Eniyan...',
     thinking: 'Na-eche',
     greeting: 'Ndewo. A bu m Eniyan, onye ndu gi na webusaiti Ijabiken Moyo. Gwa m ihe ichoro ime.',
@@ -225,7 +207,7 @@ const ENIYAN_COPY: Record<LanguageCode, {
   HA: {
     eyebrow: 'Jagoran shafi',
     title: 'Eniyan',
-    subtitle: 'Jagoran yanar gizo',
+    subtitle: 'Jagoran AI',
     placeholder: 'Tambayi Eniyan...',
     thinking: 'Tunani',
     greeting: 'Sannu. Ni ne Eniyan, jagoranka a shafin Ijabiken Moyo. Fadi abin da kake son yi.',
@@ -242,65 +224,8 @@ function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function getPageContext() {
-  if (typeof window === 'undefined') return null;
-
-  const title = document.title;
-  const path = window.location.pathname;
-  // Send public page identity only; never scrape client details or chat text.
-  const visibleText = '';
-
-  return { title, path, visibleText };
-}
-
-function getMessageLinks(content: string) {
-  const paths = content.match(/\/(?:photography|art)(?:\/[a-z-]+)?|\/(?=\s|$|[.,])/g) || [];
-  return Array.from(new Set(paths)).filter((path) => ROUTE_LABELS[path]);
-}
-
-function EniyanSign({
-  compact = false,
-  neutral = false,
-  light = false,
-}: {
-  compact?: boolean;
-  neutral?: boolean;
-  light?: boolean;
-}) {
-  return (
-    <span
-      className={`relative grid shrink-0 place-items-center overflow-hidden rounded-full border shadow-lg shadow-black/20 ${
-        compact ? 'size-9' : 'size-14'
-      } ${
-        neutral && light
-          ? 'border-black/10 bg-black/[0.035] text-black/70'
-          : neutral
-          ? 'border-white/15 bg-white/[0.035] text-white/72'
-          : light
-            ? 'border-black/10 bg-white text-black/70'
-            : 'border-accent/24 bg-white/[0.045] text-accent'
-      }`}
-      aria-hidden="true"
-    >
-      <span
-        className={`absolute left-1/2 top-2 h-[calc(100%-1rem)] w-px -translate-x-1/2 ${
-          neutral && light || !neutral && light ? 'bg-black/18' : neutral ? 'bg-white/18' : 'bg-accent/24'
-        }`}
-      />
-      <span
-        className={`absolute top-1/2 -translate-y-1/2 rounded-full ${compact ? 'size-1.5' : 'size-2'} ${
-          neutral && light || !neutral && light ? 'bg-black/45' : neutral ? 'bg-white/55' : 'bg-accent'
-        }`}
-      />
-      <span
-        className={`relative font-heading italic leading-none ${compact ? 'text-base' : 'text-2xl'} ${
-          neutral && light || !neutral && light ? 'text-black/70' : neutral ? 'text-white/75' : 'text-accent'
-        }`}
-      >
-        E
-      </span>
-    </span>
-  );
+function EniyanSign({ compact = false }: { compact?: boolean }) {
+  return <span aria-hidden="true" style={{ width: compact ? 36 : 56, height: compact ? 36 : 56, backgroundImage: 'url("/eniyan-sign.svg?v=2")' }} className="block shrink-0 bg-contain bg-center bg-no-repeat" />;
 }
 
 export default function EniyanChat() {
@@ -309,7 +234,10 @@ export default function EniyanChat() {
   const { resolvedTheme, theme } = useTheme();
   const copy = ENIYAN_COPY[language] || ENIYAN_COPY.EN;
   const isLight = (resolvedTheme || theme) === 'light';
+  const reducedMotion = useReducedMotion();
+  const [failedMessage, setFailedMessage] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [viewport, setViewport] = useState<{ height: number; inset: number } | null>(null);
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState('');
@@ -322,12 +250,26 @@ export default function EniyanChat() {
   ]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const recentMessages = useMemo(() => messages.slice(-8), [messages]);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const launcherRef = useRef<HTMLButtonElement>(null);
+  const pendingRef = useRef<AbortController | null>(null);
+  useEffect(() => () => pendingRef.current?.abort(), []);
+  useEffect(() => { if (isOpen) inputRef.current?.focus(); }, [isOpen]);
+  useEffect(() => {
+    const visual = window.visualViewport;
+    if (!isOpen || !visual) return;
+    const update = () => setViewport({ height: visual.height, inset: Math.max(0, window.innerHeight - visual.height - visual.offsetTop) });
+    update();
+    visual.addEventListener('resize', update);
+    visual.addEventListener('scroll', update);
+    return () => { visual.removeEventListener('resize', update); visual.removeEventListener('scroll', update); };
+  }, [isOpen]);
   const currentRouteLabel = ROUTE_LABELS[pathname || '/'] || 'Current page';
+  const shortViewport = Boolean(viewport && viewport.height < 500);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages, isSending]);
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: reducedMotion ? 'instant' : 'smooth' });
+  }, [messages, isSending, reducedMotion]);
 
   useEffect(() => {
     setMessages((current) => {
@@ -336,51 +278,60 @@ export default function EniyanChat() {
     });
   }, [copy.greeting]);
 
-  async function sendMessage(text: string) {
+  async function sendMessage(text: string, retry = false) {
     const trimmed = text.trim();
-    if (!trimmed || isSending) return;
+    if (!trimmed || pendingRef.current) return;
+    if (trimmed.length > ENIYAN_MESSAGE_LIMIT) { setError(`Please keep messages under ${ENIYAN_MESSAGE_LIMIT} characters.`); return; }
 
     const userMessage: ChatMessage = { id: createId(), role: 'user', content: trimmed };
-    const nextMessages = [...messages, userMessage];
+    const nextMessages = retry ? messages : [...messages, userMessage];
+    const controller = new AbortController();
+    pendingRef.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 20_000);
 
     setMessages(nextMessages);
     setInput('');
     setError('');
+    setFailedMessage(null);
     setIsSending(true);
     setIsOpen(true);
 
     try {
       const response = await fetch('/api/eniyan', {
         method: 'POST',
-        signal: AbortSignal.timeout(20_000),
+        signal: controller.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: nextMessages.filter((message) => message.id !== 'welcome').slice(-10).map(({ role, content }) => ({ role, content })),
-          page: { ...(getPageContext() || {}), language },
+          page: { path: pathname, language },
         }),
       });
 
-      const data = (await response.json()) as { reply?: string; error?: string };
+      const data = (await response.json()) as { reply?: string; error?: string; mode?: 'ai' | 'guided' };
 
-      if (!response.ok || !data.reply) {
+      if (!response.ok || typeof data.reply !== 'string' || !data.reply.trim()) {
         throw new Error(data.error || 'Eniyan is unavailable right now.');
       }
 
+      const reply = data.reply;
       setMessages((current) => [
         ...current,
-        { id: createId(), role: 'assistant', content: data.reply || 'I can help you find the right page.' },
+        { id: createId(), role: 'assistant', content: reply, mode: data.mode },
       ]);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Eniyan is unavailable right now.';
+      const message = controller.signal.aborted ? 'The request timed out. Please try again.' : err instanceof Error ? err.message : 'Eniyan is unavailable right now.';
       setError(message);
+      setFailedMessage(trimmed);
     } finally {
+      window.clearTimeout(timeout);
+      pendingRef.current = null;
       setIsSending(false);
     }
   }
 
   function closeChat() {
-    setStorageItem('local', DISMISS_KEY, String(Date.now()));
     setIsOpen(false);
+    requestAnimationFrame(() => launcherRef.current?.focus());
   }
 
   function resetChat() {
@@ -388,35 +339,42 @@ export default function EniyanChat() {
     setMessages([{ id: 'welcome', role: 'assistant', content: copy.greeting }]);
     setInput('');
     setError('');
+    setFailedMessage(null);
+    inputRef.current?.focus();
   }
 
   if (pathname.startsWith('/admin') || pathname.startsWith('/client/')) return null;
 
   return (
-    <div className="fixed inset-x-2 bottom-2 z-[120] flex max-w-[calc(100vw-1rem)] flex-col items-stretch gap-3 pb-[env(safe-area-inset-bottom)] sm:inset-x-auto sm:bottom-4 sm:right-4 sm:max-w-[calc(100vw-2rem)] sm:items-end md:bottom-6 md:right-6">
+    <div style={isOpen && viewport?.inset ? { bottom: viewport.inset + 8 } : undefined} className="fixed inset-x-2 bottom-2 z-[120] flex max-w-[calc(100vw-1rem)] flex-col items-stretch gap-3 pb-[env(safe-area-inset-bottom)] sm:inset-x-auto sm:bottom-4 sm:right-4 sm:max-w-[calc(100vw-2rem)] sm:items-end md:bottom-6 md:right-6">
       <AnimatePresence>
         {isOpen && (
           <motion.section
-            initial={{ opacity: 0, y: 18, scale: 0.98 }}
+            initial={reducedMotion ? false : { opacity: 0, y: 18, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 14, scale: 0.98 }}
-            transition={{ duration: 0.32, ease: [0.19, 1, 0.22, 1] }}
+            transition={{ duration: reducedMotion ? 0 : 0.22, ease: [0.19, 1, 0.22, 1] }}
+            style={viewport ? { maxHeight: Math.max(160, viewport.height - (shortViewport ? 24 : 100)) } : undefined}
             className={`relative flex h-[min(720px,calc(100dvh-5rem))] max-h-[calc(100dvh-5rem)] w-full min-w-0 max-w-full flex-col overflow-hidden rounded-[8px] border shadow-2xl backdrop-blur-xl sm:h-[min(720px,calc(100dvh-6.5rem))] sm:w-[min(560px,calc(100vw-2rem))] lg:w-[min(920px,calc(100vw-2rem))] ${
               isLight
                 ? 'border-black/10 bg-[#fbfaf7]/98 text-[#141414] shadow-black/12'
                 : 'border-white/10 bg-[#0f0f0f]/98 text-white shadow-black/45'
             }`}
-            aria-label="Eniyan AI chat assistant"
+            id="eniyan-chat-panel"
+            role="dialog"
+            aria-labelledby="eniyan-title"
+            dir={language === 'AR' ? 'rtl' : 'ltr'}
+            onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); closeChat(); } }}
           >
             <header className={`min-w-0 shrink-0 border-b px-3 py-3 sm:px-5 sm:py-4 ${isLight ? 'border-black/10' : 'border-white/10'}`}>
               <div className="flex min-w-0 items-start justify-between gap-2 sm:gap-4">
                 <div className="flex min-w-0 flex-1 gap-3">
                   <span className="hidden shrink-0 min-[380px]:inline-flex">
-                    <EniyanSign compact neutral light={isLight} />
+                    <EniyanSign compact />
                   </span>
                   <div className="min-w-0 flex-1 space-y-2">
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <h2 className={`min-w-0 font-heading text-2xl italic leading-none [overflow-wrap:anywhere] ${isLight ? 'text-[#141414]' : 'text-white'}`}>
+                      <h2 id="eniyan-title" className={`min-w-0 font-heading text-2xl italic leading-none [overflow-wrap:anywhere] ${isLight ? 'text-[#141414]' : 'text-white'}`}>
                         {copy.title}
                       </h2>
                       <span className={`max-w-full border px-2 py-1 text-[8px] uppercase tracking-[0.16em] [overflow-wrap:anywhere] ${
@@ -425,7 +383,7 @@ export default function EniyanChat() {
                         {copy.eyebrow}
                       </span>
                     </div>
-                    <p className={`line-clamp-2 max-w-xl text-xs leading-relaxed ${isLight ? 'text-black/52' : 'text-white/52'}`}>
+                    <p className={`${shortViewport ? 'hidden' : 'line-clamp-2'} max-w-xl text-xs leading-relaxed ${isLight ? 'text-black/52' : 'text-white/52'}`}>
                       {copy.subtitle}. You are on {currentRouteLabel}.
                     </p>
                   </div>
@@ -434,7 +392,8 @@ export default function EniyanChat() {
                   <button
                     type="button"
                     onClick={resetChat}
-                    className={`grid size-9 place-items-center rounded-[8px] transition sm:size-9 ${
+                    disabled={isSending}
+                    className={`grid size-11 place-items-center rounded-[8px] transition disabled:opacity-40 ${
                       isLight ? 'text-black/45 hover:bg-black/5 hover:text-black' : 'text-white/50 hover:bg-white/8 hover:text-white'
                     }`}
                     aria-label="Reset Eniyan chat"
@@ -443,18 +402,8 @@ export default function EniyanChat() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setIsOpen(false)}
-                    className={`grid size-9 place-items-center rounded-[8px] transition sm:size-9 ${
-                      isLight ? 'text-black/45 hover:bg-black/5 hover:text-black' : 'text-white/50 hover:bg-white/8 hover:text-white'
-                    }`}
-                    aria-label="Minimize Eniyan"
-                  >
-                    <Minimize2 className="size-4" aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
                     onClick={closeChat}
-                    className={`grid size-9 place-items-center rounded-[8px] transition sm:size-9 ${
+                    className={`grid size-11 place-items-center rounded-[8px] transition disabled:opacity-40 ${
                       isLight ? 'text-black/45 hover:bg-black/5 hover:text-black' : 'text-white/50 hover:bg-white/8 hover:text-white'
                     }`}
                     aria-label="Close Eniyan"
@@ -465,11 +414,11 @@ export default function EniyanChat() {
               </div>
             </header>
 
-            <div className="grid min-h-0 min-w-0 flex-1 lg:grid-cols-[minmax(0,1fr)_280px]">
+            <div className="grid min-h-0 min-w-0 flex-1 grid-rows-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_280px]">
               <section className="flex min-h-0 min-w-0 flex-col">
-                <div ref={scrollRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-3 py-4 sm:space-y-5 sm:px-5 sm:py-5">
-                  {recentMessages.map((message) => {
-                    const links = message.role === 'assistant' ? getMessageLinks(message.content) : [];
+                <div ref={scrollRef} role="log" aria-label="Conversation with Eniyan" aria-live="polite" aria-relevant="additions" className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-3 py-4 sm:space-y-5 sm:px-5 sm:py-5">
+                  {messages.map((message) => {
+                    const links = message.role === 'assistant' ? getEniyanLinks(message.content) : [];
 
                     return (
                       <div
@@ -478,7 +427,7 @@ export default function EniyanChat() {
                       >
                         {message.role === 'assistant' && (
                           <span className="hidden shrink-0 sm:inline-flex">
-                            <EniyanSign compact neutral light={isLight} />
+                            <EniyanSign compact />
                           </span>
                         )}
                         <div className={`flex min-w-0 max-w-full flex-col sm:max-w-[86%] ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
@@ -486,7 +435,7 @@ export default function EniyanChat() {
                             className={`max-w-full whitespace-pre-wrap rounded-[8px] px-3 py-2.5 text-sm leading-relaxed [overflow-wrap:anywhere] sm:px-4 sm:py-3 ${
                               message.role === 'user'
                                 ? isLight
-                                  ? 'bg-[#181818] text-white'
+                                  ? 'bg-[#181818] text-[#ffffff]'
                                   : 'bg-white text-[#111111]'
                                 : isLight
                                   ? 'border border-black/8 bg-black/[0.035] text-black/72'
@@ -495,10 +444,12 @@ export default function EniyanChat() {
                           >
                             {message.content}
                           </p>
+                          {message.mode === 'guided' && <span className="mt-1 text-[10px] opacity-65">Site guide · automatic reply</span>}
                           {links.length > 0 && (
                             <div className="mt-2 flex max-w-full flex-wrap gap-2">
                               {links.map((path) => (
-                                <a
+                                <Link
+                                  onClick={closeChat}
                                   key={path}
                                   href={path}
                                   className={`inline-flex items-center gap-1.5 rounded-[8px] border px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] transition ${
@@ -509,7 +460,7 @@ export default function EniyanChat() {
                                 >
                                   {ROUTE_LABELS[path]}
                                   <ArrowRight className="size-3" aria-hidden="true" />
-                                </a>
+                                </Link>
                               ))}
                             </div>
                           )}
@@ -520,7 +471,7 @@ export default function EniyanChat() {
                   {isSending && (
                     <div className="flex justify-start gap-3">
                       <span className="hidden shrink-0 sm:inline-flex">
-                        <EniyanSign compact neutral light={isLight} />
+                        <EniyanSign compact />
                       </span>
                       <div
                         className={`flex items-center gap-2 rounded-[8px] border px-4 py-3 text-sm ${
@@ -532,16 +483,17 @@ export default function EniyanChat() {
                       </div>
                     </div>
                   )}
-                  {error && <p className="text-xs leading-relaxed text-red-500">{error}</p>}
+                  {error && <div role="alert" className="space-y-2 text-xs leading-relaxed text-red-500"><p>{error}</p>{failedMessage && <button type="button" onClick={() => sendMessage(failedMessage, true)} disabled={isSending} className="min-h-11 rounded border border-current px-3 font-semibold">Retry message</button>}</div>}
                 </div>
 
                 <div className={`shrink-0 border-t px-3 py-3 sm:px-5 sm:py-4 ${isLight ? 'border-black/10' : 'border-white/10'}`}>
-                  <div className="mb-3 flex max-w-full gap-2 overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch]">
+                  <div className={`${shortViewport ? 'hidden' : 'flex'} mb-3 max-w-full gap-2 overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch]`}>
                     {copy.starterPrompts.map((prompt) => (
                       <button
                         key={prompt}
                         type="button"
                         onClick={() => sendMessage(prompt)}
+                        disabled={isSending}
                         className={`max-w-[72vw] shrink-0 rounded-[8px] border px-3 py-2 text-left text-[10px] uppercase tracking-[0.12em] [overflow-wrap:anywhere] transition sm:max-w-none ${
                           isLight ? 'border-black/10 bg-white/45 text-black/52 hover:bg-white/75 hover:text-black' : 'border-white/10 bg-white/[0.035] text-white/55 hover:bg-white/[0.07] hover:text-white'
                         }`}
@@ -565,17 +517,20 @@ export default function EniyanChat() {
                     </label>
                     <textarea
                       id="eniyan-message"
+                      ref={inputRef}
+                      maxLength={ENIYAN_MESSAGE_LIMIT}
+                      aria-describedby="eniyan-privacy"
                       value={input}
                       rows={1}
                       onChange={(event) => setInput(event.target.value)}
                       onKeyDown={(event) => {
-                        if (event.key === 'Enter' && !event.shiftKey) {
+                        if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
                           event.preventDefault();
                           sendMessage(input);
                         }
                       }}
                       placeholder={copy.placeholder}
-                      className={`max-h-24 min-h-11 min-w-0 flex-1 resize-none bg-transparent px-2 py-3 text-sm outline-none transition ${
+                      className={`max-h-24 min-h-11 min-w-0 flex-1 resize-none bg-transparent px-2 py-3 text-base outline-none transition sm:text-sm ${
                         isLight
                           ? 'text-black placeholder:text-black/30'
                           : 'text-white placeholder:text-white/30'
@@ -586,7 +541,7 @@ export default function EniyanChat() {
                       disabled={!input.trim() || isSending}
                       className={`grid size-11 shrink-0 place-items-center rounded-[8px] transition disabled:cursor-not-allowed disabled:opacity-40 ${
                         isLight
-                          ? 'bg-black text-white hover:bg-accent hover:text-black'
+                          ? 'bg-black text-[#ffffff] hover:bg-accent'
                           : 'bg-white text-black hover:bg-accent'
                       }`}
                       aria-label="Send message"
@@ -594,10 +549,11 @@ export default function EniyanChat() {
                       <Send className="size-4" aria-hidden="true" />
                     </button>
                   </form>
+                  <p id="eniyan-privacy" className="mt-2 text-[10px] leading-relaxed opacity-60">{shortViewport ? 'AI guide · Messages may be processed by Google Gemini. Keep private details out of chat.' : 'AI-assisted guidance. Messages may be processed by Google Gemini. Never share access codes, passwords or payment details. Confirm quotes and bookings with the studio.'}</p>
                 </div>
               </section>
 
-              <aside className={`hidden border-l p-4 lg:block ${isLight ? 'border-black/10 bg-black/[0.025]' : 'border-white/10 bg-white/[0.025]'}`}>
+              <aside className={`hidden min-h-0 overflow-y-auto overscroll-contain border-l p-4 lg:block ${isLight ? 'border-black/10 bg-black/[0.025]' : 'border-white/10 bg-white/[0.025]'}`}>
                 <div className="mb-4 flex items-center gap-2">
                   <Compass className={`size-4 ${isLight ? 'text-black/45' : 'text-white/45'}`} aria-hidden="true" />
                   <p className={`text-[10px] uppercase tracking-[0.24em] ${isLight ? 'text-black/45' : 'text-white/45'}`}>
@@ -610,7 +566,8 @@ export default function EniyanChat() {
                     const cardCopy = copy.features[card.id] || ENIYAN_COPY.EN.features[card.id];
                     if (!cardCopy) return null;
                     return (
-                      <a
+                      <Link
+                        onClick={closeChat}
                         key={card.href}
                         href={card.href}
                         className={`group flex items-center gap-3 rounded-[8px] border p-3 transition ${
@@ -622,7 +579,7 @@ export default function EniyanChat() {
                           <span
                             className={`grid size-10 shrink-0 place-items-center rounded-[8px] border ${
                               isLight
-                                ? 'border-black/10 bg-[#111111] text-white'
+                                ? 'border-black/10 bg-[#111111] text-[#ffffff]'
                                 : 'border-white/10 bg-white/[0.045] text-white/70'
                             }`}
                           >
@@ -637,7 +594,7 @@ export default function EniyanChat() {
                             </span>
                           </span>
                           <ArrowRight className={`size-4 shrink-0 transition group-hover:translate-x-1 ${isLight ? 'text-black/35' : 'text-white/35'}`} aria-hidden="true" />
-                        </a>
+                        </Link>
                       );
                     })}
                 </div>
@@ -656,10 +613,13 @@ export default function EniyanChat() {
 
       <button
         type="button"
-        onClick={() => setIsOpen((current) => !current)}
-        className={`group ml-auto flex h-12 w-fit max-w-full items-center gap-3 rounded-full border px-3 shadow-xl shadow-black/20 backdrop-blur-xl transition ${
+        ref={launcherRef}
+        onClick={() => isOpen ? closeChat() : setIsOpen(true)}
+        aria-expanded={isOpen}
+        aria-controls="eniyan-chat-panel"
+        className={`${isOpen && shortViewport ? 'hidden' : 'flex'} group ml-auto h-12 w-fit max-w-full items-center gap-3 rounded-full border px-3 shadow-xl shadow-black/20 backdrop-blur-xl transition ${
           isLight
-            ? 'border-black/10 bg-white/80 text-black/70 hover:border-black/18 hover:bg-white hover:text-black'
+            ? 'border-black/10 bg-white/80 text-black/70 hover:border-black/18 hover:bg-[#ffffff] hover:text-black'
             : 'border-white/10 bg-[#171717]/86 text-white/68 hover:border-white/18 hover:bg-[#1f1f1f]/90 hover:text-white/86'
         }`}
         aria-label={isOpen ? 'Hide Eniyan chat' : 'Open Eniyan chat'}
@@ -671,8 +631,8 @@ export default function EniyanChat() {
           </>
         ) : (
           <>
-            <EniyanSign compact neutral light={isLight} />
-            <span className="hidden pr-1 text-[10px] font-semibold uppercase tracking-[0.18em] sm:inline">Ask Eniyan</span>
+            <EniyanSign compact />
+            <span className="pr-1 text-[10px] font-semibold uppercase tracking-[0.16em]">Ask Eniyan</span>
           </>
         )}
       </button>

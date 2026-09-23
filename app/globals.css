@@ -196,87 +196,37 @@ body {
   }
 }
 
-.custom-cursor-enabled,
-.custom-cursor-enabled * {
-  cursor: none !important;
-}
+/* Browser-rendered pointer: no trailing DOM element or perpetual animation loop.
+   Keep native text, resize, and disabled affordances. Touch/reduced-motion users
+   retain their system cursor. The independent click spark stays in AppChrome. */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  body {
+    --studio-cursor: url('/cursor-lucide-outline.svg') 4 4;
+    cursor: var(--studio-cursor), auto;
+  }
 
-.custom-cursor {
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 2147483647;
-  width: 1px;
-  height: 1px;
-  pointer-events: none;
-  opacity: 0;
-  --cursor-fill: #ffffff;
-  color: var(--cursor-fill);
-  filter:
-    drop-shadow(0 1px 1px rgba(0, 0, 0, 0.78))
-    drop-shadow(0 4px 7px rgba(0, 0, 0, 0.32));
-  transition: opacity 220ms ease, filter 220ms ease;
-}
+  [data-theme='light'] body {
+    --studio-cursor: url('/cursor-lucide-outline-light.svg') 4 4;
+  }
 
-.custom-cursor.is-visible {
-  opacity: 1;
-}
+  :where(a[href], button, summary, label[for], select, [role='button'], [data-cursor], .cursor-pointer):not(:disabled):not([aria-disabled='true']) {
+    cursor: url('/cursor-lucide-outline-active.svg') 4 4, pointer;
+  }
 
-.custom-cursor__icon {
-  position: absolute;
-  left: 0;
-  top: 0;
-  display: block;
-  width: 30px;
-  height: 30px;
-  overflow: visible;
-  transform: translate(-9px, -6px);
-  transform-origin: 9px 7px;
-  transition: transform 220ms ease;
-}
+  :where(input, textarea, [contenteditable='true']) {
+    cursor: text;
+  }
 
-.custom-cursor__pointer-fill {
-  color: var(--cursor-fill);
-  fill: var(--cursor-fill);
-  opacity: 1;
-  transition: fill 180ms ease, opacity 180ms ease;
-}
+  :where(input[type='checkbox'], input[type='radio'], input[type='range'], input[type='submit'], input[type='button'], input[type='file']) {
+    cursor: pointer;
+  }
 
-.custom-cursor.is-interactive {
-  --cursor-fill: #ffffff;
-  filter:
-    drop-shadow(0 1px 1px rgba(0, 0, 0, 0.9))
-    drop-shadow(0 0 8px rgba(146, 1, 16, 0.38))
-    drop-shadow(0 5px 9px rgba(0, 0, 0, 0.38));
-}
-
-.custom-cursor.is-interactive .custom-cursor__icon {
-  transform: translate(-9px, -6px) scale(1.04);
-}
-
-.custom-cursor.is-text .custom-cursor__icon {
-  opacity: 1;
-  transform: translate(-9px, -6px) scale(0.92);
-}
-
-.custom-cursor.is-text {
-  --cursor-fill: var(--accent);
-  filter:
-    drop-shadow(0 1px 1px rgba(0, 0, 0, 0.9))
-    drop-shadow(0 0 12px rgba(146, 1, 16, 0.34))
-    drop-shadow(0 6px 12px rgba(0, 0, 0, 0.42));
+  :where(:disabled, [aria-disabled='true']) {
+    cursor: not-allowed;
+  }
 }
 
 @media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
-  .custom-cursor-enabled,
-  .custom-cursor-enabled * {
-    cursor: auto !important;
-  }
-
-  .custom-cursor {
-    display: none;
-  }
-
   .interactive-image-canvas {
     transition-duration: 1ms;
   }

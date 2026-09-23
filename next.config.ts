@@ -3,6 +3,10 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   compress: true,
+  serverExternalPackages: ['pdfkit'],
+  outputFileTracingIncludes: {
+    '/api/galleries/documents': ['./public/fonts/*.ttf', './public/brand/moyo-logo-red.png'],
+  },
   images: {
     remotePatterns: [
       {

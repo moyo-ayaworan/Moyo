@@ -1,8 +1,8 @@
-<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
-  <title id="title">Eniyan sign</title>
-  <desc id="desc">A circular Eniyan monogram with a central human mark.</desc>
-  <circle cx="64" cy="64" r="58" fill="#050505" stroke="#920110" stroke-width="2"/>
-  <path d="M64 28V100" stroke="#920110" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
-  <circle cx="64" cy="64" r="7" fill="#920110"/>
-  <text x="64" y="77" text-anchor="middle" fill="#920110" font-family="Georgia, 'Times New Roman', serif" font-size="52" font-style="italic">E</text>
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Eniyan</title>
+  <desc id="desc">A conversation mark with a person at its centre.</desc>
+  <rect width="64" height="64" rx="22" fill="#920110"/>
+  <path d="M19 44.5L19.8 38.5A17 17 0 1 1 28 48.5L19 51V44.5Z" stroke="#FFF4E8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="33" cy="27" r="3.5" fill="#FFF4E8"/>
+  <path d="M26.5 38C27.8 34.4 38.2 34.4 39.5 38" stroke="#FFF4E8" stroke-width="2.5" stroke-linecap="round"/>
 </svg>

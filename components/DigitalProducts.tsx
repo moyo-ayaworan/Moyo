@@ -14,31 +14,26 @@ type DigitalProduct = {
     price: string;
     details: string;
     image: string;
-    product_url?: string;
     is_active?: boolean;
 };
-
-const fallbackProducts: DigitalProduct[] = [
-    { id: 1, title: 'Editorial Presets Vol. 1', price: '$45.00', details: '10 Lightroom Presets', image: '/image-placeholder.svg', is_active: true },
-    { id: 2, title: 'Darkroom Masterclass', price: '$120.00', details: 'Video Course (3 Hours)', image: '/image-placeholder.svg', is_active: true },
-    { id: 3, title: 'Fine Art Texture Pack', price: '$30.00', details: '50 High-Res Overlays', image: '/image-placeholder.svg', is_active: true }
-];
 
 export default function DigitalProducts() {
     const { language } = useLanguage();
     const { t, translateText } = useTranslate(language);
     const settings = useSiteSettings();
-    const [products, setProducts] = useState<DigitalProduct[]>(fallbackProducts);
+    const [products, setProducts] = useState<DigitalProduct[]>([]);
 
     useEffect(() => {
         fetch('/api/digital-products')
-            .then((res) => res.json())
+            .then((res) => res.ok ? res.json() : Promise.reject())
             .then((data: { products?: DigitalProduct[] }) => {
                 const activeProducts = (data.products || []).filter((product) => product.is_active !== false);
-                if (activeProducts.length) setProducts(activeProducts);
+                setProducts(activeProducts);
             })
             .catch(() => null);
     }, []);
+
+    if (!products.length) return null;
 
     return (
         <section id="digital-shop" className="border-t border-white/5 bg-background py-24 md:py-32 lg:py-40">
@@ -86,13 +81,11 @@ export default function DigitalProducts() {
                                         className="object-cover grayscale transition-all duration-1000 group-hover:scale-105 group-hover:grayscale-0"
                                     />
                                     <a
-                                        href={product.product_url || '#digital-shop'}
-                                        target={product.product_url ? '_blank' : undefined}
-                                        rel={product.product_url ? 'noreferrer' : undefined}
-                                        className="absolute inset-x-0 bottom-0 z-20 block translate-y-0 bg-white py-5 text-center transition-transform duration-500 md:translate-y-full md:group-hover:translate-y-0"
-                                        aria-disabled={!product.product_url}
+                                        href={`/art/shop#product-${product.id}`}
+                                        aria-label={`${translateText('View in shop')}: ${product.title}`}
+                                        className="absolute inset-x-0 bottom-0 z-20 block bg-white py-5 text-center transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-accent"
                                     >
-                                        <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-black md:tracking-[0.4em]">{t('shop.purchaseNow')}</span>
+                                        <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-black md:tracking-[0.4em]">{translateText('View in shop')}</span>
                                     </a>
                                 </div>
 

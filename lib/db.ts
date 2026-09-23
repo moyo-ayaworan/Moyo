@@ -93,6 +93,7 @@ async function initializeTables(connection: PoolClient) {
       review_text TEXT DEFAULT '',
       review_submitted_at TIMESTAMPTZ,
       review_featured BOOLEAN DEFAULT FALSE,
+      gallery_design TEXT DEFAULT 'editorial',
       is_locked BOOLEAN DEFAULT FALSE,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
@@ -227,6 +228,7 @@ async function initializeTables(connection: PoolClient) {
       ADD COLUMN IF NOT EXISTS review_text TEXT DEFAULT '',
       ADD COLUMN IF NOT EXISTS review_submitted_at TIMESTAMPTZ,
       ADD COLUMN IF NOT EXISTS review_featured BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS gallery_design TEXT DEFAULT 'editorial',
       ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT FALSE;
   `);
 

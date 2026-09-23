@@ -46,9 +46,10 @@ export async function POST(req: NextRequest) {
       finished_images,
       payment_verified,
       payment_url,
+      gallery_design,
       is_locked
     )
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
     [
       slug,
       access_code,
@@ -58,6 +59,7 @@ export async function POST(req: NextRequest) {
       body.finishedImages || [],
       body.paymentVerified ?? false,
       body.paymentUrl || '',
+      ['editorial', 'classic', 'proofing'].includes(body.galleryDesign) ? body.galleryDesign : 'editorial',
       body.isLocked ?? false,
     ]
   );
@@ -202,6 +204,16 @@ export async function PUT(req: NextRequest) {
     );
     return galleryResponse(rows);
   }
+  if (action === 'design') {
+    const design = ['editorial', 'classic', 'proofing'].includes(payload?.design)
+      ? payload.design
+      : 'editorial';
+    const { rows } = await query(
+      `UPDATE galleries SET gallery_design=$1 WHERE id=$2 RETURNING *`,
+      [design, id]
+    );
+    return galleryResponse(rows);
+  }
 
   // generic update
   const { rows } = await query(
@@ -214,8 +226,9 @@ export async function PUT(req: NextRequest) {
          finished_images=$6,
          payment_verified=$7,
          payment_url=$8,
-         is_locked=$9
-     WHERE id=$10
+         gallery_design=$9,
+         is_locked=$10
+     WHERE id=$11
      RETURNING *`,
     [
       payload?.clientName,
@@ -226,6 +239,7 @@ export async function PUT(req: NextRequest) {
       payload?.finishedImages || [],
       payload?.paymentVerified ?? false,
       payload?.paymentUrl || '',
+      ['editorial', 'classic', 'proofing'].includes(payload?.galleryDesign) ? payload.galleryDesign : 'editorial',
       payload?.isLocked ?? false,
       id,
     ]

@@ -12,14 +12,16 @@ type DigitalProductUpdateKey =
   | 'displayOrder'
   | 'isActive';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const isAdmin = !requireAdmin(req);
   const { rows } = await query(`
-    SELECT *
+    SELECT ${isAdmin ? '*' : 'id, title, price, details, image, display_order, is_active'}
     FROM digital_products
+    ${isAdmin ? '' : 'WHERE is_active = TRUE'}
     ORDER BY is_active DESC, display_order ASC, created_at DESC
   `);
 
-  return NextResponse.json({ products: rows });
+  return NextResponse.json({ products: rows }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
 export async function POST(req: NextRequest) {

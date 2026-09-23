@@ -26,6 +26,7 @@ type ClientGallery = {
     is_locked: boolean;
     image_count: number;
     finished_count: number;
+    gallery_design: 'editorial' | 'classic' | 'proofing';
 };
 
 export default function ClientGalleryPage() {
@@ -63,6 +64,7 @@ export default function ClientGalleryPage() {
     const lightboxImages = useMemo(() => lightboxCollection === 'finished' ? (gallery?.finished_images || []) : (gallery?.images || []), [gallery, lightboxCollection]);
     const activeImage = activeImageIndex !== null ? lightboxImages[activeImageIndex] : null;
     const visibleImages = (gallery?.images || []).map((image, index) => ({ image, index })).filter(({ image }) => !selectionOnly || selectedImageSet.has(image));
+    const galleryDesign = gallery?.gallery_design || 'editorial';
 
     const getFinishedDownloadUrl = (image: string) =>
         `/api/galleries/download?galleryId=${gallery?.id || ''}&accessCode=${encodeURIComponent(accessCode.trim())}&file=${encodeURIComponent(image)}`;
@@ -376,19 +378,21 @@ export default function ClientGalleryPage() {
                     </motion.div>
                 ) : (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-12 md:space-y-16">
-                        <section className="collection-hero relative min-h-[420px] -mx-6 overflow-hidden border-y border-white/10 bg-black md:-mx-12">
+                        <section className={`collection-hero relative grid items-end overflow-hidden border border-white/10 bg-black ${galleryDesign === 'editorial' ? 'min-h-[420px] -mx-6 md:-mx-12' : 'mx-auto min-h-[320px] w-full max-w-7xl'}`}>
                             {gallery.images[0] && (
-                                <GalleryMedia
-                                    src={gallery.images[0]}
-                                    alt={`${gallery.client_name} ${t('clientGallery.galleryImageAlt')} 1`}
-                                    className="h-[56svh] min-h-[420px] w-full object-cover opacity-70 md:h-[68svh]"
-                                    previewWidth={1600}
-                                    loading="eager"
-                                    fetchPriority="high"
-                                />
+                                <div className="col-start-1 row-start-1 min-w-0 overflow-hidden">
+                                    <GalleryMedia
+                                        src={gallery.images[0]}
+                                        alt={`${gallery.client_name} ${t('clientGallery.galleryImageAlt')} 1`}
+                                        className={`${galleryDesign === 'editorial' ? 'h-[56svh] min-h-[420px] md:h-[68svh]' : 'h-[38svh] min-h-[320px] md:h-[48svh]'} w-full object-cover opacity-70`}
+                                        previewWidth={1600}
+                                        loading="eager"
+                                        fetchPriority="high"
+                                    />
+                                </div>
                             )}
                             <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(0,0,0,.85), rgba(0,0,0,.05) 85%)' }} />
-                            <div className="absolute inset-x-0 bottom-0 px-6 py-8 md:px-12 md:py-12">
+                            <div className="relative col-start-1 row-start-1 min-w-0 px-6 py-8 md:px-12 md:py-12">
                                 <div className="mx-auto flex max-w-7xl flex-col gap-6 md:flex-row md:items-end md:justify-between">
                                     <div className="max-w-3xl space-y-4">
                                         <span className="text-accent text-[10px] tracking-[0.5em] uppercase">
@@ -433,14 +437,14 @@ export default function ClientGalleryPage() {
                                     <p className="text-xs text-white/50" role="status">{hasSelectionChanges ? 'Selection has unsent changes' : gallery.approved_images.length ? 'Selection received by the studio' : 'Your collection, your favourites'}</p>
                                 </div>
                                 {selectionOnly && visibleImages.length === 0 && <p className="py-12 text-center text-sm text-white/60">No favourites yet. Choose All photographs to start your selection.</p>}
-                                <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 2xl:columns-4">
+                                <div className={galleryDesign === 'editorial' ? 'columns-1 gap-4 sm:columns-2 lg:columns-3 2xl:columns-4' : galleryDesign === 'proofing' ? 'grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5' : 'grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3'}>
                                     {visibleImages.map(({ image, index }) => {
                                         const isSelected = selectedImageSet.has(image);
 
                                         return (
                                             <figure
                                                 key={`${image}-${index}`}
-                                                className="group relative mb-4 break-inside-avoid overflow-hidden border border-white/10 bg-background transition-colors duration-500 hover:border-white/25"
+                                                className={`group relative break-inside-avoid overflow-hidden border bg-background transition-colors duration-500 ${galleryDesign === 'editorial' ? 'mb-4 border-white/10 hover:border-white/25' : 'border-white/15 hover:border-accent/60'}`}
                                             >
                                                 <button
                                                     type="button"
@@ -451,7 +455,7 @@ export default function ClientGalleryPage() {
                                                     <GalleryMedia
                                                         src={image}
                                                         alt={`${gallery.client_name} ${t('clientGallery.galleryImageAlt')} ${index + 1}`}
-                                                        className="h-auto w-full transition duration-700 group-hover:scale-[1.025]"
+                                                        className={`${galleryDesign === 'editorial' ? 'h-auto' : galleryDesign === 'proofing' ? 'aspect-square object-cover' : 'aspect-[4/5] object-cover'} w-full transition duration-700 group-hover:scale-[1.025]`}
                                                         previewWidth={900}
                                                         loading={index < 3 ? 'eager' : 'lazy'}
                                                         fetchPriority={index === 0 ? 'high' : 'auto'}
@@ -474,6 +478,15 @@ export default function ClientGalleryPage() {
                                                 >
                                                     <Check className={`h-4 w-4 ${isSelected ? 'opacity-100' : 'opacity-0'}`} />
                                                 </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => toggleImageSelection(image)}
+                                                    aria-pressed={isSelected}
+                                                    className={`absolute bottom-12 left-3 z-20 inline-flex items-center gap-2 border px-3 py-2 text-[9px] font-semibold uppercase tracking-[0.18em] backdrop-blur-md transition-all ${isSelected ? 'border-white bg-white text-black' : 'border-white/50 bg-black/60 text-white hover:border-white'}`}
+                                                >
+                                                    <Heart className={`h-3 w-3 ${isSelected ? 'fill-current' : ''}`} />
+                                                    {isSelected ? 'Selected' : 'Select'}
+                                                </button>
                                                 <figcaption className="flex items-center justify-between gap-4 border-t border-white/10 px-4 py-3">
                                                     <span className="text-[10px] uppercase tracking-[0.24em] text-white/35">
                                                         {String(index + 1).padStart(2, '0')}
@@ -489,7 +502,7 @@ export default function ClientGalleryPage() {
                                     })}
                                 </div>
 
-                                <div className="sticky bottom-20 z-40 mx-auto max-w-3xl border border-white/10 bg-background/88 p-3 shadow-2xl backdrop-blur-xl">
+                                <div className="mx-auto max-w-3xl border border-white/10 bg-background/88 p-3 shadow-2xl backdrop-blur-xl">
                                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                         <div className="min-w-0 px-2">
                                             <p className="text-[10px] uppercase tracking-[0.24em] text-white/35">

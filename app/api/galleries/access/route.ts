@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
             review_rating,
             review_text,
             review_submitted_at,
+            gallery_design,
             is_locked
      FROM galleries
      WHERE UPPER(access_code) = UPPER($1)
@@ -59,6 +60,7 @@ export async function POST(req: NextRequest) {
       review_rating: gallery.review_rating || null,
       review_text: gallery.review_text || '',
       review_submitted_at: gallery.review_submitted_at || null,
+      gallery_design: gallery.gallery_design || 'editorial',
       is_locked: gallery.is_locked,
       image_count: allImages.length,
       finished_count: finishedImages.length,

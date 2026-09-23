@@ -8,7 +8,6 @@ import { ThemeProvider } from '@/components/ThemeProvider';
 import ClickSpark from '@/components/ClickSpark';
 
 const SessionTracker = dynamic(() => import('@/components/SessionTracker'), { ssr: false });
-const CustomCursor = dynamic(() => import('@/components/CustomCursor'), { ssr: false });
 const SocialLinks = dynamic(() => import('@/components/SocialLinks'), { ssr: false });
 const EniyanChat = dynamic(() => import('@/components/EniyanChat'), { ssr: false });
 
@@ -54,7 +53,6 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
           <SessionTracker />
           {enablePointerEffects ? (
             <>
-              <CustomCursor />
               <ClickSpark
                 sparkColor="#920110"
                 sparkSize={12}

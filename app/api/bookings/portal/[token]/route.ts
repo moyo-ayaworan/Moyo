@@ -40,7 +40,7 @@ export async function GET(_req: NextRequest, context: RouteContext) {
           [galleryId]
         ),
         query(
-          `SELECT id, document_type, title, amount, currency, due_date, sent_at::text, created_at::text
+          `SELECT id, document_type, title, amount, currency, due_date, sent_at::text, paid_at::text, created_at::text
            FROM gallery_documents
            WHERE gallery_id = $1
            ORDER BY created_at DESC`,
@@ -53,5 +53,5 @@ export async function GET(_req: NextRequest, context: RouteContext) {
     booking,
     gallery: galleryResult.rows[0] || null,
     documents: documentResult.rows,
-  });
+  }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
