@@ -1,11 +1,13 @@
 import PDFDocument from 'pdfkit';
 import { existsSync } from 'fs';
 import path from 'path';
+import { paymentNarrative, receiptLabel, type PaymentFields, type DocumentPayment } from './documentPayments';
 
-type Document = {
+type Document = PaymentFields & {
   id: number; document_type: string; title: string; client_name?: string;
   client_email: string; amount: string | number; currency: string; due_date: string;
   line_items: string; terms: string; paid_at?: string | null; created_at: string;
+  display_kind?: string; receipt_payment?: DocumentPayment;
 };
 type Calculation = {
   items: Array<{ description: string; quantity: number; unitPrice: number; total: number }>;
@@ -27,7 +29,8 @@ export async function buildDocumentPdf(doc: Document, calculation: Calculation |
   });
   pdf.registerFont('Body', fontPath('Regular'));
   pdf.registerFont('Bold', fontPath('Bold'));
-  const label = doc.document_type === 'contract' ? 'CONTRACT' : doc.paid_at ? 'RECEIPT' : 'INVOICE';
+  const isReceipt = doc.display_kind === 'receipt' || (doc.display_kind !== 'invoice' && Boolean(doc.paid_at));
+  const label = doc.document_type === 'contract' ? 'CONTRACT' : isReceipt ? 'RECEIPT' : 'INVOICE';
   const logo = path.join(process.cwd(), 'public', 'brand', 'moyo-logo-red.png');
   const foreground = '#eeeae5';
   const accent = '#e06673';
@@ -45,7 +48,7 @@ export async function buildDocumentPdf(doc: Document, calculation: Calculation |
     if (existsSync(logo)) pdf.image(logo, 48, 17, { fit: [65, 34] });
     else text('MOYO', 48, 22, 16, true, accent);
     text(label, 355, 12, 24);
-    text(`MOYO-${doc.id}`, 355, 43, 8);
+    text(`MOYO-${doc.id}${doc.receipt_payment ? ` / R-${doc.receipt_payment.id.slice(0, 8)}` : ''}`, 355, 43, 8);
     text('MOYO AYAWORAN / Photography & Fine Art', 48, 753, 8);
     text(`Page ${page}`, 510, 753, 8);
     y = 80;
@@ -86,8 +89,8 @@ export async function buildDocumentPdf(doc: Document, calculation: Calculation |
   y += 8;
   write(`Prepared for ${doc.client_name || 'Client'}`, 10, true);
   write(doc.client_email);
-  write(`Issued: ${date(doc.created_at)}`);
-  if (doc.document_type === 'invoice' && !doc.paid_at) write(`Due: ${doc.due_date || 'On receipt'}`);
+  write(`Issued: ${date(doc.receipt_payment?.recordedAt || doc.created_at)}`);
+  if (doc.document_type === 'invoice' && !isReceipt) write(`Balance due: ${doc.due_date || 'On receipt'}`);
   y += 18;
   heading(doc.document_type === 'contract' ? 'SCOPE OF WORK' : 'SERVICES');
   if (doc.document_type === 'invoice' && calculation) {
@@ -119,6 +122,12 @@ export async function buildDocumentPdf(doc: Document, calculation: Calculation |
   }
   y += 12;
   if (doc.document_type === 'invoice') {
+    if (doc.billing_details || doc.payments?.length || doc.display_kind === 'invoice') {
+      heading(isReceipt ? (doc.receipt_payment ? `${receiptLabel(doc, doc.receipt_payment).toUpperCase()} RECEIPT` : 'PAYMENT RECEIPT') : 'PAYMENT SCHEDULE');
+      for (const line of paymentNarrative(doc, doc.currency, doc.receipt_payment)) write(line, 11, line.startsWith('BOOKING CONFIRMED'), line.startsWith('BOOKING CONFIRMED') ? accent : foreground);
+      if (doc.receipt_payment) write(`Receipt reference: ${doc.receipt_payment.id}`, 8);
+      y += 14;
+    } else {
     ensure(doc.paid_at ? 155 : 60);
     write(`${doc.paid_at ? 'TOTAL PAID' : 'TOTAL DUE'}: ${money(calculation?.total ?? doc.amount, doc.currency)}`, 14, true, accent);
     if (doc.paid_at) {
@@ -131,6 +140,7 @@ export async function buildDocumentPdf(doc: Document, calculation: Calculation |
     }
     write(`Payment: studio confirmation. Reference: Moyo-${doc.id}`);
     y += 14;
+    }
   }
   if (doc.terms) { heading('TERMS'); write(doc.terms); y += 14; }
   ensure(75);

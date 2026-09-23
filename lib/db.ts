@@ -253,6 +253,8 @@ async function initializeTables(connection: PoolClient) {
   await connection.query(`ALTER TABLE gallery_documents ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;`);
   await connection.query(`
     ALTER TABLE gallery_documents ADD COLUMN IF NOT EXISTS receipt_sent_at TIMESTAMPTZ;
+    ALTER TABLE gallery_documents ADD COLUMN IF NOT EXISTS billing_details JSONB;
+    ALTER TABLE gallery_documents ADD COLUMN IF NOT EXISTS payments JSONB NOT NULL DEFAULT '[]'::jsonb;
     ALTER TABLE gallery_documents ADD COLUMN IF NOT EXISTS creation_key TEXT;
     ALTER TABLE gallery_documents ADD COLUMN IF NOT EXISTS request_hash TEXT;
     CREATE UNIQUE INDEX IF NOT EXISTS gallery_documents_creation_key_idx ON gallery_documents (creation_key);

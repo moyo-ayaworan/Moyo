@@ -41,7 +41,7 @@ function load(file, mocks = {}, globals = {}) {
   const compiledModule = { exports: {} };
   vm.runInNewContext(source, {
     module: compiledModule, exports: compiledModule.exports,
-    require: (name) => name in mocks ? mocks[name] : requireDependency(name),
+    require: (name) => name in mocks ? mocks[name] : (name === '@/lib/documentPayments' || name === './documentPayments') ? load('lib/documentPayments.ts') : requireDependency(name),
     process: { cwd: () => process.cwd(), env: { DATABASE_URL: 'postgres://localhost/test', ADMIN_KEY: 'test-key', SMTP_USER: 'test@example.test', SMTP_PASS: 'test' } },
     console: { error() {} }, URL, Date, Buffer, AbortSignal, ...globals,
   });
@@ -468,6 +468,7 @@ test('Eniyan links use exact known routes, including punctuation and Markdown bo
 });
 
 const invoiceBody = { galleryId: 1, documentType: 'invoice', clientEmail: 'client@example.test', currency: 'NGN', items: [{ description: 'Portrait session', quantity: 1, unitPrice: 100 }] };
+const payments = load('lib/documentPayments.ts');
 function documentRoute(query, sendMail = async () => ({ accepted: ['client@example.test'], messageId: 'test-id' })) {
   return load('app/api/galleries/documents/route.ts', {
     path: { default: requireDependency('node:path') },
@@ -504,6 +505,156 @@ const savedInvoice = {
   line_items: JSON.stringify({ kind: 'calculated-invoice', items: Array.from({ length: 20 }, (_, index) => ({ description: `Service number ${index + 1}`, quantity: 1, unitPrice: 100 })) }),
   terms: 'Long terms with full delivery details. '.repeat(60) + 'FINAL TERMS MUST REMAIN',
 };
+
+const depositInvoice = {
+  ...savedInvoice, title: 'Portrait booking', amount: 100000, terms: 'Balance due before delivery.',
+  due_date: '2026-10-10', payments: [], paid_at: null,
+  line_items: JSON.stringify({ kind: 'calculated-invoice', items: [{ description: 'Portrait session', quantity: 1, unitPrice: 100000 }] }),
+  billing_details: { depositAmount: 40000, sessionDate: '2026-10-10', agreementScope: 'A studio portrait session and ten edited photographs.', agreementTerms: 'Delivery and usage as agreed. Cancellation terms reviewed with the client.' },
+};
+const paymentBody = { id: 1, action: 'recordPayment', paymentKey: '4e0a36f1-ab65-4594-9e01-1e8a5ca35bf1', amount: 40000, receivedAt: '2026-09-01', reference: 'BANK-TEST-ONLY' };
+function paymentRoute(seed = depositInvoice) {
+  let doc = structuredClone(seed);
+  const route = documentRoute(async (sql, params) => {
+    if (sql.startsWith('UPDATE gallery_documents SET payments')) {
+      assert.match(sql, /payments = \$3::jsonb AND paid_at IS NULL/);
+      if (JSON.stringify(doc.payments) !== params[2] || doc.paid_at) return { rows: [] };
+      doc.payments.push(...JSON.parse(params[1]));
+      if (params[3] === 0) doc.paid_at = new Date().toISOString();
+    }
+    return { rows: [structuredClone(doc)] };
+  });
+  return { route, current: () => doc };
+}
+
+test('fixed and percentage deposits are part of the final invoice total and reject invalid input', () => {
+  assert.equal(payments.normalizeBilling({ depositType: 'percent', depositValue: 40 }, 100000).depositAmount, 40000);
+  assert.equal(payments.normalizeBilling({ depositValue: '' }, 100000).depositAmount, 0);
+  for (const invalid of [{ depositValue: -1 }, { depositValue: 100001 }, { depositValue: false }, { depositValue: [] }, { depositType: 'percent', depositValue: 101 }, { sessionDate: '2026-02-30' }, { addAgreement: true, agreementScope: 'Scope' }]) assert.throws(() => payments.normalizeBilling(invalid, 100000));
+});
+
+test('deposit and agreement save with invoice and participate in its idempotency hash', async () => {
+  const saved = new Map();
+  let billing;
+  const route = documentRoute(async (sql, params) => {
+    if (sql.startsWith('SELECT')) return { rows: [{ client_name: 'Client' }] };
+    billing = JSON.parse(params[11]);
+    const previous = saved.get(params[9]);
+    if (previous && previous !== params[10]) return { rows: [] };
+    saved.set(params[9], params[10]); return { rows: [{ id: 1 }] };
+  });
+  const body = { ...invoiceBody, creationKey: paymentBody.paymentKey, depositType: 'percent', depositValue: '40', sessionDate: '2026-10-10', addAgreement: true, agreementScope: 'Scope', agreementTerms: 'Terms' };
+  assert.equal((await route.POST(request(body))).status, 200);
+  assert.equal(billing.depositAmount, 40); assert.equal(billing.agreementScope, 'Scope');
+  assert.equal((await route.POST(request(body))).status, 200);
+  assert.equal((await route.POST(request({ ...body, depositValue: 50 }))).status, 409);
+});
+
+test('deposit receipt confirms booking only after the threshold is met and preserves remaining balance', async () => {
+  const { route, current } = paymentRoute();
+  assert.equal((await route.PUT(request(paymentBody))).status, 200);
+  const doc = current();
+  assert.equal(doc.paid_at, null); assert.equal(doc.payments.length, 1);
+  assert.equal(doc.payments[0].bookingConfirmed, true);
+  assert.equal(doc.payments[0].balance, 60000);
+  assert.equal(payments.paymentSummary(doc).paid, 40000);
+  assert.equal(payments.receiptLabel(doc, doc.payments[0]), 'Booking deposit');
+  const final = { ...paymentBody, paymentKey: '5e0a36f1-ab65-4594-9e01-1e8a5ca35bf1', amount: 60000 };
+  assert.equal((await route.PUT(request(final))).status, 200);
+  assert.ok(current().paid_at); assert.equal(current().payments.length, 2);
+  assert.equal(current().payments[0].balance, 60000, 'Earlier receipt snapshot must not change');
+  assert.equal(current().payments[1].balance, 0);
+});
+
+test('lost-response and concurrent payment retries produce one receipt only', async () => {
+  const { route, current } = paymentRoute();
+  const results = await Promise.all([route.PUT(request(paymentBody)), route.PUT(request(paymentBody))]);
+  assert.ok(results.every(result => result.status === 200));
+  assert.equal(current().payments.length, 1);
+  assert.equal((await route.PUT(request(paymentBody))).status, 200);
+  assert.equal(current().payments.length, 1);
+  assert.equal((await route.PUT(request({ ...paymentBody, amount: 20000 }))).status, 409);
+});
+
+test('concurrent different payments cannot overwrite each other or overpay', async () => {
+  const { route, current } = paymentRoute();
+  const results = await Promise.all([route.PUT(request({ ...paymentBody, amount: 60000 })), route.PUT(request({ ...paymentBody, paymentKey: '5e0a36f1-ab65-4594-9e01-1e8a5ca35bf1', amount: 60000 }))]);
+  assert.deepEqual(results.map(result => result.status).sort(), [200, 409]);
+  assert.equal(current().payments.length, 1);
+});
+
+test('invalid payments, future dates, contracts and overpayments are rejected', async () => {
+  const { route } = paymentRoute();
+  for (const override of [{ amount: -1 }, { amount: 0 }, { amount: true }, { amount: [] }, { amount: 0.001 }, { receivedAt: '2099-01-01' }, { receivedAt: '2026-02-30' }, { receivedAt: '' }, { paymentKey: 'bad' }, { reference: 'a'.repeat(141) }]) assert.equal((await route.PUT(request({ ...paymentBody, ...override }))).status, 400, JSON.stringify(override));
+  assert.equal((await route.PUT(request({ ...paymentBody, amount: 100001 }))).status, 409);
+  assert.equal((await paymentRoute({ ...depositInvoice, document_type: 'contract' }).route.PUT(request(paymentBody))).status, 400);
+  assert.equal((await route.PUT(request({ id: 1, action: 'markPaid' }))).status, 400);
+});
+
+test('a small part payment or missing agreed date does not claim booking confirmation', async () => {
+  for (const [doc, amount] of [[depositInvoice, 20000], [{ ...depositInvoice, billing_details: { ...depositInvoice.billing_details, sessionDate: '' } }, 40000]]) {
+    const { route, current } = paymentRoute(doc);
+    await route.PUT(request({ ...paymentBody, amount }));
+    assert.equal(current().payments[0].bookingConfirmed, false);
+    assert.equal(payments.paymentSummary(current()).confirmed, false);
+  }
+});
+
+test('invoice, deposit receipt and agreement PDFs remain separately downloadable after full payment', async () => {
+  const { route: recording, current } = paymentRoute();
+  await recording.PUT(request(paymentBody));
+  await recording.PUT(request({ ...paymentBody, paymentKey: '5e0a36f1-ab65-4594-9e01-1e8a5ca35bf1', amount: 60000 }));
+  const doc = current();
+  const route = documentRoute(async () => ({ rows: [doc] }));
+  for (const [kind, expected, paymentId] of [['invoice', 'PAYMENT SCHEDULE', ''], ['receipt', 'BOOKING DEPOSIT RECEIPT', paymentBody.paymentKey], ['agreement', 'SCOPE OF WORK', '']]) {
+    const result = await route.GET({ nextUrl: new URL(`https://example.test/?id=1&format=pdf&kind=${kind}&paymentId=${paymentId}`) });
+    assert.equal(result.status, 200);
+    assert.match(result.headers['Content-Disposition'], new RegExp(kind));
+    const view = kind === 'agreement' ? { ...doc, document_type: 'contract', display_kind: kind, line_items: doc.billing_details.agreementScope, terms: doc.billing_details.agreementTerms, paid_at: null } : { ...doc, display_kind: kind, receipt_payment: kind === 'receipt' ? doc.payments[0] : undefined };
+    const pdf = await documentPdf.buildDocumentPdf(view, null);
+    const text = renderedPdfText.get(pdf);
+    assert.ok(text.includes(expected));
+    if (kind === 'receipt') { assert.ok(text.includes('This payment received: NGN 40,000')); assert.ok(text.includes('Remaining balance: NGN 60,000')); }
+    if (kind === 'invoice') { assert.ok(text.includes('INVOICE')); assert.ok(text.includes('Remaining balance: NGN 0')); }
+    for (const line of renderedPdfLayout.get(pdf)) assert.ok(line.x + line.width <= 565 && line.y <= 765, line.value);
+    if (process.env.DOCUMENT_QA_DIR) fs.writeFileSync(`${process.env.DOCUMENT_QA_DIR}/booking-${kind}.pdf`, Buffer.from(result.body));
+  }
+  assert.equal((await route.GET({ nextUrl: new URL('https://example.test/?id=1&format=pdf&kind=receipt&paymentId=wrong') })).status, 400);
+});
+
+test('invoice email includes the optional agreement; deposit email reports only money actually received', async () => {
+  const { route: recording, current } = paymentRoute(); await recording.PUT(request(paymentBody));
+  let email;
+  const route = documentRoute(async () => ({ rows: [current()] }), async message => { email = message; return { accepted: ['client@example.test'] }; });
+  assert.equal((await route.PUT(request({ id: 1, action: 'send', kind: 'invoice' }))).status, 200);
+  assert.equal(email.attachments.filter(item => item.contentType === 'application/pdf').length, 2);
+  assert.ok(email.subject.startsWith('Invoice:'));
+  assert.equal((await route.PUT(request({ id: 1, action: 'send', kind: 'receipt', paymentId: paymentBody.paymentKey }))).status, 200);
+  assert.ok(email.subject.startsWith('Receipt:'));
+  assert.match(email.text, /This payment received: NGN 40,000/);
+  assert.match(email.text, /Remaining balance: NGN 60,000/);
+  assert.equal(email.attachments.filter(item => item.contentType === 'application/pdf').length, 1);
+});
+
+test('payment records cannot be deleted and unpaid invoices cannot generate receipts', async () => {
+  let deleteSql;
+  const route = documentRoute(async sql => {
+    if (sql.startsWith('DELETE')) { deleteSql = sql; return { rows: [] }; }
+    return { rows: [depositInvoice] };
+  });
+  assert.equal((await route.GET({ nextUrl: new URL('https://example.test/?id=1&format=pdf&kind=receipt') })).status, 400);
+  assert.equal((await route.DELETE({ nextUrl: new URL('https://example.test/?id=1') })).status, 409);
+  assert.match(deleteSql, /paid_at IS NULL AND payments = '\[\]'::jsonb/);
+});
+
+test('new invoice links without a view parameter remain invoices after payment', async () => {
+  const { route: recording, current } = paymentRoute();
+  await recording.PUT(request({ ...paymentBody, amount: 100000 }));
+  let email;
+  const route = documentRoute(async () => ({ rows: [current()] }), async message => { email = message; return { accepted: ['client@example.test'] }; });
+  assert.equal((await route.PUT(request({ id: 1, action: 'send' }))).status, 200);
+  assert.match(email.subject, /^Invoice:/);
+});
 test('invoice email includes every item and full terms in a paginated PDF', async () => {
   let email;
   let markedSent = false;

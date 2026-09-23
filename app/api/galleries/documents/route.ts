@@ -6,10 +6,11 @@ import { buildDocumentPdf } from '@/lib/documentPdf';
 import nodemailer from 'nodemailer';
 import { requireAdmin } from '@/lib/auth';
 import { query } from '@/lib/db';
+import { normalizeBilling, paymentSummary, paymentNarrative, roundMoney, type PaymentFields, type DocumentPayment } from '@/lib/documentPayments';
 
 export const runtime = 'nodejs';
 
-type GalleryDocument = {
+type GalleryDocument = PaymentFields & {
   id: number;
   gallery_id: number;
   document_type: string;
@@ -25,6 +26,8 @@ type GalleryDocument = {
   created_at: string;
   client_name?: string;
   access_code?: string;
+  receipt_payment?: DocumentPayment;
+  display_kind?: string;
 };
 
 type GeminiResponse = {
@@ -417,6 +420,21 @@ async function getDocument(id: string) {
   return rows[0] as GalleryDocument | undefined;
 }
 
+function documentView(doc: GalleryDocument, kind: string, paymentId: string): GalleryDocument {
+  if (kind === 'agreement') {
+    if (!doc.billing_details?.agreementScope || !doc.billing_details.agreementTerms) throw new Error('No agreement is attached to this invoice.');
+    return { ...doc, display_kind: 'agreement', document_type: 'contract', paid_at: null, title: `Agreement for Moyo-${doc.id}`, line_items: doc.billing_details.agreementScope, terms: doc.billing_details.agreementTerms };
+  }
+  if (kind === 'receipt') {
+    const payment = doc.payments?.find(item => item.id === paymentId);
+    if (payment) return { ...doc, display_kind: 'receipt', paid_at: payment.recordedAt, receipt_payment: payment };
+    if (doc.document_type === 'invoice' && doc.paid_at && !doc.payments?.length && (!paymentId || paymentId === 'legacy')) return { ...doc, display_kind: 'receipt' };
+    throw new Error('Receipt not found. Record the payment received first.');
+  }
+  if (kind && kind !== 'invoice') throw new Error('Invalid document view.');
+  return kind === 'invoice' || doc.billing_details || doc.payments?.length ? { ...doc, display_kind: 'invoice' } : doc;
+}
+
 function getTransportConfig() {
   const user = process.env.SMTP_USER || process.env.EMAIL_SERVER_USER || process.env.EMAIL_USER || process.env.MAIL_USER;
   const pass = process.env.SMTP_PASS || process.env.EMAIL_SERVER_PASSWORD || process.env.EMAIL_PASS || process.env.MAIL_PASS || process.env.SMTP_PASSWORD;
@@ -491,12 +509,14 @@ export async function GET(req: NextRequest) {
       doc = await getDocument(id);
     }
     if (!doc) return NextResponse.json({ error: 'Document not found.' }, { status: 404 });
+    try { doc = documentView(doc, req.nextUrl.searchParams.get('kind') || '', req.nextUrl.searchParams.get('paymentId') || ''); }
+    catch (error) { return NextResponse.json({ error: (error as Error).message }, { status: 400 }); }
     const pdf = await buildDocumentPdf(doc, getCalculatedInvoice(doc));
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
         'Content-Type': 'application/pdf',
         'Cache-Control': 'private, no-store',
-        'Content-Disposition': `attachment; filename="${sanitizeFilename(`${doc.paid_at ? 'receipt' : doc.document_type}-${doc.id}-${doc.title}`)}.pdf"`,
+        'Content-Disposition': `attachment; filename="${sanitizeFilename(`${doc.display_kind || (doc.paid_at ? 'receipt' : doc.document_type)}-${doc.id}-${doc.title}`)}.pdf"`,
       },
     });
   }
@@ -669,17 +689,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Enter a valid client email.' }, { status: 400 });
     }
 
+    let billing = null;
+    try { billing = documentType === 'invoice' ? normalizeBilling(body, storedAmount) : null; }
+    catch (error) { return NextResponse.json({ error: (error as Error).message }, { status: 400 }); }
     const values = [galleryId, documentType, title, clientEmail, storedAmount, currency, dueDate, storedLineItems, terms];
-    const requestHash = creationKey ? createHash('sha256').update(JSON.stringify(values)).digest('hex') : null;
+    const requestHash = creationKey ? createHash('sha256').update(JSON.stringify([...values, billing])).digest('hex') : null;
     const { rows } = await query(
       `INSERT INTO gallery_documents (
-        gallery_id, document_type, title, client_email, amount, currency, due_date, line_items, terms, creation_key, request_hash
+        gallery_id, document_type, title, client_email, amount, currency, due_date, line_items, terms, creation_key, request_hash, billing_details
       )
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)
        ON CONFLICT (creation_key) DO UPDATE SET creation_key = EXCLUDED.creation_key
        WHERE gallery_documents.request_hash = EXCLUDED.request_hash
        RETURNING *`,
-      [...values, creationKey || null, requestHash]
+      [...values, creationKey || null, requestHash, JSON.stringify(billing)]
     );
     if (!rows[0]) return NextResponse.json({ error: 'This save key belongs to different document details. Nothing was changed.' }, { status: 409 });
     return NextResponse.json({ document: rows[0] }, { headers: { 'Cache-Control': 'private, no-store' } });
@@ -700,19 +723,59 @@ export async function PUT(req: NextRequest) {
     const action = normalize(body.action);
     if (!id) return NextResponse.json({ error: 'Missing document id.' }, { status: 400 });
 
+    if (action === 'recordPayment') {
+      const doc = await getDocument(id);
+      if (!doc) return NextResponse.json({ error: 'Document not found.' }, { status: 404 });
+      if (doc.document_type !== 'invoice') return NextResponse.json({ error: 'Payments can only be recorded against invoices.' }, { status: 400 });
+      const key = normalize(body.paymentKey);
+      const amount = Number(body.amount);
+      const receivedAt = normalize(body.receivedAt);
+      const reference = normalize(body.reference);
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key) || !['string', 'number'].includes(typeof body.amount) || !Number.isFinite(amount) || amount <= 0 || amount > Number.MAX_SAFE_INTEGER / 100 || roundMoney(amount) !== amount || !receivedAt || !isValidDateInput(receivedAt) || receivedAt > new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }) || reference.length > 140) {
+        return NextResponse.json({ error: 'Enter a positive payment (up to two decimal places), a valid payment date no later than today, and a reference up to 140 characters.' }, { status: 400 });
+      }
+      const prior = doc.payments?.find(item => item.id === key);
+      if (prior) {
+        if (prior.amount !== amount || prior.receivedAt !== receivedAt || prior.reference !== reference) return NextResponse.json({ error: 'This payment key already belongs to different details.' }, { status: 409 });
+        return NextResponse.json({ document: doc });
+      }
+      const summary = paymentSummary(doc);
+      if (amount > summary.balance) return NextResponse.json({ error: 'Payment exceeds the remaining invoice balance. Refresh the invoice before recording another payment.' }, { status: 409 });
+      const totalPaid = roundMoney(summary.paid + amount);
+      const balance = roundMoney(summary.total - totalPaid);
+      const payment: DocumentPayment = { id: key, amount, receivedAt, reference, recordedAt: new Date().toISOString(), totalPaid, balance, bookingConfirmed: Boolean(doc.billing_details?.sessionDate && totalPaid >= (summary.deposit || summary.total)) };
+      const { rows } = await query(
+        `UPDATE gallery_documents SET payments = payments || $2::jsonb,
+         paid_at = CASE WHEN $4::numeric = 0 THEN NOW() ELSE paid_at END, updated_at = NOW()
+         WHERE id = $1 AND payments = $3::jsonb AND paid_at IS NULL RETURNING *`,
+        [id, JSON.stringify([payment]), JSON.stringify(doc.payments || []), balance]
+      );
+      if (!rows[0]) {
+        const latest = await getDocument(id);
+        const saved = latest?.payments?.find(item => item.id === key);
+        if (saved && saved.amount === amount && saved.receivedAt === receivedAt && saved.reference === reference) return NextResponse.json({ document: latest });
+        return NextResponse.json({ error: 'The invoice changed during payment recording. Refresh and check its receipts before retrying.' }, { status: 409 });
+      }
+      return NextResponse.json({ document: rows[0] }, { headers: { 'Cache-Control': 'private, no-store' } });
+    }
+
     if (action === 'markPaid') {
       const doc = await getDocument(id);
       if (!doc) return NextResponse.json({ error: 'Document not found.' }, { status: 404 });
+      if (doc.payments?.length || doc.billing_details?.depositAmount) return NextResponse.json({ error: 'Use Record payment to record the remaining balance.' }, { status: 400 });
       if (doc.document_type !== 'invoice' || !Number.isFinite(Number(doc.amount)) || Number(doc.amount) <= 0) return NextResponse.json({ error: 'Only invoices with a positive total can be marked paid.' }, { status: 400 });
       const { rows } = await query(
-        `UPDATE gallery_documents SET paid_at = COALESCE(paid_at, NOW()), updated_at = NOW() WHERE id = $1 RETURNING *`, [id]
+        `UPDATE gallery_documents SET paid_at = COALESCE(paid_at, NOW()), updated_at = NOW() WHERE id = $1 AND payments = '[]'::jsonb RETURNING *`, [id]
       );
       return NextResponse.json({ document: rows[0] });
     }
 
     if (action === 'send') {
-      const doc = await getDocument(id);
-      if (!doc) return NextResponse.json({ error: 'Document not found.' }, { status: 404 });
+      const original = await getDocument(id);
+      if (!original) return NextResponse.json({ error: 'Document not found.' }, { status: 404 });
+      let doc: GalleryDocument;
+      try { doc = documentView(original, normalize(body.kind), normalize(body.paymentId)); }
+      catch (error) { return NextResponse.json({ error: (error as Error).message }, { status: 400 }); }
 
       const config = getTransportConfig();
       if (!config) return NextResponse.json({ error: 'Email is not configured.' }, { status: 500 });
@@ -723,22 +786,26 @@ export async function PUT(req: NextRequest) {
           : { connectionTimeout: 10_000, greetingTimeout: 10_000, socketTimeout: 30_000, service: 'gmail', auth: { user: config.user, pass: config.pass } }
       );
 
-      const label = doc.document_type === 'contract' ? 'Contract' : doc.paid_at ? 'Receipt' : 'Invoice';
+      const label = doc.document_type === 'contract' ? 'Contract' : doc.display_kind === 'invoice' ? 'Invoice' : doc.paid_at ? 'Receipt' : 'Invoice';
+      const narrative = doc.document_type === 'invoice' ? paymentNarrative(original, doc.currency, doc.receipt_payment) : [];
+      const usePaymentEmail = Boolean(doc.display_kind || original.payments?.length || original.billing_details?.depositAmount);
+      const bodyText = [`${label}: ${doc.title}`, `Moyo-${doc.id}`, ...narrative, doc.terms, 'Please see the attached document.'].filter(Boolean).join('\n\n');
       const logoAttachment = getLogoAttachment();
       const delivery = await transporter.sendMail({
         from: config.from,
         replyTo: process.env.SMTP_REPLY_TO || config.user,
         to: doc.client_email,
         subject: `${label}: ${doc.title}`,
-        text: documentText(doc),
-        html: emailHtml(doc),
+        text: usePaymentEmail ? bodyText : documentText(doc),
+        html: usePaymentEmail ? `<div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;padding:32px;background:#151618;color:#eeeae5"><h1>${escapeHtml(label)}</h1>${bodyText.split('\n\n').map(line => `<p style="line-height:1.6;white-space:pre-wrap">${escapeHtml(line)}</p>`).join('')}</div>` : emailHtml(doc),
         attachments: [
           ...(logoAttachment ? [logoAttachment] : []),
           {
-            filename: `${sanitizeFilename(`${doc.paid_at ? 'receipt' : doc.document_type}-${doc.id}-${doc.title}`)}.pdf`,
+            filename: `${sanitizeFilename(`${label.toLowerCase()}-${doc.id}-${doc.title}`)}.pdf`,
             content: await buildDocumentPdf(doc, getCalculatedInvoice(doc)),
             contentType: 'application/pdf',
           },
+          ...(label === 'Invoice' && original.billing_details?.agreementScope ? [{ filename: `agreement-Moyo-${doc.id}.pdf`, content: await buildDocumentPdf(documentView(original, 'agreement', ''), null), contentType: 'application/pdf' }] : []),
         ],
       });
 
@@ -753,7 +820,7 @@ export async function PUT(req: NextRequest) {
              updated_at = NOW()
          WHERE id = $1
          RETURNING *`,
-        [id, Boolean(doc.paid_at)]
+        [id, label === 'Receipt']
       );
       return NextResponse.json({ document: rows[0], message: 'Document accepted by the mail server.', messageId: delivery.messageId });
     }
@@ -772,8 +839,11 @@ export async function DELETE(req: NextRequest) {
   try {
     const id = normalizeId(req.nextUrl.searchParams.get('id'));
     if (!id) return NextResponse.json({ error: 'Missing document id.' }, { status: 400 });
-    const { rows } = await query('DELETE FROM gallery_documents WHERE id = $1 RETURNING id', [id]);
-    if (!rows[0]) return NextResponse.json({ error: 'Document not found.' }, { status: 404 });
+    const { rows } = await query("DELETE FROM gallery_documents WHERE id = $1 AND paid_at IS NULL AND payments = '[]'::jsonb RETURNING id", [id]);
+    if (!rows[0]) {
+      const existing = await getDocument(id);
+      return NextResponse.json({ error: existing ? 'Invoices with recorded payments must be retained.' : 'Document not found.' }, { status: existing ? 409 : 404 });
+    }
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('[gallery documents] DELETE error', error);

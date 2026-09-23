@@ -36,6 +36,8 @@ type PortalDocument = {
   due_date: string;
   sent_at: string | null;
   paid_at: string | null;
+  billing_details?: { agreementScope?: string } | null;
+  payments?: Array<{ id: string; amount: number; receivedAt: string; balance: number }>;
   created_at: string;
 };
 
@@ -220,17 +222,22 @@ export default function ClientBookingPortalPage() {
                       <p className="text-[10px] uppercase tracking-[0.22em] text-white/35">Contracts, Invoices & Receipts</p>
                     </div>
                     <div className="mt-4 space-y-2">
-                      {documents.length > 0 ? documents.map((document) => (
+                      {documents.length > 0 ? documents.flatMap(document => [
+                        { ...document, key: `${document.id}-invoice`, kind: document.document_type === 'invoice' ? 'invoice' : '', paymentId: '', label: document.document_type },
+                        ...(document.billing_details?.agreementScope ? [{ ...document, key: `${document.id}-agreement`, kind: 'agreement', paymentId: '', label: 'Agreement', title: `Agreement for Moyo-${document.id}` }] : []),
+                        ...(document.payments?.map(payment => ({ ...document, key: `${document.id}-${payment.id}`, kind: 'receipt', paymentId: payment.id, label: `Receipt · ${payment.receivedAt} · ${document.currency} ${Number(payment.amount).toLocaleString()}`, title: `Payment receipt for Moyo-${document.id}` })) || []),
+                        ...(!document.payments?.length && document.paid_at ? [{ ...document, key: `${document.id}-receipt`, kind: 'receipt', paymentId: 'legacy', label: 'Receipt · Paid' }] : []),
+                      ]).map((document) => (
                         <a
-                          key={document.id}
-                          href={`/api/galleries/documents?id=${document.id}&format=pdf&token=${params.token}`}
+                          key={document.key}
+                          href={`/api/galleries/documents?id=${document.id}&format=pdf&kind=${document.kind}&paymentId=${document.paymentId}&token=${params.token}`}
                           target="_blank"
                           rel="noreferrer"
                           className="flex min-w-0 items-center justify-between gap-3 border border-white/10 bg-black/20 px-3 py-3 text-sm text-white/70 transition-colors hover:border-accent hover:text-accent"
                         >
                           <span className="min-w-0">
                             <span className="block truncate">{document.title}</span>
-                            <span className="mt-1 block text-[10px] uppercase tracking-[0.16em] text-white/35">{document.document_type === 'invoice' && document.paid_at ? 'Receipt · Paid' : document.document_type}</span>
+                            <span className="mt-1 block text-[10px] uppercase tracking-[0.16em] text-white/35">{document.label}</span>
                           </span>
                           <Download size={15} className="shrink-0" />
                         </a>
