@@ -93,3 +93,52 @@ test('an emailed invoice does not imply that its later receipt was emailed', () 
   assert.equal(documentSentAt({ paid_at: 'paid-date', sent_at: 'invoice-date' }), undefined);
   assert.equal(documentSentAt({ paid_at: 'paid-date', sent_at: 'invoice-date', receipt_sent_at: 'receipt-date' }), 'receipt-date');
 });
+
+test('a priced item with a missing description gets one specific error, not discount or tax errors', () => {
+  const { invoiceItemIssues } = client();
+  const issues = invoiceItemIssues([{ description: '', quantity: '1', unitPrice: '40000' }]);
+  assert.equal(issues.length, 1);
+  assert.match(issues[0], /Item 1: add a description/);
+  assert.equal(invoiceItemIssues([{ description: 'Portrait session', quantity: '1', unitPrice: '40000' }]).length, 0);
+});
+
+test('Gemini fills a missing description even when a price was already entered', () => {
+  const { mergeInvoiceDraftItems, invoiceItemIssues } = client();
+  const result = mergeInvoiceDraftItems([{ description: '', quantity: '1', unitPrice: '40000' }], ['Portrait session', 'Additional generated line']);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].description, 'Portrait session');
+  assert.equal(result[0].quantity, '1');
+  assert.equal(result[0].unitPrice, '40000');
+  assert.equal(invoiceItemIssues(result).length, 0);
+});
+
+test('Gemini preserves entered descriptions and quantities and never invents prices', () => {
+  const { mergeInvoiceDraftItems } = client();
+  const result = mergeInvoiceDraftItems([{ description: 'My agreed service', quantity: '2', unitPrice: '40000' }, { description: '', quantity: '3', unitPrice: '0' }], ['Do not overwrite', 'Complimentary print']);
+  assert.equal(result[0].description, 'My agreed service');
+  assert.equal(result[0].quantity, '2');
+  assert.equal(result[0].unitPrice, '40000');
+  assert.equal(result[1].description, 'Complimentary print');
+  assert.equal(result[1].unitPrice, '0');
+  const blank = mergeInvoiceDraftItems([{ description: '', quantity: '1', unitPrice: '' }], ['Portrait session']);
+  assert.equal(blank[0].unitPrice, '');
+});
+
+test('invoice description stays full-width rather than sharing fixed-width number columns', () => {
+  const source = fs.readFileSync('app/admin/page.tsx', 'utf8');
+  assert.ok(!source.includes('sm:grid-cols-[minmax(0,1fr)_90px_120px]'));
+  assert.ok(source.includes('Discount and tax are optional. Leave them blank for zero.'));
+  assert.ok(source.includes('description · required'));
+});
+
+test('unused default rows do not block saving but partially filled items still require details', () => {
+  const { enteredInvoiceItems, invoiceItemIssues, mergeInvoiceDraftItems } = client();
+  const priced = { description: 'Portrait session', quantity: '1', unitPrice: '40000' };
+  const blank = { description: '', quantity: '1', unitPrice: '' };
+  assert.equal(invoiceItemIssues([priced, blank]).length, 0);
+  assert.equal(enteredInvoiceItems([priced, blank]).length, 1);
+  assert.equal(invoiceItemIssues([blank]).length, 1);
+  assert.match(invoiceItemIssues([priced, { ...blank, description: 'Additional print' }])[0], /Item 2: enter a unit price/);
+  assert.match(invoiceItemIssues([priced, { ...blank, unitPrice: '100' }])[0], /Item 2: add a description/);
+  assert.equal(mergeInvoiceDraftItems([priced, blank], ['Other description', 'Do not invent an extra item'])[1].description, '');
+});

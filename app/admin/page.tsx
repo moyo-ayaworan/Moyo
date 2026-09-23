@@ -11,7 +11,7 @@ import { getCloudinaryPreviewUrl, getImagePreviewSrcSet } from '@/lib/mediaUrl';
 import { fileFingerprint, uploadAdminFile } from '@/lib/adminUpload';
 import { uploadPublicId } from '@/lib/uploadIdentity';
 import { createSeoImageFilename } from '@/lib/imageSeo';
-import { createDocumentSaveSession, documentSentAt, loadInvoiceWorkspace } from '@/lib/adminDocuments';
+import { createDocumentSaveSession, documentSentAt, enteredInvoiceItems, invoiceItemIssues, loadInvoiceWorkspace, mergeInvoiceDraftItems } from '@/lib/adminDocuments';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   FiChevronDown,
@@ -341,7 +341,7 @@ function formatDocumentAmount(amount: string | number, currency: string, zeroLab
 }
 
 function calculateInvoice(form: GalleryDocumentForm) {
-  const items = getDefaultInvoiceItems(form)
+  const items = enteredInvoiceItems(getDefaultInvoiceItems(form))
     .map((item) => {
       const description = item.description.trim();
       const quantity = Math.max(0, toFiniteNumber(item.quantity));
@@ -391,19 +391,8 @@ function getDocumentFormIssues(form: GalleryDocumentForm) {
     if (!Number.isFinite(Number(form.discountValue)) || !Number.isFinite(Number(form.taxRate))) issues.push('Enter valid discount and tax numbers.');
     if (form.discountType === 'fixed' && Number(form.discountValue) > calculation.subtotal) issues.push('Discount cannot exceed the subtotal.');
     if (!Number.isFinite(calculation.total) || calculation.subtotal > Number.MAX_SAFE_INTEGER / 100 || calculation.total > Number.MAX_SAFE_INTEGER / 100) issues.push('Invoice amounts are too large.');
-    if (getDefaultInvoiceItems(form).some((item) => !item.description.trim() || !item.quantity || !item.unitPrice || !Number.isFinite(Number(item.quantity)) || !Number.isFinite(Number(item.unitPrice)))) issues.push('Complete every item description, quantity, and price.');
-    if (getDefaultInvoiceItems(form).some(item => item.description.trim().length > 220)) issues.push('Keep each item description under 220 characters.');
-    if (getDefaultInvoiceItems(form).length > 20) issues.push('Use no more than 20 invoice items.');
+    issues.push(...invoiceItemIssues(getDefaultInvoiceItems(form)));
     if (Number(form.taxRate) > 100) issues.push('Tax cannot exceed 100%.');
-    if (!calculation.items.some((item) => item.description && item.quantity > 0 && item.unitPrice > 0)) {
-      issues.push('Add at least one invoice item with a description, quantity, and price above zero.');
-    }
-    if (getDefaultInvoiceItems(form).some((item) => item.quantity && toFiniteNumber(item.quantity) <= 0)) {
-      issues.push('Item quantities must be above zero.');
-    }
-    if (getDefaultInvoiceItems(form).some((item) => item.unitPrice && toFiniteNumber(item.unitPrice) < 0)) {
-      issues.push('Unit prices cannot be negative.');
-    }
     if (form.discountValue && toFiniteNumber(form.discountValue) < 0) issues.push('Discount cannot be negative.');
     if (form.taxRate && toFiniteNumber(form.taxRate) < 0) issues.push('Tax cannot be negative.');
     if (form.discountType === 'percent' && toFiniteNumber(form.discountValue) > 100) issues.push('Percent discount cannot exceed 100%.');
@@ -1791,6 +1780,7 @@ export default function AdminPage() {
           galleryId: gallery.id,
           ...form,
           amount: form.documentType === 'invoice' ? calculateInvoice(form).total : 0,
+          items: enteredInvoiceItems(getDefaultInvoiceItems(form)),
           lineItems: form.documentType === 'invoice' ? '' : form.lineItems,
         }, headers);
       setGalleryDocuments((prev) => ({
@@ -1833,11 +1823,7 @@ export default function AdminPage() {
         title: data.draft.title || form.title,
         ...(form.documentType === 'invoice'
           ? {
-              items: getDefaultInvoiceItems(form).some((item) => item.description.trim() || item.unitPrice) ? getDefaultInvoiceItems(form) : normalizeDocumentLines(data.draft.lineItems || form.lineItems, 'Photography services.').slice(0, 4).map((line) => ({
-                description: line,
-                quantity: '1',
-                unitPrice: '',
-              })),
+              items: mergeInvoiceDraftItems(getDefaultInvoiceItems(form), normalizeDocumentLines(data.draft.lineItems || form.lineItems, 'Photography services.')),
             }
           : { lineItems: data.draft.lineItems || form.lineItems }),
         terms: data.draft.terms || form.terms,
@@ -2287,7 +2273,7 @@ export default function AdminPage() {
 
   const renderDocumentEditor = (gal: Gallery) => {
     const docForm = getGalleryDocumentForm(gal);
-    const saveLocked = Boolean(documentActionIds[`create-${gal.id}`] || uncertainDocumentSaves[gal.id]);
+    const saveLocked = Boolean(documentActionIds[`create-${gal.id}`] || documentActionIds[`generate-${gal.id}`] || uncertainDocumentSaves[gal.id]);
     return (
 <div className="grid min-w-0 gap-4 border border-white/10 bg-white/[0.02] p-3 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.82fr)] xl:items-start">
                             <div className="grid min-w-0 gap-3">
@@ -2353,19 +2339,26 @@ export default function AdminPage() {
                                     </button>
                                   </div>
                                   <div className="space-y-3">
+                                    <p className="text-xs text-white/65">Describe each charged item. Completely blank extra rows are ignored.</p>
                                     {getDefaultInvoiceItems(docForm).map((item, index) => {
                                       const rowTotal = Math.max(0, toFiniteNumber(item.quantity)) * Math.max(0, toFiniteNumber(item.unitPrice));
                                       return (
                                         <div key={index} className="grid min-w-0 gap-2 border border-white/10 bg-white/[0.025] p-3">
-                                          <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_90px_120px]">
+                                          <div className="grid min-w-0 gap-3">
+                                            <label className="block min-w-0 space-y-1 text-xs text-white/75">
+                                              <span>Item {index + 1} description · required</span>
                                             <input
                                               className={inputClass}
-                                              placeholder="Description"
+                                              placeholder="e.g. Portrait session"
                                               aria-label={`Item ${index + 1} description`}
                                               maxLength={220}
                                               value={item.description}
                                               onChange={(e) => updateGalleryDocumentItem(gal.id, index, { description: e.target.value })}
                                             />
+                                            </label>
+                                            <div className="grid min-w-0 grid-cols-2 gap-3">
+                                            <label className="block min-w-0 space-y-1 text-xs text-white/75">
+                                              <span>Quantity · required</span>
                                             <input
                                               className={inputClass}
                                               type="number"
@@ -2377,6 +2370,9 @@ export default function AdminPage() {
                                               value={item.quantity}
                                               onChange={(e) => updateGalleryDocumentItem(gal.id, index, { quantity: e.target.value })}
                                             />
+                                            </label>
+                                            <label className="block min-w-0 space-y-1 text-xs text-white/75">
+                                              <span>Unit price · required</span>
                                             <input
                                               className={inputClass}
                                               type="number"
@@ -2388,6 +2384,8 @@ export default function AdminPage() {
                                               value={item.unitPrice}
                                               onChange={(e) => updateGalleryDocumentItem(gal.id, index, { unitPrice: e.target.value })}
                                             />
+                                            </label>
+                                            </div>
                                           </div>
                                           <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-white/45">
                                             <span>Total: {formatDocumentAmount(rowTotal, docForm.currency, `${docForm.currency || 'NGN'} 0`)}</span>
@@ -2403,7 +2401,10 @@ export default function AdminPage() {
                                       );
                                     })}
                                   </div>
-                                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                                  <div className="grid min-w-0 gap-3">
+                                    <p className="text-xs text-white/65">Discount and tax are optional. Leave them blank for zero.</p>
+                                    <label className="block min-w-0 space-y-1 text-xs text-white/75">
+                                      <span>Discount type</span>
                                     <select
                                       className={inputClass}
                                       value={docForm.discountType}
@@ -2412,26 +2413,35 @@ export default function AdminPage() {
                                       <option value="fixed">Fixed discount</option>
                                       <option value="percent">Percent discount</option>
                                     </select>
+                                    </label>
+                                    <div className="grid min-w-0 grid-cols-2 gap-3">
+                                    <label className="block min-w-0 space-y-1 text-xs text-white/75">
+                                      <span>Discount{docForm.discountType === 'percent' ? ' %' : ''} · optional</span>
                                     <input
                                       className={inputClass}
                                       type="number"
                                       min="0"
                                       step="0.01"
                                       inputMode="decimal"
-                                      placeholder={docForm.discountType === 'percent' ? 'Discount %' : 'Discount'}
+                                      placeholder="0"
                                       value={docForm.discountValue}
                                       onChange={(e) => updateGalleryDocumentForm(gal.id, { discountValue: e.target.value })}
                                     />
+                                    </label>
+                                    <label className="block min-w-0 space-y-1 text-xs text-white/75">
+                                      <span>Tax % · optional</span>
                                     <input
                                       className={inputClass}
                                       type="number"
                                       min="0"
                                       step="0.01"
                                       inputMode="decimal"
-                                      placeholder="Tax %"
+                                      placeholder="0"
                                       value={docForm.taxRate}
                                       onChange={(e) => updateGalleryDocumentForm(gal.id, { taxRate: e.target.value })}
                                     />
+                                    </label>
+                                    </div>
                                   </div>
                                   <div className="grid gap-2 border-t border-white/10 pt-3 text-xs text-white/55">
                                     <div className="flex justify-between gap-4">
@@ -2488,7 +2498,7 @@ export default function AdminPage() {
                                 </button>
                                 <button
                                   type="button"
-                                  disabled={Boolean(documentActionIds[`create-${gal.id}`])}
+                                  disabled={Boolean(documentActionIds[`create-${gal.id}`] || documentActionIds[`generate-${gal.id}`])}
                                   onClick={() => createGalleryDocument(gal)}
                                   className="bg-white px-4 py-3 text-[10px] font-bold uppercase tracking-[0.22em] text-black transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
                                 >

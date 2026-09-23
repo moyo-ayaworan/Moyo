@@ -1,3 +1,36 @@
+type InvoiceItemInput = { description: string; quantity: string; unitPrice: string };
+
+function unusedInvoiceItem(item: InvoiceItemInput) {
+  return !item.description.trim() && !item.unitPrice.trim() && ['', '1'].includes(item.quantity.trim());
+}
+
+export function enteredInvoiceItems(items: InvoiceItemInput[]) {
+  return items.filter(item => !unusedInvoiceItem(item));
+}
+
+export function invoiceItemIssues(items: InvoiceItemInput[]) {
+  const issues: string[] = [];
+  items.forEach((item, index) => {
+    if (unusedInvoiceItem(item)) return;
+    const label = `Item ${index + 1}`;
+    if (!item.description.trim()) issues.push(`${label}: add a description, for example “Portrait session”.`);
+    else if (item.description.trim().length > 220) issues.push(`${label}: keep the description under 220 characters.`);
+    if (!item.quantity.trim() || !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) issues.push(`${label}: enter a quantity above zero.`);
+    if (!item.unitPrice.trim() || !Number.isFinite(Number(item.unitPrice)) || Number(item.unitPrice) < 0) issues.push(`${label}: enter a unit price (zero is allowed for a free item).`);
+  });
+  if (items.length > 20) issues.push('Use no more than 20 invoice items.');
+  if (!items.some(item => Number(item.quantity) > 0 && Number(item.unitPrice) > 0)) issues.push('Add at least one item with a price above zero.');
+  return issues;
+}
+
+export function mergeInvoiceDraftItems(items: InvoiceItemInput[], descriptions: string[]) {
+  const hasEnteredItems = enteredInvoiceItems(items).length > 0;
+  // Gemini can supply a missing description without discarding the amount the
+  // studio already entered, adding new priced rows, or overwriting existing text.
+  if (hasEnteredItems) return items.map((item, index) => ({ ...item, description: unusedInvoiceItem(item) || item.description.trim() ? item.description : descriptions[index] || '' }));
+  return descriptions.slice(0, 4).map(description => ({ description, quantity: '1', unitPrice: '' }));
+}
+
 export function documentSentAt(document: { paid_at?: string | null; sent_at?: string | null; receipt_sent_at?: string | null }) {
   return document.paid_at ? document.receipt_sent_at : document.sent_at;
 }
