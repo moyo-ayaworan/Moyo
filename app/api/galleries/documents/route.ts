@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { existsSync } from 'fs';
 import path from 'path';
+import { createHash } from 'crypto';
 import { buildDocumentPdf } from '@/lib/documentPdf';
 import nodemailer from 'nodemailer';
 import { requireAdmin } from '@/lib/auth';
@@ -526,6 +527,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => null);
     if (!body || typeof body !== 'object' || Array.isArray(body)) return NextResponse.json({ error: 'Invalid document request.' }, { status: 400 });
     const action = normalize(body.action);
+    const creationKey = normalize(body.creationKey);
+    if (creationKey && !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(creationKey)) {
+      return NextResponse.json({ error: 'Invalid document request key.' }, { status: 400 });
+    }
     if (action && action !== 'generate') return NextResponse.json({ error: 'Unsupported action.' }, { status: 400 });
     if (body.documentType && !['invoice', 'contract'].includes(body.documentType)) return NextResponse.json({ error: 'Invalid document type.' }, { status: 400 });
     const galleryId = Number(body.galleryId);
@@ -664,16 +669,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Enter a valid client email.' }, { status: 400 });
     }
 
+    const values = [galleryId, documentType, title, clientEmail, storedAmount, currency, dueDate, storedLineItems, terms];
+    const requestHash = creationKey ? createHash('sha256').update(JSON.stringify(values)).digest('hex') : null;
     const { rows } = await query(
       `INSERT INTO gallery_documents (
-        gallery_id, document_type, title, client_email, amount, currency, due_date, line_items, terms
+        gallery_id, document_type, title, client_email, amount, currency, due_date, line_items, terms, creation_key, request_hash
       )
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       ON CONFLICT (creation_key) DO UPDATE SET creation_key = EXCLUDED.creation_key
+       WHERE gallery_documents.request_hash = EXCLUDED.request_hash
        RETURNING *`,
-      [galleryId, documentType, title, clientEmail, storedAmount, currency, dueDate, storedLineItems, terms]
+      [...values, creationKey || null, requestHash]
     );
-
-    return NextResponse.json({ document: rows[0] });
+    if (!rows[0]) return NextResponse.json({ error: 'This save key belongs to different document details. Nothing was changed.' }, { status: 409 });
+    return NextResponse.json({ document: rows[0] }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error('[gallery documents] POST error', error);
     return NextResponse.json({ error: 'Unable to save this document.' }, { status: 500 });
@@ -733,16 +742,18 @@ export async function PUT(req: NextRequest) {
         ],
       });
 
-      if (!delivery.accepted?.length) {
+      if (!delivery.accepted?.length || delivery.rejected?.length) {
         return NextResponse.json({ error: 'The mail server did not accept the recipient. The document has not been marked sent.' }, { status: 502 });
       }
 
       const { rows } = await query(
         `UPDATE gallery_documents
-         SET sent_at = NOW(), updated_at = NOW()
+         SET sent_at = CASE WHEN $2::boolean THEN sent_at ELSE NOW() END,
+             receipt_sent_at = CASE WHEN $2::boolean THEN NOW() ELSE receipt_sent_at END,
+             updated_at = NOW()
          WHERE id = $1
          RETURNING *`,
-        [id]
+        [id, Boolean(doc.paid_at)]
       );
       return NextResponse.json({ document: rows[0], message: 'Document accepted by the mail server.', messageId: delivery.messageId });
     }

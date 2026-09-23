@@ -251,6 +251,12 @@ async function initializeTables(connection: PoolClient) {
   `);
 
   await connection.query(`ALTER TABLE gallery_documents ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;`);
+  await connection.query(`
+    ALTER TABLE gallery_documents ADD COLUMN IF NOT EXISTS receipt_sent_at TIMESTAMPTZ;
+    ALTER TABLE gallery_documents ADD COLUMN IF NOT EXISTS creation_key TEXT;
+    ALTER TABLE gallery_documents ADD COLUMN IF NOT EXISTS request_hash TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS gallery_documents_creation_key_idx ON gallery_documents (creation_key);
+  `);
 
   await connection.query(`
     UPDATE galleries
@@ -326,6 +332,12 @@ async function initializeTables(connection: PoolClient) {
   `);
 
   // seed singleton rows
+  await connection.query(`
+    ALTER TABLE bookings ADD COLUMN IF NOT EXISTS creation_key TEXT;
+    ALTER TABLE bookings ADD COLUMN IF NOT EXISTS request_hash TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS bookings_creation_key_idx ON bookings (creation_key);
+  `);
+
   await connection.query(`INSERT INTO content (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);
   await connection.query(`INSERT INTO contact (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);
 }

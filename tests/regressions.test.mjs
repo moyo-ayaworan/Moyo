@@ -53,6 +53,7 @@ const next = { NextResponse: class {
   static json(body, options = {}) { return new this(body, options); }
 } };
 const dates = load('lib/bookingDates.ts');
+const bookingRequest = load('lib/bookingRequest.ts', { '@/lib/bookingDates': dates });
 const request = (body) => ({ json: async () => body, nextUrl: new URL('https://example.test/api/bookings') });
 
 test('booking dates reject rollover dates and preserve Lagos studio time', () => {
@@ -66,6 +67,7 @@ test('booking dates reject rollover dates and preserve Lagos studio time', () =>
 test('saved bookings succeed even when confirmation delivery fails', async () => {
   let insertParams;
   const routes = load('app/api/bookings/route.ts', {
+    '@/lib/bookingRequest': bookingRequest,
     'next/server': next,
     '@/lib/bookingDates': dates,
     '@/lib/auth': { requireAdmin: () => null },
@@ -83,6 +85,7 @@ test('saved bookings succeed even when confirmation delivery fails', async () =>
 
 test('invalid availability dates are rejected before querying the database', async () => {
   const routes = load('app/api/bookings/route.ts', {
+    '@/lib/bookingRequest': bookingRequest,
     'next/server': next, '@/lib/bookingDates': dates,
     '@/lib/auth': { requireAdmin: () => null },
     '@/lib/db': { query: async () => { throw Error('must not query'); } },
@@ -90,6 +93,231 @@ test('invalid availability dates are rejected before querying the database', asy
   for (const range of ['start=2026-02-30&end=2026-03-01', 'start=2026-04-01&end=2026-03-01']) {
     assert.equal((await routes.GET({ nextUrl: new URL(`https://example.test/?${range}`) })).status, 400);
   }
+});
+
+const bookingKey = '72f0291c-5f19-41aa-9a39-4548db1087b9';
+const bookingDraft = {
+  name: 'Test Visitor', email: 'visitor@example.test', phone: '+2348000000000',
+  service: 'portrait', message: 'Studio portrait test, no real booking.', bookingDate: '2099-09-12', bookingTime: '09:00',
+  source: 'eniyan', confirmed: true, bookingRequestId: bookingKey,
+};
+const bookingReq = body => ({ ...request(body), nextUrl: new URL('https://example.test/api/bookings') });
+function loadBooking(query, sendMail = async () => ({ accepted: ['visitor@example.test'], rejected: [] })) {
+  return load('app/api/bookings/route.ts', {
+    crypto: { default: requireDependency('node:crypto') },
+    'next/server': next, '@/lib/bookingDates': dates, '@/lib/bookingRequest': bookingRequest,
+    '@/lib/auth': { requireAdmin: () => null }, '@/lib/db': { query },
+    nodemailer: { default: { createTransport: () => ({ sendMail }) } },
+  });
+}
+
+test('Eniyan booking requires explicit confirmation, an idempotency key, and complete bounded contact details', async () => {
+  const route = loadBooking(async () => { throw Error('must not query'); });
+  for (const changes of [
+    { confirmed: false }, { confirmed: 'true' }, { bookingRequestId: '' }, { bookingRequestId: 'guessable' },
+    { phone: '' }, { phone: 'abcdefghij' }, { service: 'invented service' }, { message: '' },
+    { name: 'a'.repeat(121) }, { email: 'invalid' }, { message: 'a'.repeat(3001) },
+  ]) assert.equal((await route.POST(bookingReq({ ...bookingDraft, ...changes }))).status, 400);
+});
+
+test('Eniyan booking saves a pending request, emails once, and recovers the same result on retry', async () => {
+  let row;
+  let inserts = 0;
+  const deliveries = [];
+  const route = loadBooking(async (sql, params) => {
+    if (sql.startsWith('SELECT')) return { rows: row ? [row] : [] };
+    if (sql.startsWith('INSERT')) {
+      inserts++;
+      assert.equal(params[12], bookingKey);
+      row = { id: 81, ...bookingDraft, booking_date: bookingDraft.bookingDate, booking_time: bookingDraft.bookingTime, status: 'pending', request_hash: params[13], manage_token: 'private-test-token' };
+      return { rows: [row] };
+    }
+    row.confirmation_sent_at = '2099-09-01';
+    return { rows: [] };
+  }, async message => { deliveries.push(message); return { accepted: [message.to], rejected: [] }; });
+  const first = await route.POST(bookingReq(bookingDraft));
+  assert.equal(first.status, 201);
+  assert.equal(first.body.booking.status, 'pending');
+  assert.equal(first.body.emailSent, true);
+  assert.equal(first.body.booking.manage_token, undefined);
+  assert.equal(first.body.booking.email, undefined);
+  assert.equal(first.headers['Cache-Control'], 'private, no-store');
+  const second = await route.POST(bookingReq(bookingDraft));
+  assert.equal(second.status, 200);
+  assert.equal(second.body.booking.id, 81);
+  assert.equal(second.body.replayed, true);
+  assert.equal(inserts, 1);
+  assert.equal(deliveries.length, 2, 'one studio email and one client email only');
+  assert.ok(deliveries[1].text.includes('/client/booking/private-test-token'));
+  const changed = await route.POST(bookingReq({ ...bookingDraft, bookingTime: '11:00' }));
+  assert.equal(changed.status, 409);
+  assert.equal(changed.body.code, 'request_key_conflict');
+  assert.equal(inserts, 1);
+});
+
+test('concurrent booking retries recover the saved request without repeating emails', async () => {
+  let row;
+  const route = loadBooking(async (sql, params) => {
+    if (sql.startsWith('SELECT')) return { rows: row ? [row] : [] };
+    row = { id: 82, status: 'pending', request_hash: params[13], confirmation_sent_at: null };
+    throw Object.assign(Error('slot unique conflict'), { code: '23505' });
+  }, async () => { throw Error('must not send'); });
+  const result = await route.POST(bookingReq(bookingDraft));
+  assert.equal(result.status, 200);
+  assert.equal(result.body.booking.id, 82);
+  assert.equal(result.body.emailSent, false);
+});
+
+test('a booking slot taken by somebody else never returns their booking', async () => {
+  const route = loadBooking(async sql => {
+    if (sql.startsWith('SELECT')) return { rows: [] };
+    throw Object.assign(Error('occupied slot'), { code: '23505' });
+  });
+  const result = await route.POST(bookingReq(bookingDraft));
+  assert.equal(result.status, 409);
+  assert.equal(result.body.code, 'slot_taken');
+  assert.equal(result.body.booking, undefined);
+});
+
+test('booking email rejection reports saved request without claiming email delivery', async () => {
+  const route = loadBooking(async sql => ({ rows: sql.startsWith('SELECT') ? [] : [{ id: 83, status: 'pending', ...bookingDraft }] }), async () => ({ accepted: [], rejected: ['visitor@example.test'] }));
+  const response = await route.POST(bookingReq(bookingDraft));
+  assert.equal(response.status, 201);
+  assert.equal(response.body.emailSent, false);
+});
+
+test('booking availability uses live non-cancelled slots and private caching', async () => {
+  const route = loadBooking(async sql => {
+    assert.ok(sql.includes("status <> 'cancelled'"));
+    return { rows: [{ booking_date: '2099-09-12', booking_time: '09:00' }] };
+  });
+  const response = await route.GET({ nextUrl: new URL('https://example.test/api/bookings?start=2099-09-12&end=2099-09-12') });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers['Cache-Control'], 'private, no-store');
+  assert.deepEqual(Array.from(response.body.booked['2099-09-12']), ['09:00']);
+});
+
+test('Eniyan booking intent opens only new photography requests and validates real future slots', () => {
+  for (const text of ['Book a photography session', 'Can I book a shoot?', 'I want to book']) assert.equal(bookingRequest.wantsEniyanBooking(text), true, text);
+  for (const text of ['Cancel my booking', 'Reschedule my session', 'I already booked a session', 'Commission an artwork', "I don't want to book a session", 'Show my portrait gallery']) assert.equal(bookingRequest.wantsEniyanBooking(text), false, text);
+  assert.ok(bookingRequest.bookingSlotError({ bookingDate: '2099-02-30', bookingTime: '09:00' }));
+  assert.ok(bookingRequest.bookingSlotError({ bookingDate: '2020-02-20', bookingTime: '09:00' }));
+  assert.equal(bookingRequest.bookingSlotError(bookingDraft), '');
+});
+
+function bookingFlowHarness(fetcher) {
+  const cells = [];
+  let index = 0;
+  let effects = [];
+  const react = {
+    useState(initial) {
+      const at = index++;
+      if (!(at in cells)) cells[at] = typeof initial === 'function' ? initial() : initial;
+      return [cells[at], value => { cells[at] = typeof value === 'function' ? value(cells[at]) : value; }];
+    },
+    useRef(initial) { const at = index++; return cells[at] ||= { current: initial }; },
+    useEffect(effect, deps) {
+      const at = index++;
+      const previous = cells[at];
+      if (!previous || deps.some((value, i) => value !== previous.deps[i])) {
+        effects.push(() => { previous?.cleanup?.(); cells[at] = { deps, cleanup: effect() }; });
+      }
+    },
+  };
+  const { useEniyanBooking: runHook } = load('lib/useEniyanBooking.ts', {
+    react, '@/lib/bookingDates': dates, '@/lib/bookingRequest': bookingRequest,
+  }, { fetch: fetcher, AbortController, crypto: requireDependency('node:crypto'), window: { setTimeout, clearTimeout, setInterval: () => 1, clearInterval() {} } });
+  let current;
+  const render = () => { index = 0; effects = []; current = runHook(); for (const effect of effects) effect(); return current; };
+  return { render, async settle() { await new Promise(setImmediate); return render(); } };
+}
+
+async function prepareBookingReview(harness) {
+  let flow = harness.render();
+  flow.start(); flow = harness.render();
+  flow.chooseService('portrait'); flow = harness.render();
+  flow.update('bookingDate', bookingDraft.bookingDate); flow = harness.render();
+  flow = await harness.settle();
+  flow.update('bookingTime', bookingDraft.bookingTime); flow = harness.render();
+  flow.go('details'); flow = harness.render();
+  for (const key of ['name', 'email', 'phone', 'message']) flow.update(key, bookingDraft[key]);
+  flow = harness.render(); flow.go('review');
+  return harness.render();
+}
+const availableSlots = () => ({ ok: true, json: async () => ({ booked: {}, slots: dates.BOOKING_TIMES }) });
+
+test('guided booking never submits before confirmation and blocks double clicks', async () => {
+  let posts = 0;
+  let resolveSave;
+  const saved = new Promise(resolve => { resolveSave = resolve; });
+  const harness = bookingFlowHarness(async (url, options) => {
+    assert.ok(url.startsWith('/api/bookings'), 'Booking fields never go to Gemini chat');
+    if (options.method !== 'POST') return availableSlots();
+    posts++;
+    const body = JSON.parse(options.body);
+    assert.equal(body.confirmed, true);
+    assert.equal(body.source, 'eniyan');
+    return saved;
+  });
+  let flow = await prepareBookingReview(harness);
+  assert.equal(flow.step, 'review');
+  assert.equal(posts, 0);
+  const first = flow.confirm();
+  const second = flow.confirm();
+  flow = harness.render();
+  assert.equal(flow.saving, true);
+  flow.cancel();
+  assert.equal(harness.render().active, true);
+  resolveSave({ ok: true, status: 201, json: async () => ({ booking: { id: 92, status: 'pending' }, emailSent: true }) });
+  await Promise.all([first, second]);
+  flow = harness.render();
+  assert.equal(posts, 1);
+  assert.equal(flow.step, 'complete');
+  assert.equal(flow.result.id, 92);
+});
+
+test('uncertain client outcomes freeze editing and reuse the identical submission key and payload', async () => {
+  const bodies = [];
+  const harness = bookingFlowHarness(async (_url, options) => {
+    if (options.method !== 'POST') return availableSlots();
+    bodies.push(options.body);
+    if (bodies.length === 1) throw Error('connection dropped after save');
+    return { ok: true, status: 200, json: async () => ({ booking: { id: 93, status: 'pending' }, emailSent: false, replayed: true }) };
+  });
+  let flow = await prepareBookingReview(harness);
+  await flow.confirm(); flow = harness.render();
+  assert.equal(flow.uncertain, true);
+  flow.update('email', 'changed@example.test'); flow.cancel(); flow.go('details');
+  flow = harness.render();
+  assert.equal(flow.active, true);
+  assert.equal(flow.step, 'review');
+  assert.equal(flow.draft.email, bookingDraft.email);
+  await flow.confirm(); flow = harness.render();
+  assert.equal(bodies[0], bodies[1]);
+  assert.equal(flow.step, 'complete');
+  assert.equal(flow.result.emailSent, false);
+});
+
+test('client handles slot conflicts without erasing contact details or reporting success', async () => {
+  const harness = bookingFlowHarness(async (_url, options) => options.method !== 'POST' ? availableSlots() : { ok: false, status: 409, json: async () => ({ code: 'slot_taken' }) });
+  let flow = await prepareBookingReview(harness);
+  await flow.confirm(); flow = harness.render();
+  assert.equal(flow.step, 'schedule');
+  assert.equal(flow.draft.bookingTime, '');
+  assert.equal(flow.draft.email, bookingDraft.email);
+  assert.equal(flow.result, null);
+  assert.equal(flow.uncertain, false);
+});
+
+test('availability failures prevent progression and can be retried', async () => {
+  let fail = true;
+  const harness = bookingFlowHarness(async () => { if (fail) throw Error('offline'); return availableSlots(); });
+  let flow = harness.render(); flow.start(); flow = harness.render(); flow.chooseService('portrait'); flow = harness.render();
+  flow.update('bookingDate', bookingDraft.bookingDate); flow = harness.render(); flow = await harness.settle();
+  flow.update('bookingTime', '09:00'); flow = harness.render(); flow.go('details'); flow = harness.render();
+  assert.equal(flow.step, 'schedule'); assert.equal(flow.ready, false);
+  fail = false; flow.retryAvailability(); flow = harness.render(); flow = await harness.settle();
+  assert.equal(flow.ready, true);
 });
 
 test('orders cannot be read without admin authentication', async () => {
@@ -424,6 +652,41 @@ test('a completed invoice form saves with blank optional discount and tax fields
   assert.equal(result.status, 200);
   assert.equal(result.body.document.id, 42);
   assert.equal(inserted[4], 500000);
+});
+
+test('invoice and contract retries use an atomic document key and reject changed details', async () => {
+  for (const documentType of ['invoice', 'contract']) {
+    const saved = new Map();
+    const route = documentRoute(async (sql, params) => {
+      if (sql.startsWith('SELECT')) return { rows: [{ client_name: 'Client' }] };
+      assert.match(sql, /ON CONFLICT \(creation_key\) DO UPDATE/);
+      assert.match(sql, /WHERE gallery_documents.request_hash = EXCLUDED.request_hash/);
+      const previous = saved.get(params[9]);
+      if (previous && previous.hash !== params[10]) return { rows: [] };
+      if (!previous) saved.set(params[9], { hash: params[10], doc: { id: 71, title: params[2] } });
+      return { rows: [saved.get(params[9]).doc] };
+    });
+    const body = { ...invoiceBody, documentType, lineItems: 'Complete contract scope', terms: 'Agreed terms', creationKey: '4e0a36f1-ab65-4594-9e01-1e8a5ca35bf1' };
+    assert.equal((await route.POST(request(body))).body.document.id, 71);
+    assert.equal((await route.POST(request(body))).body.document.id, 71);
+    assert.equal(saved.size, 1);
+    assert.equal((await route.POST(request({ ...body, title: 'Changed details' }))).status, 409);
+    assert.equal((await route.POST(request({ ...body, creationKey: 'invalid' }))).status, 400);
+  }
+});
+
+test('receipt emailing updates receipt delivery separately from the invoice email', async () => {
+  for (const paid_at of [null, '2026-09-23T10:00:00Z']) {
+    let updated;
+    const route = documentRoute(async (sql, params) => {
+      if (sql.includes('UPDATE gallery_documents')) updated = { sql, params };
+      return { rows: [{ ...savedInvoice, paid_at }] };
+    });
+    assert.equal((await route.PUT(request({ id: 1, action: 'send' }))).status, 200);
+    assert.equal(updated.params[1], Boolean(paid_at));
+    assert.match(updated.sql, /receipt_sent_at = CASE WHEN \$2::boolean THEN NOW\(\) ELSE receipt_sent_at END/);
+    assert.match(updated.sql, /sent_at = CASE WHEN \$2::boolean THEN sent_at ELSE NOW\(\) END/);
+  }
 });
 
 test('payment confirmation is invoice-specific and keeps the original payment date', async () => {

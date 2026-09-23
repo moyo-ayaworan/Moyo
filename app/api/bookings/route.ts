@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { query } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
 import { BOOKING_TIMES, isCalendarDate, parseBookingDate } from '@/lib/bookingDates';
+import { bookingDetailsError } from '@/lib/bookingRequest';
 
 export const runtime = 'nodejs';
 
@@ -31,14 +32,11 @@ type BookingRow = {
   reminder_24h_sent_at: string | null;
   reminder_day_sent_at: string | null;
   created_at: string;
+  request_hash?: string;
 };
 
 function normalize(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
-}
-
-function isEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
 function escapeHtml(value: string) {
@@ -127,7 +125,7 @@ async function sendBookingEmails(booking: BookingRow, origin: string) {
     text: `New booking request\nName: ${booking.name}\nEmail: ${booking.email}\nPhone: ${booking.phone || 'Not provided'}\nService: ${booking.service}\nDate: ${when}\nClient portal: ${portalUrl}\nMessage: ${booking.message || 'No message added.'}`,
   });
 
-  await transporter.sendMail({
+  const clientDelivery = await transporter.sendMail({
     from: config.from,
     to: booking.email,
     replyTo: CONTACT_EMAIL,
@@ -136,7 +134,7 @@ async function sendBookingEmails(booking: BookingRow, origin: string) {
     text: `Hi ${booking.name}, your booking request for ${when} (${STUDIO_TIMEZONE}) has been received. View your booking status here: ${portalUrl}`,
   });
 
-  return true;
+  return !clientDelivery.rejected?.length && Boolean(clientDelivery.accepted?.length);
 }
 
 export async function GET(req: NextRequest) {
@@ -181,7 +179,7 @@ export async function GET(req: NextRequest) {
       return acc;
     }, {});
 
-    return NextResponse.json({ booked, slots: Array.from(SLOT_TIMES) });
+    return NextResponse.json({ booked, slots: Array.from(SLOT_TIMES) }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error('[bookings] Failed to load availability:', error);
     return NextResponse.json({ error: 'Could not load availability. Please try again.' }, { status: 503 });
@@ -189,6 +187,21 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  let creationKey = '';
+  let requestHash = '';
+  let fromEniyan = false;
+  const savedResponse = (booking: BookingRow, emailSent: boolean, replayed = false) => NextResponse.json({
+    booking: fromEniyan ? { id: booking.id, status: booking.status, booking_date: booking.booking_date, booking_time: booking.booking_time } : booking,
+    emailSent, replayed, message: 'Booking request received. Final arrangements require studio confirmation.',
+  }, { status: replayed ? 200 : 201, headers: { 'Cache-Control': 'private, no-store' } });
+  const findPrevious = async () => {
+    if (!creationKey) return null;
+    const { rows } = await query('SELECT id, status, booking_date::text, booking_time, confirmation_sent_at::text, request_hash FROM bookings WHERE creation_key=$1', [creationKey]);
+    const previous = rows[0] as BookingRow | undefined;
+    if (!previous) return null;
+    if (previous.request_hash !== requestHash) return NextResponse.json({ error: 'This request key belongs to different booking details.', code: 'request_key_conflict' }, { status: 409 });
+    return savedResponse(previous, Boolean(previous.confirmation_sent_at), true);
+  };
   try {
     const body = await req.json().catch(() => null);
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -201,6 +214,11 @@ export async function POST(req: NextRequest) {
     const message = normalize(body.message);
     const bookingDate = normalize(body.bookingDate);
     const bookingTime = normalize(body.bookingTime);
+    fromEniyan = body.source === 'eniyan';
+    creationKey = normalize(body.bookingRequestId);
+    if ((creationKey && !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(creationKey)) || (fromEniyan && (!creationKey || body.confirmed !== true))) {
+      return NextResponse.json({ error: 'Review your details and confirm the booking request first.' }, { status: 400 });
+    }
     const clientNotes = '';
     const internalNotes = '';
     const scheduledAt = parseBookingDate(bookingDate, bookingTime);
@@ -208,8 +226,12 @@ export async function POST(req: NextRequest) {
     if (!name || !email || !service || !bookingDate || !bookingTime) {
       return NextResponse.json({ error: 'Name, email, service, date, and time are required.' }, { status: 400 });
     }
-    if (!isEmail(email)) {
-      return NextResponse.json({ error: 'Enter a valid email address.' }, { status: 400 });
+    const detailsError = bookingDetailsError({ name, email, phone, service, message, bookingDate, bookingTime }, fromEniyan);
+    if (detailsError) return NextResponse.json({ error: detailsError }, { status: 400 });
+    if (creationKey) {
+      requestHash = crypto.createHash('sha256').update(JSON.stringify({ name, email, phone, service, message, bookingDate, bookingTime })).digest('hex');
+      const previous = await findPrevious();
+      if (previous) return previous;
     }
     if (!scheduledAt) {
       return NextResponse.json({ error: 'Choose a valid booking slot.' }, { status: 400 });
@@ -219,11 +241,11 @@ export async function POST(req: NextRequest) {
     }
 
     const { rows } = await query(
-      `INSERT INTO bookings (name, email, phone, service, message, booking_date, booking_time, scheduled_at, timezone, manage_token, client_notes, internal_notes)
-       VALUES ($1, $2, $3, $4, $5, $6::date, $7, $8, $9, $10, $11, $12)
+      `INSERT INTO bookings (name, email, phone, service, message, booking_date, booking_time, scheduled_at, timezone, manage_token, client_notes, internal_notes, creation_key, request_hash)
+       VALUES ($1, $2, $3, $4, $5, $6::date, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING id, name, email, phone, service, message, booking_date::text, booking_time, scheduled_at::text, timezone, status,
                  manage_token, client_notes, internal_notes, gallery_id, confirmation_sent_at::text, reminder_24h_sent_at::text, reminder_day_sent_at::text, created_at::text`,
-      [name, email, phone, service, message, bookingDate, bookingTime, scheduledAt.toISOString(), STUDIO_TIMEZONE, createManageToken(), clientNotes, internalNotes]
+      [name, email, phone, service, message, bookingDate, bookingTime, scheduledAt.toISOString(), STUDIO_TIMEZONE, createManageToken(), clientNotes, internalNotes, creationKey || null, requestHash || null]
     );
 
     const booking = rows[0] as BookingRow;
@@ -237,10 +259,18 @@ export async function POST(req: NextRequest) {
       console.error('[bookings] Booking saved but confirmation email failed:', error);
     }
 
-    return NextResponse.json({ booking, emailSent, message: 'Booking request created.' }, { status: 201 });
+    return savedResponse(booking, emailSent);
   } catch (error: unknown) {
     if (typeof error === 'object' && error && 'code' in error && error.code === '23505') {
-      return NextResponse.json({ error: 'That time has just been booked. Please choose another slot.' }, { status: 409 });
+      // Concurrent retries may collide on the slot before the request-key index.
+      // Only the matching unguessable key + payload may recover the saved result.
+      try {
+        const previous = await findPrevious();
+        if (previous) return previous;
+      } catch { /* Return an uncertain outcome; keep the same request key on retry. */
+        return NextResponse.json({ error: 'Could not verify the booking result. Retry the same request.' }, { status: 503 });
+      }
+      return NextResponse.json({ error: 'That time has just been booked. Please choose another slot.', code: 'slot_taken' }, { status: 409 });
     }
     console.error('[bookings] Failed to create booking:', error);
     return NextResponse.json({ error: 'Failed to create booking.' }, { status: 500 });

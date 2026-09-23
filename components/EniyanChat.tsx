@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import EniyanBooking from '@/components/EniyanBooking';
+import { useEniyanBooking } from '@/lib/useEniyanBooking';
+import { wantsEniyanBooking } from '@/lib/bookingRequest';
 import { ENIYAN_ROUTES as ROUTE_LABELS, ENIYAN_MESSAGE_LIMIT, getEniyanLinks } from '@/lib/eniyanNavigation';
 import {
   ArrowRight,
@@ -235,6 +238,7 @@ export default function EniyanChat() {
   const copy = ENIYAN_COPY[language] || ENIYAN_COPY.EN;
   const isLight = (resolvedTheme || theme) === 'light';
   const reducedMotion = useReducedMotion();
+  const booking = useEniyanBooking();
   const [failedMessage, setFailedMessage] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [viewport, setViewport] = useState<{ height: number; inset: number } | null>(null);
@@ -282,6 +286,10 @@ export default function EniyanChat() {
     const trimmed = text.trim();
     if (!trimmed || pendingRef.current) return;
     if (trimmed.length > ENIYAN_MESSAGE_LIMIT) { setError(`Please keep messages under ${ENIYAN_MESSAGE_LIMIT} characters.`); return; }
+    if (wantsEniyanBooking(trimmed)) {
+      setInput(''); setError(''); setFailedMessage(null); setIsOpen(true); booking.start();
+      return;
+    }
 
     const userMessage: ChatMessage = { id: createId(), role: 'user', content: trimmed };
     const nextMessages = retry ? messages : [...messages, userMessage];
@@ -335,7 +343,8 @@ export default function EniyanChat() {
   }
 
   function resetChat() {
-    if (isSending) return;
+    if (isSending || booking.locked) return;
+    booking.cancel();
     setMessages([{ id: 'welcome', role: 'assistant', content: copy.greeting }]);
     setInput('');
     setError('');
@@ -392,7 +401,7 @@ export default function EniyanChat() {
                   <button
                     type="button"
                     onClick={resetChat}
-                    disabled={isSending}
+                    disabled={isSending || booking.locked}
                     className={`grid size-11 place-items-center rounded-[8px] transition disabled:opacity-40 ${
                       isLight ? 'text-black/45 hover:bg-black/5 hover:text-black' : 'text-white/50 hover:bg-white/8 hover:text-white'
                     }`}
@@ -416,6 +425,7 @@ export default function EniyanChat() {
 
             <div className="grid min-h-0 min-w-0 flex-1 grid-rows-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_280px]">
               <section className="flex min-h-0 min-w-0 flex-col">
+                {booking.active ? <EniyanBooking flow={booking} isLight={isLight} /> : <>
                 <div ref={scrollRef} role="log" aria-label="Conversation with Eniyan" aria-live="polite" aria-relevant="additions" className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-3 py-4 sm:space-y-5 sm:px-5 sm:py-5">
                   {messages.map((message) => {
                     const links = message.role === 'assistant' ? getEniyanLinks(message.content) : [];
@@ -487,12 +497,13 @@ export default function EniyanChat() {
                 </div>
 
                 <div className={`shrink-0 border-t px-3 py-3 sm:px-5 sm:py-4 ${isLight ? 'border-black/10' : 'border-white/10'}`}>
+                  <button type="button" disabled={isSending} onClick={() => { setInput(''); booking.start(); }} className="mb-2 inline-flex min-h-11 items-center gap-2 rounded-lg border border-current/25 px-3 text-xs font-semibold disabled:opacity-40"><CalendarCheck className="size-4" aria-hidden="true" />Book a session with Eniyan</button>
                   <div className={`${shortViewport ? 'hidden' : 'flex'} mb-3 max-w-full gap-2 overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch]`}>
-                    {copy.starterPrompts.map((prompt) => (
+                    {copy.starterPrompts.map((prompt, index) => (
                       <button
                         key={prompt}
                         type="button"
-                        onClick={() => sendMessage(prompt)}
+                        onClick={() => index === (language === 'EN' ? 1 : 0) ? booking.start() : sendMessage(prompt)}
                         disabled={isSending}
                         className={`max-w-[72vw] shrink-0 rounded-[8px] border px-3 py-2 text-left text-[10px] uppercase tracking-[0.12em] [overflow-wrap:anywhere] transition sm:max-w-none ${
                           isLight ? 'border-black/10 bg-white/45 text-black/52 hover:bg-white/75 hover:text-black' : 'border-white/10 bg-white/[0.035] text-white/55 hover:bg-white/[0.07] hover:text-white'
@@ -551,6 +562,7 @@ export default function EniyanChat() {
                   </form>
                   <p id="eniyan-privacy" className="mt-2 text-[10px] leading-relaxed opacity-60">{shortViewport ? 'AI guide · Messages may be processed by Google Gemini. Keep private details out of chat.' : 'AI-assisted guidance. Messages may be processed by Google Gemini. Never share access codes, passwords or payment details. Confirm quotes and bookings with the studio.'}</p>
                 </div>
+                </>}
               </section>
 
               <aside className={`hidden min-h-0 overflow-y-auto overscroll-contain border-l p-4 lg:block ${isLight ? 'border-black/10 bg-black/[0.025]' : 'border-white/10 bg-white/[0.025]'}`}>

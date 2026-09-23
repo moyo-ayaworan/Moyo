@@ -15,6 +15,10 @@ export default function PrivacyPage() {
           <p>
             Submitted details are used to respond to enquiries, manage client galleries, process studio communication, and maintain requested subscriptions.
           </p>
+          <p>
+            General messages to Eniyan may be processed by Google Gemini. Do not share passwords, gallery access codes or payment details in chat.
+            Eniyan’s separate guided booking fields are sent directly to the studio booking system, not to Gemini. Your booking details are submitted only after you review them and confirm the request.
+          </p>
         </div>
       </section>
       <Footer />

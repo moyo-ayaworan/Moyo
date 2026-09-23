@@ -11,6 +11,7 @@ import { getCloudinaryPreviewUrl, getImagePreviewSrcSet } from '@/lib/mediaUrl';
 import { fileFingerprint, uploadAdminFile } from '@/lib/adminUpload';
 import { uploadPublicId } from '@/lib/uploadIdentity';
 import { createSeoImageFilename } from '@/lib/imageSeo';
+import { createDocumentSaveSession, documentSentAt, loadInvoiceWorkspace } from '@/lib/adminDocuments';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   FiChevronDown,
@@ -119,6 +120,7 @@ type GalleryDocument = {
   terms: string;
   sent_at: string | null;
   paid_at?: string | null;
+  receipt_sent_at?: string | null;
   created_at: string;
 };
 
@@ -441,7 +443,7 @@ function DocumentManager({ gallery, galleries = [], documents, actions, onSend, 
   }, [documents.length]);
   const years = [...new Set(documents.map(doc => new Date(doc.created_at).getFullYear()).filter(Number.isFinite))].sort((a, b) => b - a);
   const scoped = documents.filter(doc => (year === 'all' || String(new Date(doc.created_at).getFullYear()) === year) && `${doc.title} ${doc.client_email} Moyo-${doc.id} ${clientName(doc)}`.toLowerCase().includes(search.toLowerCase()));
-  const visible = scoped.filter(doc => filter === 'all' || (filter === 'paid' ? Boolean(doc.paid_at) : filter === 'sent' ? Boolean(doc.sent_at) : !doc.sent_at)).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  const visible = scoped.filter(doc => filter === 'all' || (filter === 'paid' ? Boolean(doc.paid_at) : filter === 'sent' ? Boolean(documentSentAt(doc)) : !documentSentAt(doc))).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   const groups = visible.reduce<Record<string, GalleryDocument[]>>((result, doc) => {
     const month = new Date(doc.created_at).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
     (result[month] ||= []).push(doc);
@@ -459,7 +461,7 @@ function DocumentManager({ gallery, galleries = [], documents, actions, onSend, 
         <input aria-label="Search documents" placeholder="Search name, title, or invoice number…" value={search} onChange={e => setSearch(e.target.value)} className="min-w-0 flex-1 rounded border border-white/20 bg-[#18191c] px-4 py-3 text-sm text-white placeholder:text-white/50" />
       </div>
       <div className="grid grid-cols-2 gap-2 rounded-lg border border-white/10 bg-[#18191c] p-2" aria-label="Document status filters">
-        {[['all', 'All', scoped.length], ['sent', 'Sent', scoped.filter(doc => doc.sent_at).length], ['unsent', 'Unsent', scoped.filter(doc => !doc.sent_at).length], ['paid', 'Paid', scoped.filter(doc => doc.paid_at).length]].map(([value, title, count]) => <button type="button" key={value} aria-pressed={filter === value} onClick={() => setFilter(String(value))} className={`flex flex-wrap items-center justify-between gap-2 rounded px-3 py-3 text-sm ${filter === value ? 'bg-[#920110] text-white' : 'text-white/70 hover:bg-white/5'}`}><span>{title}</span><span className="rounded-full bg-white/10 px-2 py-0.5 text-xs">{count}</span></button>)}
+        {[['all', 'All', scoped.length], ['sent', 'Sent', scoped.filter(doc => documentSentAt(doc)).length], ['unsent', 'Unsent', scoped.filter(doc => !documentSentAt(doc)).length], ['paid', 'Paid', scoped.filter(doc => doc.paid_at).length]].map(([value, title, count]) => <button type="button" key={value} aria-pressed={filter === value} onClick={() => setFilter(String(value))} className={`flex flex-wrap items-center justify-between gap-2 rounded px-3 py-3 text-sm ${filter === value ? 'bg-[#920110] text-white' : 'text-white/70 hover:bg-white/5'}`}><span>{title}</span><span className="rounded-full bg-white/10 px-2 py-0.5 text-xs">{count}</span></button>)}
       </div>
       <div className="space-y-4">
         {Object.entries(groups).map(([month, docs]) => {
@@ -470,7 +472,7 @@ function DocumentManager({ gallery, galleries = [], documents, actions, onSend, 
               <div className="flex items-start gap-3 sm:gap-4">
                 <div className="w-12 shrink-0 rounded border border-[#920110]/60 bg-[#920110]/20 py-2 text-center text-white"><p className="text-[10px] uppercase text-white/60">{new Date(doc.created_at).toLocaleDateString('en-GB', { month: 'short' })}</p><p className="mt-1 text-xl font-semibold">{new Date(doc.created_at).getDate()}</p></div>
                 <div className="min-w-0 flex-1"><p className="text-base font-semibold text-white [overflow-wrap:anywhere]">{clientName(doc)}</p><p className="mt-1 text-xs text-white/60 [overflow-wrap:anywhere]">{doc.title}</p><div className="mt-2 flex flex-wrap items-center gap-2 text-xs"><span className="text-white/50">Moyo-{doc.id}</span><span className="rounded-full border border-white/15 bg-white/5 px-2 py-1 text-white/80">{doc.paid_at ? 'Paid' : doc.sent_at ? 'Sent' : 'Unsent'}</span><span className="capitalize text-white/50">{doc.document_type}</span></div></div>
-                <div className="max-w-[40%] text-right"><p className="text-sm font-semibold tabular-nums text-white [overflow-wrap:anywhere]">{doc.document_type === 'invoice' ? formatDocumentAmount(Number(doc.amount), doc.currency) : 'Contract'}</p>{doc.document_type === 'invoice' && !doc.paid_at && doc.due_date && <p className="mt-2 text-xs text-white/50">Due {doc.due_date}</p>}</div>
+                <div className="max-w-[40%] text-right"><p className="text-sm font-semibold tabular-nums text-white [overflow-wrap:anywhere]">{doc.document_type === 'invoice' ? formatDocumentAmount(Number(doc.amount), doc.currency) : 'Contract'}</p>{doc.document_type === 'invoice' && !doc.paid_at && doc.due_date && <p className="mt-2 text-xs text-white/50">Due {doc.due_date}</p>}{doc.paid_at && <p className="mt-2 text-xs text-white/60">{doc.receipt_sent_at ? 'Receipt emailed' : 'Receipt email not confirmed'}</p>}</div>
               </div>
               <div className="mt-4 flex flex-wrap gap-2 sm:pl-16"><button type="button" className={button} disabled={Boolean(actions[`send-${doc.id}`])} onClick={() => onSend(doc)}>{actions[`send-${doc.id}`] ? 'Sending…' : doc.paid_at ? 'Email receipt' : doc.sent_at ? 'Resend email' : 'Send email'}</button><button type="button" className={button} disabled={Boolean(actions[`download-${doc.id}`])} onClick={() => onDownload(doc)}>{actions[`download-${doc.id}`] ? 'Downloading…' : doc.paid_at ? 'Download receipt' : 'Download PDF'}</button>{doc.document_type === 'invoice' && !doc.paid_at && Number(doc.amount) > 0 && <button type="button" className={button} disabled={Boolean(actions[`paid-${doc.id}`])} onClick={() => onPaid(doc)}>{actions[`paid-${doc.id}`] ? 'Confirming…' : 'Confirm full payment'}</button>}<button type="button" className={`${button} !text-red-300`} disabled={Boolean(actions[`delete-${doc.id}`])} onClick={() => onDelete(doc)}>Delete</button></div>
             </article>)}</div>
@@ -775,6 +777,11 @@ export default function AdminPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [digitalProducts, setDigitalProducts] = useState<DigitalProduct[]>([]);
   const [documentFeedback, setDocumentFeedback] = useState<Record<number, { text: string; type: 'success' | 'error' }>>({});
+  const documentSaveSessions = useRef(new Map<number, ReturnType<typeof createDocumentSaveSession>>());
+  const activeDocumentSaves = useRef(new Set<number>());
+  const [uncertainDocumentSaves, setUncertainDocumentSaves] = useState<Record<number, boolean>>({});
+  const [invoiceLoading, setInvoiceLoading] = useState(true);
+  const [invoiceLoadError, setInvoiceLoadError] = useState('');
   const [invoiceGalleryId, setInvoiceGalleryId] = useState('');
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [catalogCategories, setCatalogCategories] = useState<PhotographyCatalogCategory[]>([]);
@@ -937,6 +944,20 @@ export default function AdminPage() {
 
   const fetchAll = useCallback(async () => {
     if (!isAuthed) return;
+    // Invoices must not depend on the shop, catalogue, or any unrelated endpoint.
+    if (activeRouteSection === 'invoices') {
+      setInvoiceLoading(true); setInvoiceLoadError('');
+      try {
+        const data = await loadInvoiceWorkspace<Gallery, GalleryDocument>(headers);
+        setGalleries(data.galleries);
+        setGalleryDocuments(data.documents.reduce<Record<number, GalleryDocument[]>>((acc, doc) => {
+          (acc[doc.gallery_id] ||= []).push(doc); return acc;
+        }, {}));
+      } catch (error) {
+        setInvoiceLoadError(error instanceof Error ? error.message : 'Could not load invoices. Please retry.');
+      } finally { setInvoiceLoading(false); }
+      return;
+    }
     try {
       const [artRes, bookingRes, digitalRes, galRes, documentRes, contentRes, contactRes, socialRes, orderRes] = await Promise.all([
         fetch('/api/artworks'),
@@ -1029,7 +1050,7 @@ export default function AdminPage() {
       console.error(error);
       setMessage({ text: error instanceof Error ? error.message : 'Failed to load data', type: 'error' });
     }
-  }, [headers, isAuthed]);
+  }, [headers, isAuthed, activeRouteSection]);
 
   useEffect(() => {
     fetchAll();
@@ -1701,6 +1722,8 @@ export default function AdminPage() {
   });
 
   const updateGalleryDocumentForm = (galleryId: number, patch: Partial<GalleryDocumentForm>) => {
+    if (activeDocumentSaves.current.has(galleryId) || documentSaveSessions.current.get(galleryId)?.uncertain) return;
+    setDocumentFeedback(prev => { const next = { ...prev }; delete next[galleryId]; return next; });
     setGalleryDocumentForms((prev) => ({
       ...prev,
       [galleryId]: {
@@ -1752,36 +1775,36 @@ export default function AdminPage() {
   };
 
   const createGalleryDocument = async (gallery: Gallery) => {
+    if (activeDocumentSaves.current.has(gallery.id)) return;
     const feedback = (value: { text: string; type: 'success' | 'error' }) => setDocumentFeedback(prev => ({ ...prev, [gallery.id]: value }));
     const form = getGalleryDocumentForm(gallery);
     const issues = getDocumentFormIssues(form);
     if (issues.length) return feedback({ text: issues[0], type: 'error' });
 
     const actionId = `create-${gallery.id}`;
+    activeDocumentSaves.current.add(gallery.id);
+    if (!documentSaveSessions.current.has(gallery.id)) documentSaveSessions.current.set(gallery.id, createDocumentSaveSession());
+    const session = documentSaveSessions.current.get(gallery.id)!;
     setDocumentActionIds((prev) => ({ ...prev, [actionId]: true }));
     try {
-      const res = await fetch('/api/galleries/documents', {
-        method: 'POST',
-        signal: AbortSignal.timeout(30_000),
-        headers,
-        body: JSON.stringify({
+      const document = await session.save<GalleryDocument>({
           galleryId: gallery.id,
           ...form,
           amount: form.documentType === 'invoice' ? calculateInvoice(form).total : 0,
           lineItems: form.documentType === 'invoice' ? '' : form.lineItems,
-        }),
-      });
-      const data = await readJsonResponse<{ document?: GalleryDocument; error?: string }>(res, 'Unable to create document');
-      if (!res.ok || !data.document) return feedback({ text: data.error || 'Unable to create document', type: 'error' });
+        }, headers);
       setGalleryDocuments((prev) => ({
         ...prev,
-        [gallery.id]: [data.document!, ...(prev[gallery.id] || [])],
+        [gallery.id]: [document, ...(prev[gallery.id] || []).filter(item => item.id !== document.id)],
       }));
       setGalleryDocumentForms((prev) => ({ ...prev, [gallery.id]: defaultDocumentForm }));
       feedback({ text: `${form.documentType === 'contract' ? 'Contract' : 'Invoice'} created`, type: 'success' });
+      setMessage({ text: `${form.documentType === 'contract' ? 'Contract' : 'Invoice'} Moyo-${document.id} saved. It has not been emailed yet.`, type: 'success' });
     } catch (error) {
       feedback({ text: error instanceof Error ? error.message : 'Unable to create document. Check your connection and try again.', type: 'error' });
     } finally {
+      activeDocumentSaves.current.delete(gallery.id);
+      setUncertainDocumentSaves(prev => ({ ...prev, [gallery.id]: session.uncertain }));
       setDocumentActionIds((prev) => {
         const next = { ...prev };
         delete next[actionId];
@@ -2264,12 +2287,15 @@ export default function AdminPage() {
 
   const renderDocumentEditor = (gal: Gallery) => {
     const docForm = getGalleryDocumentForm(gal);
+    const saveLocked = Boolean(documentActionIds[`create-${gal.id}`] || uncertainDocumentSaves[gal.id]);
     return (
 <div className="grid min-w-0 gap-4 border border-white/10 bg-white/[0.02] p-3 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.82fr)] xl:items-start">
                             <div className="grid min-w-0 gap-3">
+                              <fieldset disabled={saveLocked} className="grid min-w-0 gap-3 disabled:opacity-65">
                               <div className="grid gap-3 sm:grid-cols-2">
                                 <select
                                   className={inputClass}
+                                  aria-label="Document type"
                                   value={docForm.documentType}
                                   onChange={(e) =>
                                     updateGalleryDocumentForm(gal.id, {
@@ -2284,6 +2310,7 @@ export default function AdminPage() {
                                 <input
                                   className={inputClass}
                                   type="email"
+                                  aria-label="Client email"
                                   placeholder="Client email"
                                   value={docForm.clientEmail}
                                   onChange={(e) => updateGalleryDocumentForm(gal.id, { clientEmail: e.target.value })}
@@ -2334,6 +2361,8 @@ export default function AdminPage() {
                                             <input
                                               className={inputClass}
                                               placeholder="Description"
+                                              aria-label={`Item ${index + 1} description`}
+                                              maxLength={220}
                                               value={item.description}
                                               onChange={(e) => updateGalleryDocumentItem(gal.id, index, { description: e.target.value })}
                                             />
@@ -2344,6 +2373,7 @@ export default function AdminPage() {
                                               step="0.01"
                                               inputMode="decimal"
                                               placeholder="Qty"
+                                              aria-label={`Item ${index + 1} quantity`}
                                               value={item.quantity}
                                               onChange={(e) => updateGalleryDocumentItem(gal.id, index, { quantity: e.target.value })}
                                             />
@@ -2354,6 +2384,7 @@ export default function AdminPage() {
                                               step="0.01"
                                               inputMode="decimal"
                                               placeholder="Unit price"
+                                              aria-label={`Item ${index + 1} unit price`}
                                               value={item.unitPrice}
                                               onChange={(e) => updateGalleryDocumentItem(gal.id, index, { unitPrice: e.target.value })}
                                             />
@@ -2437,6 +2468,7 @@ export default function AdminPage() {
                                 value={docForm.terms}
                                 onChange={(e) => updateGalleryDocumentForm(gal.id, { terms: e.target.value })}
                               />
+                              </fieldset>
                               {getDocumentFormIssues(docForm).length > 0 && (
                                 <div className="space-y-1 border border-yellow-400/25 bg-yellow-400/[0.06] p-3 text-xs leading-relaxed text-yellow-100/80">
                                   {getDocumentFormIssues(docForm).map((issue) => (
@@ -2448,7 +2480,7 @@ export default function AdminPage() {
                               <div className="grid gap-3 sm:grid-cols-2">
                                 <button
                                   type="button"
-                                  disabled={Boolean(documentActionIds[`generate-${gal.id}`])}
+                                  disabled={saveLocked || Boolean(documentActionIds[`generate-${gal.id}`])}
                                   onClick={() => generateGalleryDocumentDraft(gal)}
                                   className="border border-accent/55 bg-accent/10 px-4 py-3 text-[10px] font-bold uppercase tracking-[0.2em] text-accent transition-colors hover:bg-accent hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
                                 >
@@ -2460,7 +2492,7 @@ export default function AdminPage() {
                                   onClick={() => createGalleryDocument(gal)}
                                   className="bg-white px-4 py-3 text-[10px] font-bold uppercase tracking-[0.22em] text-black transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
                                 >
-                                  {documentActionIds[`create-${gal.id}`] ? 'Saving...' : 'Create Document'}
+                                  {documentActionIds[`create-${gal.id}`] ? 'Saving...' : uncertainDocumentSaves[gal.id] ? 'Retry same document' : `Create ${docForm.documentType === 'contract' ? 'contract' : 'invoice'}`}
                                 </button>
                               </div>
                             </div>
@@ -2671,7 +2703,7 @@ export default function AdminPage() {
         )}
 
         <div className="space-y-4">
-          {shouldShowSection('invoices') && (
+          {shouldShowSection('invoices') && (invoiceLoading ? <p role="status">Loading clients and documents…</p> : invoiceLoadError ? <div role="alert" className="space-y-3 rounded border border-red-400/40 p-4 text-red-200"><p>{invoiceLoadError}</p><button type="button" onClick={() => void fetchAll()} className="rounded border px-4 py-2">Retry loading invoices</button></div> : (
             <DocumentManager galleries={galleries} documents={Object.values(galleryDocuments).flat()} actions={documentActionIds} onSend={sendGalleryDocument} onDownload={downloadGalleryDocument} onDelete={deleteGalleryDocument} onPaid={markInvoicePaid} onNew={() => {
               const selected = galleries.find(gal => String(gal.id) === invoiceGalleryId);
               if (selected) updateGalleryDocumentForm(selected.id, { documentType: 'invoice', title: 'Photography Invoice' });
@@ -2686,7 +2718,7 @@ export default function AdminPage() {
               </div>
               {(() => { const selected = galleries.find(gal => String(gal.id) === invoiceGalleryId); return selected ? renderDocumentEditor(selected) : null; })()}
             </DocumentManager>
-          )}
+          ))}
           {/* Bookings */}
           {shouldShowSection('bookings') && (
           <AdminAccordionPanel
