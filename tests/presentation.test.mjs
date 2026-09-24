@@ -23,9 +23,12 @@ test('studio pointer is browser-rendered, with native fallbacks and no hidden cu
   assert.match(css, /--studio-cursor: url\('\/cursor-lucide-outline.svg'\) 4 4/);
   assert.match(css, /\[data-theme='light'\] body\s*\{\s*--studio-cursor: url\('\/cursor-lucide-outline-light.svg'\) 4 4/);
   assert.match(css, /cursor: var\(--studio-cursor\), auto/);
-  assert.match(css, /cursor: url\('\/cursor-lucide-outline-active.svg'\) 4 4, pointer/);
+  assert.match(css, /cursor: url\('\/cursor-lucide-click.svg'\) 9 9, pointer/);
+  assert.match(css, /cursor: url\('\/cursor-lucide-zoom.svg'\) 11 11, zoom-in/);
+  assert.match(css, /cursor: url\('\/cursor-lucide-grab.svg'\) 8 3, grab/);
+  assert.match(css, /cursor: url\('\/cursor-lucide-blocked.svg'\) 3 3, not-allowed/);
   assert.match(css, /cursor: text/);
-  assert.match(css, /cursor: not-allowed/);
+  assert.match(css, /not-allowed/);
   const lucideSource = fs.readFileSync('node_modules/lucide-react/dist/esm/icons/mouse-pointer-2.js', 'utf8');
   const lucidePath = lucideSource.match(/d: "([^"]+)"/)[1];
   for (const asset of ['cursor-lucide-outline.svg', 'cursor-lucide-outline-light.svg', 'cursor-lucide-outline-active.svg']) {
@@ -38,6 +41,14 @@ test('studio pointer is browser-rendered, with native fallbacks and no hidden cu
     assert.match(svg, /cursor-LICENSE.txt/);
     assert.doesNotMatch(svg, /<script|<filter|<animate|href=/);
   }
+  for (const asset of ['cursor-lucide-click.svg', 'cursor-lucide-zoom.svg', 'cursor-lucide-grab.svg', 'cursor-lucide-blocked.svg']) {
+    const svg = fs.readFileSync(`public/${asset}`, 'utf8');
+    assert.match(svg, /width="24" height="24"/);
+    assert.match(svg, /fill="none"/);
+    assert.match(svg, /stroke-width="2"/);
+    assert.match(svg, /cursor-LICENSE.txt/);
+    assert.doesNotMatch(svg, /<script|<filter|<animate|href=/);
+  }
 });
 
 test('red click spark remains separate from pointer movement and idle animation', () => {
@@ -45,5 +56,6 @@ test('red click spark remains separate from pointer movement and idle animation'
   assert.match(chrome, /<ClickSpark\s+sparkColor="#920110"/);
   assert.match(spark, /sparksRef.current.length > 0/);
   assert.match(spark, /addEventListener\('pointerdown'/);
+  assert.match(spark, /target\?\.closest/);
   assert.doesNotMatch(spark, /addEventListener\('pointermove'/);
 });

@@ -198,6 +198,9 @@ export default function ClickSpark({
     useEffect(() => {
         const handlePointerDown = (event: PointerEvent) => {
             if (event.pointerType === 'mouse' && event.button !== 0) return;
+            const target = event.target instanceof Element ? event.target : null;
+            const action = target?.closest("a[href], button, summary, label[for], select, [role='button'], .cursor-pointer, .cursor-zoom-in, [data-cursor='zoom']");
+            if (!action || action.matches(":disabled, [aria-disabled='true']")) return;
             addSparks(event.clientX, event.clientY);
         };
 

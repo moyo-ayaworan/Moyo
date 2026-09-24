@@ -209,8 +209,8 @@ body {
     --studio-cursor: url('/cursor-lucide-outline-light.svg') 4 4;
   }
 
-  :where(a[href], button, summary, label[for], select, [role='button'], [data-cursor], .cursor-pointer):not(:disabled):not([aria-disabled='true']) {
-    cursor: url('/cursor-lucide-outline-active.svg') 4 4, pointer;
+  :where(a[href], button, summary, label[for], select, [role='button'], .cursor-pointer):not(:disabled):not([aria-disabled='true']) {
+    cursor: url('/cursor-lucide-click.svg') 9 9, pointer;
   }
 
   :where(input, textarea, [contenteditable='true']) {
@@ -218,11 +218,23 @@ body {
   }
 
   :where(input[type='checkbox'], input[type='radio'], input[type='range'], input[type='submit'], input[type='button'], input[type='file']) {
-    cursor: pointer;
+    cursor: url('/cursor-lucide-click.svg') 9 9, pointer;
+  }
+
+  :where(.cursor-zoom-in, [data-cursor='zoom']) {
+    cursor: url('/cursor-lucide-zoom.svg') 11 11, zoom-in;
+  }
+
+  :where([draggable='true'], [data-cursor='grab'], .cursor-grab) {
+    cursor: url('/cursor-lucide-grab.svg') 8 3, grab;
+  }
+
+  :where([data-cursor='grabbing'], .cursor-grabbing):active {
+    cursor: grabbing;
   }
 
   :where(:disabled, [aria-disabled='true']) {
-    cursor: not-allowed;
+    cursor: url('/cursor-lucide-blocked.svg') 3 3, not-allowed;
   }
 }
 
