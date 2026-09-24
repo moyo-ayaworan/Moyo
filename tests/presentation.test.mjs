@@ -48,6 +48,8 @@ test('studio pointer is browser-rendered, with native fallbacks and no hidden cu
     assert.match(svg, /fill="none"/);
     assert.match(svg, /stroke-width="2"/);
     assert.match(svg, /cursor-LICENSE.txt/);
+    assert.match(svg, /#fffdfa/);
+    assert.match(svg, /#920110/);
     assert.doesNotMatch(svg, /<script|<filter|<animate|href=/);
   }
 });
