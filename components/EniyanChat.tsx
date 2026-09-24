@@ -565,6 +565,7 @@ export default function EniyanChat() {
                     />
                     <button
                       type="submit"
+                      aria-busy={isSending}
                       disabled={!input.trim() || isSending}
                       className={`grid size-11 shrink-0 place-items-center rounded-[8px] transition disabled:cursor-not-allowed disabled:opacity-40 ${
                         isLight

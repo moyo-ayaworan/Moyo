@@ -41,7 +41,7 @@ export default function BookingAccess({ compact = false, isLight = false }: { co
       <label className="text-xs">Booking reference<input className={`${field} mt-1`} inputMode="numeric" maxLength={13} placeholder="#123" required value={reference} onChange={event => setReference(event.target.value)} /></label>
       <label className="text-xs">Booking email<input className={`${field} mt-1`} type="email" autoComplete="email" maxLength={254} placeholder="you@example.com" required value={email} onChange={event => setEmail(event.target.value)} /></label>
     </div>
-    <button type="submit" disabled={state === 'sending'} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">
+    <button type="submit" aria-busy={state === 'sending'} disabled={state === 'sending'} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">
       {state === 'sending' ? <Loader2 size={15} className="animate-spin" /> : <Mail size={15} />}
       {state === 'sending' ? 'Sending secure link…' : 'Send my tracking link'}
     </button>

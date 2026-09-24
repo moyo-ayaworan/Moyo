@@ -364,6 +364,7 @@ export default function ClientGalleryPage() {
                                 )}
                                 <button
                                     type="submit"
+                                    aria-busy={isLoading}
                                     disabled={isLoading}
                                     className="w-full bg-white text-black text-[10px] tracking-[0.4em] uppercase py-4 font-bold hover:bg-accent transition-colors duration-500 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >

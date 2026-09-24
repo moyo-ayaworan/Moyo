@@ -287,7 +287,7 @@ export default function BookingForm({ embedded = false }: BookingFormProps) {
                 <textarea id="booking-message" rows={4} value={formData.message} required onChange={(e) => setFormData({ ...formData, message: e.target.value })} className="w-full bg-transparent border-b border-white/10 py-3 text-foreground focus:outline-none focus:border-accent transition-colors font-body resize-none" />
             </div>
 
-            <button type="submit" disabled={!availabilityReady || selectedSlotIsPast || status === 'loading' || !selectedDate || !selectedTime || activeBookedSlots.includes(selectedTime)} className="flex min-h-14 w-full items-center justify-center gap-3 bg-white px-4 py-5 text-[10px] font-bold uppercase tracking-[0.18em] text-background transition-colors duration-300 hover:bg-accent hover:text-background disabled:opacity-50 sm:tracking-[0.35em]">
+            <button type="submit" aria-busy={status === 'loading'} disabled={!availabilityReady || selectedSlotIsPast || status === 'loading' || !selectedDate || !selectedTime || activeBookedSlots.includes(selectedTime)} className="flex min-h-14 w-full items-center justify-center gap-3 bg-white px-4 py-5 text-[10px] font-bold uppercase tracking-[0.18em] text-background transition-colors duration-300 hover:bg-accent hover:text-background disabled:opacity-50 sm:tracking-[0.35em]">
                 <Sparkles size={16} />
                 {status === 'loading' ? t('ui.sending') : 'Request Booking'}
             </button>

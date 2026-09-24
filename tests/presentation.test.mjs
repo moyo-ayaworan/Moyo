@@ -27,6 +27,7 @@ test('studio pointer is browser-rendered, with native fallbacks and no hidden cu
   assert.match(css, /cursor: url\('\/cursor-lucide-zoom.svg'\) 11 11, zoom-in/);
   assert.match(css, /cursor: url\('\/cursor-lucide-grab.svg'\) 8 3, grab/);
   assert.match(css, /cursor: url\('\/cursor-lucide-blocked.svg'\) 3 3, not-allowed/);
+  assert.match(css, /cursor: url\('\/cursor-lucide-loading.svg'\) 4 4, wait/);
   assert.match(css, /cursor: text/);
   assert.match(css, /not-allowed/);
   const lucideSource = fs.readFileSync('node_modules/lucide-react/dist/esm/icons/mouse-pointer-2.js', 'utf8');
@@ -41,7 +42,7 @@ test('studio pointer is browser-rendered, with native fallbacks and no hidden cu
     assert.match(svg, /cursor-LICENSE.txt/);
     assert.doesNotMatch(svg, /<script|<filter|<animate|href=/);
   }
-  for (const asset of ['cursor-lucide-click.svg', 'cursor-lucide-zoom.svg', 'cursor-lucide-grab.svg', 'cursor-lucide-blocked.svg']) {
+  for (const asset of ['cursor-lucide-click.svg', 'cursor-lucide-zoom.svg', 'cursor-lucide-grab.svg', 'cursor-lucide-blocked.svg', 'cursor-lucide-loading.svg']) {
     const svg = fs.readFileSync(`public/${asset}`, 'utf8');
     assert.match(svg, /width="24" height="24"/);
     assert.match(svg, /fill="none"/);

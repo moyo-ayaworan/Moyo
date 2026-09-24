@@ -55,7 +55,7 @@ export default function EniyanBooking({ flow, isLight }: { flow: EniyanBookingFl
       </dl>
       {step === 'review' ? <>
         <p className="text-sm leading-relaxed">Confirming sends these details to the studio and requests this slot. Pricing, location and final arrangements still require studio confirmation. This does not make a payment.</p>
-        <div className="flex flex-wrap gap-2"><button type="button" disabled={flow.locked} className={secondary} onClick={() => flow.go('details')}>Edit details</button><button type="button" disabled={flow.saving} className={primary} onClick={() => void flow.confirm()}>{flow.saving ? 'Saving booking request…' : flow.uncertain ? 'Retry same booking request' : 'Confirm booking request'}</button></div>
+        <div className="flex flex-wrap gap-2"><button type="button" disabled={flow.locked} className={secondary} onClick={() => flow.go('details')}>Edit details</button><button type="button" aria-busy={flow.saving} disabled={flow.saving} className={primary} onClick={() => void flow.confirm()}>{flow.saving ? 'Saving booking request…' : flow.uncertain ? 'Retry same booking request' : 'Confirm booking request'}</button></div>
         {flow.saving && <p role="status" className="text-sm">Checking and saving your request. Please wait.</p>}
       </> : <div role="status" className="space-y-3 text-sm leading-relaxed">
         <p>Your request is saved. Reference: <strong>#{flow.result?.id}</strong>. Status: {flow.result?.status}. The studio will confirm the final arrangements; this is not a payment confirmation.</p>

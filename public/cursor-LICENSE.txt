@@ -1,4 +1,4 @@
-Lucide MousePointer2, MousePointerClick, MousePointerBan, ZoomIn, and HandGrab cursor assets, adapted from lucide-react 0.563.0.
+Lucide MousePointer2, MousePointerClick, MousePointerBan, ZoomIn, HandGrab, and Ellipsis cursor assets, adapted from lucide-react 0.563.0.
 https://lucide.dev/icons/mouse-pointer-2
 Adaptations: theme-specific stroke colours and native browser hotspot.
 

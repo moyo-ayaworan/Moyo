@@ -236,6 +236,10 @@ body {
   :where(:disabled, [aria-disabled='true']) {
     cursor: url('/cursor-lucide-blocked.svg') 3 3, not-allowed;
   }
+
+  :where([aria-busy='true'], [data-cursor='loading'], .cursor-wait, button:has(.animate-spin)) {
+    cursor: url('/cursor-lucide-loading.svg') 4 4, wait;
+  }
 }
 
 @media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
