@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { BOOKING_TIMES, isCalendarDate, parseBookingDate } from '@/lib/bookingDates';
 import { bookingDetailsError, bookingSlotError, type BookingDraft } from '@/lib/bookingRequest';
+import { DEFAULT_BOOKING_OPTIONS, getBookingPackage } from '@/lib/bookingRates';
 
-const emptyDraft: BookingDraft = { name: '', email: '', phone: '', service: '', message: '', bookingDate: '', bookingTime: '' };
+const emptyDraft: BookingDraft = { name: '', email: '', phone: '', service: '', packageId: '', options: DEFAULT_BOOKING_OPTIONS, message: '', bookingDate: '', bookingTime: '' };
 type Step = 'service' | 'schedule' | 'details' | 'review' | 'complete';
 type Result = { id: number; emailSent: boolean; status: string };
 
@@ -55,7 +56,7 @@ export function useEniyanBooking() {
   const locked = saving || uncertain;
 
   function start() { setActive(true); setError(''); }
-  function update(field: keyof BookingDraft, value: string) {
+  function update<K extends keyof BookingDraft>(field: K, value: BookingDraft[K]) {
     if (locked) return;
     setDraft(current => ({ ...current, [field]: value, ...(field === 'bookingDate' ? { bookingTime: '' } : {}) }));
     setError('');
@@ -68,7 +69,7 @@ export function useEniyanBooking() {
       if (problem || !ready || !slots.includes(draft.bookingTime)) { setError(problem || 'Choose an available time first.'); setStep('schedule'); return; }
     }
     if (next === 'review') {
-      const clean = Object.fromEntries(Object.entries(draft).map(([key, value]) => [key, value.trim()])) as BookingDraft;
+      const clean = Object.fromEntries(Object.entries(draft).map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value])) as BookingDraft;
       clean.email = clean.email.toLowerCase();
       const problem = bookingDetailsError(clean, true);
       if (problem) { setError(problem); return; }
@@ -76,7 +77,13 @@ export function useEniyanBooking() {
     }
     setStep(next);
   }
-  function chooseService(service: string) { update('service', service); go('schedule'); }
+  function chooseService(packageId: string) {
+    const resolvedId = packageId === 'portrait' ? 'portrait-one' : packageId;
+    const selectedPackage = getBookingPackage(resolvedId);
+    if (!selectedPackage) return;
+    setDraft(current => ({ ...current, packageId: resolvedId, service: selectedPackage.category, options: { ...DEFAULT_BOOKING_OPTIONS } }));
+    setError(''); setStep('schedule');
+  }
   function retryAvailability() { setAvailability({ date: '', slots: [], error: false }); setRefresh(value => value + 1); }
   function cancel() {
     if (locked) return;

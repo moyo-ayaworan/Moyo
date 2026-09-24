@@ -153,6 +153,11 @@ async function initializeTables(connection: PoolClient) {
       email TEXT NOT NULL,
       phone TEXT DEFAULT '',
       service TEXT NOT NULL,
+      package_id TEXT DEFAULT '',
+      booking_options JSONB NOT NULL DEFAULT '{}'::jsonb,
+      base_price NUMERIC DEFAULT 0,
+      estimated_total NUMERIC DEFAULT 0,
+      quote_required BOOLEAN DEFAULT FALSE,
       message TEXT DEFAULT '',
       booking_date DATE NOT NULL,
       booking_time TEXT NOT NULL,
@@ -278,6 +283,11 @@ async function initializeTables(connection: PoolClient) {
   await connection.query(`
     ALTER TABLE bookings
       ADD COLUMN IF NOT EXISTS phone TEXT DEFAULT '',
+      ADD COLUMN IF NOT EXISTS package_id TEXT DEFAULT '',
+      ADD COLUMN IF NOT EXISTS booking_options JSONB NOT NULL DEFAULT '{}'::jsonb,
+      ADD COLUMN IF NOT EXISTS base_price NUMERIC DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS estimated_total NUMERIC DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS quote_required BOOLEAN DEFAULT FALSE,
       ADD COLUMN IF NOT EXISTS message TEXT DEFAULT '',
       ADD COLUMN IF NOT EXISTS booking_date DATE,
       ADD COLUMN IF NOT EXISTS booking_time TEXT,

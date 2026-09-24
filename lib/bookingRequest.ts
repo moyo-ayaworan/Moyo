@@ -1,24 +1,22 @@
 import { parseBookingDate } from '@/lib/bookingDates';
+import { BOOKING_PACKAGES, getBookingPackage, type BookingOptions } from '@/lib/bookingRates';
 
-export const ENIYAN_BOOKING_SERVICES = [
-  { id: 'portrait', label: 'Portrait photography' },
-  { id: 'editorial', label: 'Editorial photography' },
-  { id: 'commercial', label: 'Commercial photography' },
-  { id: 'other', label: 'Other photography / event' },
-] as const;
+export const ENIYAN_BOOKING_SERVICES = BOOKING_PACKAGES;
 
 export type BookingDraft = {
   name: string; email: string; phone: string; service: string; message: string;
   bookingDate: string; bookingTime: string;
+  packageId?: string; options?: BookingOptions;
 };
 
 export function bookingDetailsError(draft: BookingDraft, requireContact = false) {
   if (!draft.name || draft.name.length > 120) return 'Enter your name (up to 120 characters).';
   if (draft.email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email)) return 'Enter a valid email address.';
   if (!draft.service || draft.service.length > 80) return 'Choose a service.';
+  if (draft.options && draft.options.locationType !== 'lagos-studio' && !draft.options.locationAddress.trim()) return 'Enter the shoot location or address so the studio can prepare the travel quote.';
   if (draft.phone.length > 40 || draft.message.length > 3000) return 'Phone must be at most 40 characters and project details at most 3000 characters.';
   if (requireContact) {
-    if (!ENIYAN_BOOKING_SERVICES.some(service => service.id === draft.service)) return 'Choose one of the photography services.';
+    if (!getBookingPackage(draft.packageId || draft.service) && !['portrait', 'editorial', 'commercial', 'other'].includes(draft.service)) return 'Choose one of the photography packages.';
     if (!/^[+\d\s().-]+$/.test(draft.phone) || draft.phone.replace(/\D/g, '').length < 7 || draft.phone.replace(/\D/g, '').length > 15) return 'Enter a valid contact phone number, including your country code.';
     if (draft.message.length < 5) return 'Tell the studio a little about your project (at least 5 characters).';
   }

@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { ENIYAN_BOOKING_SERVICES } from '@/lib/bookingRequest';
 import type { EniyanBookingFlow } from '@/lib/useEniyanBooking';
 import { isCalendarDate } from '@/lib/bookingDates';
+import { calculateBookingEstimate, formatNaira } from '@/lib/bookingRates';
 
 export default function EniyanBooking({ flow, isLight }: { flow: EniyanBookingFlow; isLight: boolean }) {
   const heading = useRef<HTMLHeadingElement>(null);
@@ -14,7 +15,9 @@ export default function EniyanBooking({ flow, isLight }: { flow: EniyanBookingFl
   const primary = 'min-h-11 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-[#ffffff] disabled:opacity-40';
   const title = step === 'service' ? 'Let’s arrange your session.' : step === 'schedule' ? 'When would you like to come?' : step === 'details' ? 'Who are we booking for?' : step === 'review' ? 'Does everything look right?' : 'Booking request received';
   const dateLabel = isCalendarDate(draft.bookingDate) ? new Intl.DateTimeFormat('en-GB', { dateStyle: 'full', timeZone: 'Africa/Lagos' }).format(new Date(`${draft.bookingDate}T12:00:00+01:00`)) : '';
-  const serviceLabel = ENIYAN_BOOKING_SERVICES.find(item => item.id === draft.service)?.label || draft.service;
+  const serviceLabel = ENIYAN_BOOKING_SERVICES.find(item => item.id === draft.packageId)?.label || draft.service;
+  const estimate = calculateBookingEstimate(draft.packageId || '', draft.options);
+  const updateOption = (key: string, value: string | number | boolean) => flow.update('options', { ...estimate.options, [key]: value });
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(flow.now));
 
   return <section aria-label="Book with Ẹnìyàn" className={`min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-4 sm:p-5 ${isLight ? 'text-[#141414]' : 'text-[#f5f5f5]'}`}>
@@ -24,7 +27,7 @@ export default function EniyanBooking({ flow, isLight }: { flow: EniyanBookingFl
       {step !== 'complete' && <p className="text-xs leading-relaxed opacity-75">Nothing is submitted until you review your details and press “Confirm booking request”. All times are Lagos time (WAT, UTC+1).</p>}
     </div>
     {flow.error && <p role="alert" className="rounded-lg border border-accent/40 p-3 text-sm leading-relaxed">{flow.error}</p>}
-    {step === 'service' && <div className="grid gap-2">{ENIYAN_BOOKING_SERVICES.map(service => <button key={service.id} type="button" onClick={() => flow.chooseService(service.id)} className={`${secondary} text-left`}>{service.label}</button>)}</div>}
+    {step === 'service' && <div className="grid gap-2">{ENIYAN_BOOKING_SERVICES.map(service => <button key={service.id} type="button" onClick={() => flow.chooseService(service.id)} className={`${secondary} text-left`}><span className="block font-medium">{service.label} · {service.price === null ? 'Quote required' : formatNaira(service.price)}</span><span className="mt-1 block text-xs opacity-65">{service.details}</span></button>)}</div>}
     {step === 'schedule' && <form className="space-y-4" onSubmit={event => { event.preventDefault(); flow.go('details'); }}>
       <label className="block text-sm" htmlFor="eniyan-booking-date">Preferred date
         <input id="eniyan-booking-date" type="date" required min={today} max="9999-12-31" value={draft.bookingDate} onChange={event => flow.update('bookingDate', event.target.value)} className={field} />
@@ -40,6 +43,16 @@ export default function EniyanBooking({ flow, isLight }: { flow: EniyanBookingFl
     </form>}
     {step === 'details' && <form className="space-y-4" onSubmit={event => { event.preventDefault(); flow.go('review'); }}>
       <p className="text-sm opacity-80">{serviceLabel}<br />{dateLabel} at {draft.bookingTime} WAT</p>
+      <div className="space-y-3 rounded-lg border border-current/20 p-3">
+        <p className="text-xs font-medium uppercase tracking-wider opacity-70">Price adjustments</p>
+        <label className="block text-sm">Location<select value={estimate.options.locationType} onChange={event => updateOption('locationType', event.target.value)} className={field}><option value="lagos-studio">Lagos studio · included</option><option value="lagos-location">On-location in Lagos · quote</option><option value="outside-lagos">Outside Lagos · travel quote</option><option value="international">International · travel quote</option></select></label>
+        {estimate.options.locationType !== 'lagos-studio' && <label className="block text-sm">Location / address<input required maxLength={300} value={estimate.options.locationAddress} onChange={event => updateOption('locationAddress', event.target.value)} className={field} /></label>}
+        <label className="block text-sm">Delivery<select value={estimate.options.deliverySpeed} onChange={event => updateOption('deliverySpeed', event.target.value)} className={field}><option value="standard">Standard delivery</option><option value="rush">Rush delivery · quote</option></select></label>
+        <div className="grid grid-cols-3 gap-2">{([['extraImages', 'Extra images'], ['extraOutfits', 'Extra outfits'], ['extraHours', 'Extra hours']] as const).map(([key, label]) => <label key={key} className="text-xs">{label}<input type="number" min="0" max="100" value={estimate.options[key]} onChange={event => updateOption(key, Number(event.target.value))} className={field} /></label>)}</div>
+        <label className="flex gap-2 text-sm"><input type="checkbox" checked={estimate.options.extraShooter} onChange={event => updateOption('extraShooter', event.target.checked)} />Extra photographer {estimate.selectedPackage?.category === 'wedding' ? '· ₦100,000' : '· quote'}</label>
+        <label className="flex gap-2 text-sm"><input type="checkbox" checked={estimate.options.productionNeeds} onChange={event => updateOption('productionNeeds', event.target.checked)} />Production, permits or accommodation needed</label>
+        <p className="text-sm"><strong>Current estimate: {formatNaira(estimate.estimatedTotal)}</strong>{estimate.quoteRequired && <><br /><span className="text-xs opacity-70">Final quote needed for: {estimate.quoteReasons.join(', ')}.</span></>}</p>
+      </div>
       {([
         ['name', 'Full name', 'text', 'name', 120],
         ['email', 'Email address', 'email', 'email', 254],
@@ -51,7 +64,7 @@ export default function EniyanBooking({ flow, isLight }: { flow: EniyanBookingFl
     </form>}
     {(step === 'review' || step === 'complete') && <div className="space-y-4">
       <dl className="space-y-3 rounded-lg border border-current/20 p-4 text-sm [overflow-wrap:anywhere]">
-        {Object.entries({ Service: serviceLabel, Date: dateLabel, Time: `${draft.bookingTime} WAT (UTC+1)`, Name: draft.name, Email: draft.email, Phone: draft.phone, 'Project details': draft.message }).map(([label, value]) => <div key={label}><dt className="text-xs opacity-65">{label}</dt><dd className="mt-1 whitespace-pre-wrap">{value}</dd></div>)}
+        {Object.entries({ Package: serviceLabel, Estimate: formatNaira(estimate.estimatedTotal), 'Quote status': estimate.quoteRequired ? `Studio confirmation required: ${estimate.quoteReasons.join(', ')}` : 'Package rate shown', Date: dateLabel, Time: `${draft.bookingTime} WAT (UTC+1)`, Name: draft.name, Email: draft.email, Phone: draft.phone, 'Project details': draft.message }).map(([label, value]) => <div key={label}><dt className="text-xs opacity-65">{label}</dt><dd className="mt-1 whitespace-pre-wrap">{value}</dd></div>)}
       </dl>
       {step === 'review' ? <>
         <p className="text-sm leading-relaxed">Confirming sends these details to the studio and requests this slot. Pricing, location and final arrangements still require studio confirmation. This does not make a payment.</p>

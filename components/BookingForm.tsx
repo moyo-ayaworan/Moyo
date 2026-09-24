@@ -8,6 +8,7 @@ import { useTranslate } from '@/lib/translations';
 import GlareHover from '@/components/GlareHover';
 import { useSiteSettings } from '@/lib/useSiteSettings';
 import { parseBookingDate } from '@/lib/bookingDates';
+import { BOOKING_PACKAGES, DEFAULT_BOOKING_OPTIONS, calculateBookingEstimate, formatNaira, getBookingPackage, type BookingOptions } from '@/lib/bookingRates';
 
 type BookingFormProps = {
     embedded?: boolean;
@@ -51,7 +52,8 @@ function buildMonthDays(date: Date) {
 }
 
 export default function BookingForm({ embedded = false }: BookingFormProps) {
-    const [formData, setFormData] = useState({ name: '', email: '', phone: '', service: 'portrait', message: '' });
+    const [formData, setFormData] = useState({ name: '', email: '', phone: '', service: 'portrait', packageId: 'portrait-one', message: '' });
+    const [bookingOptions, setBookingOptions] = useState<BookingOptions>({ ...DEFAULT_BOOKING_OPTIONS });
     const [selectedDate, setSelectedDate] = useState('');
     const [selectedTime, setSelectedTime] = useState('');
     const [now, setNow] = useState(() => Date.now());
@@ -70,12 +72,7 @@ export default function BookingForm({ embedded = false }: BookingFormProps) {
     const { t, translateText } = useTranslate(language);
     const settings = useSiteSettings();
 
-    const services = [
-        { id: 'editorial', label: t('services.editorial') },
-        { id: 'portrait', label: t('services.portrait') },
-        { id: 'commercial', label: t('services.commercial') },
-        { id: 'commission', label: t('services.artCommission') },
-    ];
+    const estimate = useMemo(() => calculateBookingEstimate(formData.packageId, bookingOptions), [formData.packageId, bookingOptions]);
 
     const today = useMemo(() => startOfDay(new Date(new Date(now).toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))), [now]);
     const days = useMemo(() => buildMonthDays(month), [month]);
@@ -135,6 +132,7 @@ export default function BookingForm({ embedded = false }: BookingFormProps) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     ...formData,
+                    options: bookingOptions,
                     bookingDate: selectedDate,
                     bookingTime: selectedTime,
                 }),
@@ -148,7 +146,8 @@ export default function BookingForm({ embedded = false }: BookingFormProps) {
                     ...current,
                     [selectedDate]: [...(current[selectedDate] || []), selectedTime],
                 }));
-                setFormData({ name: '', email: '', phone: '', service: 'portrait', message: '' });
+                setFormData({ name: '', email: '', phone: '', service: 'portrait', packageId: 'portrait-one', message: '' });
+                setBookingOptions({ ...DEFAULT_BOOKING_OPTIONS });
                 setSelectedDate('');
                 setSelectedTime('');
             } else {
@@ -259,14 +258,29 @@ export default function BookingForm({ embedded = false }: BookingFormProps) {
             </div>
 
             <div className="space-y-5">
-                <label className="block text-[10px] uppercase tracking-widest text-foreground/20 font-medium">{t('booking.inquiryType')}</label>
-                <div className="flex flex-wrap gap-3">
-                    {services.map((service) => (
-                        <button key={service.id} type="button" onClick={() => setFormData({ ...formData, service: service.id })} className={`px-4 py-2 border text-[10px] uppercase tracking-widest transition-all duration-300 rounded-full sm:px-6 ${formData.service === service.id ? 'border-accent text-accent bg-accent/5' : 'border-white/10 text-foreground/40 hover:border-foreground/30 hover:text-foreground'}`}>
-                            {service.label}
+                <label className="block text-[10px] uppercase tracking-widest text-foreground/40 font-medium">Choose a package</label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                    {BOOKING_PACKAGES.map((service) => (
+                        <button key={service.id} type="button" onClick={() => setFormData({ ...formData, packageId: service.id, service: service.category })} className={`border p-4 text-left transition-all duration-300 ${formData.packageId === service.id ? 'border-accent text-accent bg-accent/5' : 'border-foreground/10 text-foreground/60 hover:border-foreground/30 hover:text-foreground'}`}>
+                            <span className="block text-xs font-medium uppercase tracking-wider">{service.label}</span>
+                            <span className="mt-2 block text-lg">{service.price === null ? 'Quote required' : formatNaira(service.price)}</span>
+                            <span className="mt-1 block text-xs leading-relaxed opacity-65">{service.details}</span>
                         </button>
                     ))}
                 </div>
+            </div>
+
+            <div className="space-y-5 border border-foreground/10 p-4 sm:p-6">
+                <div><p className="text-[10px] uppercase tracking-widest text-foreground/40">Adjust your booking</p><p className="mt-1 text-xs text-foreground/45">Travel, rush work and custom additions are confirmed by the studio before payment.</p></div>
+                <div className="grid gap-5 md:grid-cols-2">
+                    <label className="text-xs text-foreground/60">Location<select value={bookingOptions.locationType} onChange={(e) => setBookingOptions({ ...bookingOptions, locationType: e.target.value as BookingOptions['locationType'] })} className="mt-2 min-h-11 w-full border border-foreground/10 bg-background px-3 text-foreground"><option value="lagos-studio">Lagos studio · included</option><option value="lagos-location">On-location in Lagos · quote</option><option value="outside-lagos">Outside Lagos · travel quote</option><option value="international">International · travel quote</option></select></label>
+                    <label className="text-xs text-foreground/60">Delivery<select value={bookingOptions.deliverySpeed} onChange={(e) => setBookingOptions({ ...bookingOptions, deliverySpeed: e.target.value as BookingOptions['deliverySpeed'] })} className="mt-2 min-h-11 w-full border border-foreground/10 bg-background px-3 text-foreground"><option value="standard">Standard delivery</option><option value="rush">Rush delivery · quote</option></select></label>
+                </div>
+                {bookingOptions.locationType !== 'lagos-studio' && <label className="block text-xs text-foreground/60">Location / address<input required maxLength={300} value={bookingOptions.locationAddress} onChange={(e) => setBookingOptions({ ...bookingOptions, locationAddress: e.target.value })} className="mt-2 min-h-11 w-full border border-foreground/10 bg-transparent px-3 text-foreground" /></label>}
+                <div className="grid grid-cols-3 gap-3">{([['extraImages', 'Extra images'], ['extraOutfits', 'Extra outfits'], ['extraHours', 'Extra hours']] as const).map(([key, label]) => <label key={key} className="text-xs text-foreground/60">{label}<input type="number" min="0" max="100" value={bookingOptions[key]} onChange={(e) => setBookingOptions({ ...bookingOptions, [key]: Number(e.target.value) })} className="mt-2 min-h-11 w-full border border-foreground/10 bg-transparent px-3 text-foreground" /></label>)}</div>
+                <label className="flex gap-3 text-sm text-foreground/70"><input type="checkbox" checked={bookingOptions.extraShooter} onChange={(e) => setBookingOptions({ ...bookingOptions, extraShooter: e.target.checked })} />Extra photographer {getBookingPackage(formData.packageId)?.category === 'wedding' ? '· ₦100,000' : '· quote'}</label>
+                <label className="flex gap-3 text-sm text-foreground/70"><input type="checkbox" checked={bookingOptions.productionNeeds} onChange={(e) => setBookingOptions({ ...bookingOptions, productionNeeds: e.target.checked })} />Production, permits or accommodation needed</label>
+                <div className="border-t border-foreground/10 pt-4"><p className="text-lg text-foreground">Current estimate: <strong>{formatNaira(estimate.estimatedTotal)}</strong></p>{estimate.quoteRequired && <p className="mt-1 text-xs leading-relaxed text-foreground/50">Final quote required for {estimate.quoteReasons.join(', ')}. Your request will save these choices for the studio.</p>}</div>
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">

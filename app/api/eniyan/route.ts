@@ -126,7 +126,7 @@ function buildFallbackReply(messages: unknown, page?: PageContext) {
   if (/\b(price|prices|pricing|cost|costs|budget|rate|rates|packages|how much)\b/.test(latest)) {
     return artContext
       ? `For art pricing, check ${ENIYAN_GUIDED_LINKS.artShop}, or ${ENIYAN_GUIDED_LINKS.artCommissions} for custom work. The studio confirms the final quote and availability; I cannot provide a live price.`
-      : `For a photography quote, use ${ENIYAN_GUIDED_LINKS.bookings}. Include the session type, date, location and intended image use. The studio confirms pricing and availability; I cannot promise a rate or a slot.`;
+      : `Photography packages start at ₦50,000: portraits are ₦50,000 for one outfit or ₦70,000 for two; family portraits are ₦80,000 for one outfit or ₦100,000 for two; weddings are ₦400,000 for one day or ₦600,000 for two days. An extra wedding shooter is ₦100,000. Use “Book a session with Ẹnìyàn” or ${ENIYAN_GUIDED_LINKS.bookings} to see deliverables and build an estimate. Travel, rush delivery and custom additions need a final studio quote.`;
   }
   if (/\b(book|booking|shoot|session|photoshoot|portrait|editorial|commercial|date|dates|availability|tomorrow)\b/.test(latest)) {
     return `Use “Book a session with Eniyan” below to choose a service, check available Lagos-time slots, and enter your contact and project details privately. Review everything, then press “Confirm booking request” to save it. The studio still confirms final arrangements and pricing. You can also use ${ENIYAN_GUIDED_LINKS.bookings}.`;

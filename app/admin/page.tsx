@@ -189,6 +189,11 @@ type Booking = {
   email: string;
   phone: string;
   service: string;
+  package_id: string;
+  booking_options: Record<string, string | number | boolean>;
+  base_price: number;
+  estimated_total: number;
+  quote_required: boolean;
   message: string;
   booking_date: string;
   booking_time: string;
@@ -2745,14 +2750,16 @@ export default function AdminPage() {
                           <p className="mt-2 text-sm text-white/75">{formatBookingDateTime(booking.scheduled_at)}</p>
                         </div>
                         <div className="border border-white/10 bg-white/[0.025] p-3">
-                          <p className="text-[10px] uppercase tracking-[0.2em] text-white/35">Service</p>
-                          <p className="mt-2 text-sm capitalize text-white/75">{booking.service}</p>
+                          <p className="text-[10px] uppercase tracking-[0.2em] text-white/35">Package & estimate</p>
+                          <p className="mt-2 text-sm text-white/75">{booking.package_id || booking.service}</p>
+                          <p className="mt-1 text-sm text-accent">₦{Number(booking.estimated_total || 0).toLocaleString('en-NG')}{booking.quote_required ? ' + final quote' : ''}</p>
                         </div>
                       </div>
 
                       <div className="border border-white/10 bg-white/[0.025] p-3">
                         <p className="text-[10px] uppercase tracking-[0.2em] text-white/35">Brief</p>
                         <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-white/55">{booking.message || 'No brief added.'}</p>
+                        {booking.booking_options && <p className="mt-3 whitespace-pre-wrap text-xs leading-relaxed text-white/40">Options: {Object.entries(booking.booking_options).filter(([, value]) => value !== '' && value !== false && value !== 0).map(([key, value]) => `${key}: ${String(value)}`).join(' · ') || 'Standard package options'}</p>}
                       </div>
 
                       <div className="grid gap-2 text-[10px] uppercase tracking-[0.16em] text-white/35 sm:grid-cols-3">

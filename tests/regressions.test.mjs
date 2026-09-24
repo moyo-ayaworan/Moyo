@@ -41,7 +41,7 @@ function load(file, mocks = {}, globals = {}) {
   const compiledModule = { exports: {} };
   vm.runInNewContext(source, {
     module: compiledModule, exports: compiledModule.exports,
-    require: (name) => name in mocks ? mocks[name] : (name === '@/lib/documentPayments' || name === './documentPayments') ? load('lib/documentPayments.ts') : requireDependency(name),
+    require: (name) => name in mocks ? mocks[name] : (name === '@/lib/documentPayments' || name === './documentPayments') ? load('lib/documentPayments.ts') : name === '@/lib/bookingRates' ? load('lib/bookingRates.ts') : requireDependency(name),
     process: { cwd: () => process.cwd(), env: { DATABASE_URL: 'postgres://localhost/test', ADMIN_KEY: 'test-key', SMTP_USER: 'test@example.test', SMTP_PASS: 'test' } },
     console: { error() {} }, URL, Date, Buffer, AbortSignal, ...globals,
   });
@@ -53,6 +53,7 @@ const next = { NextResponse: class {
   static json(body, options = {}) { return new this(body, options); }
 } };
 const dates = load('lib/bookingDates.ts');
+const bookingRates = load('lib/bookingRates.ts');
 const bookingRequest = load('lib/bookingRequest.ts', { '@/lib/bookingDates': dates });
 const request = (body) => ({ json: async () => body, nextUrl: new URL('https://example.test/api/bookings') });
 
@@ -62,6 +63,20 @@ test('booking dates reject rollover dates and preserve Lagos studio time', () =>
   assert.equal(dates.isCalendarDate('2024-02-29'), true);
   assert.equal(dates.parseBookingDate('2026-09-12', '10:00'), null);
   assert.equal(dates.parseBookingDate('2026-09-12', '09:00').toISOString(), '2026-09-12T08:00:00.000Z');
+});
+
+test('booking rates calculate only published prices and flag variable costs for a quote', () => {
+  const standard = bookingRates.calculateBookingEstimate('portrait-one', {});
+  assert.equal(standard.estimatedTotal, 50000);
+  assert.equal(standard.quoteRequired, false);
+  const wedding = bookingRates.calculateBookingEstimate('wedding-one-day', { extraShooter: true, deliverySpeed: 'rush' });
+  assert.equal(wedding.estimatedTotal, 500000);
+  assert.equal(wedding.extraShooterPrice, 100000);
+  assert.equal(wedding.quoteRequired, true);
+  assert.ok(wedding.quoteReasons.includes('rush delivery'));
+  const travel = bookingRates.calculateBookingEstimate('family-two', { locationType: 'outside-lagos', locationAddress: 'Abuja' });
+  assert.equal(travel.estimatedTotal, 100000);
+  assert.ok(travel.quoteReasons.includes('location and travel'));
 });
 
 test('saved bookings succeed even when confirmation delivery fails', async () => {
@@ -78,8 +93,8 @@ test('saved bookings succeed even when confirmation delivery fails', async () =>
   const response = await routes.POST(request({ name: 'Client', email: 'client@example.test', service: 'portrait', bookingDate: '2099-09-12', bookingTime: '09:00', internalNotes: 'injected', clientNotes: 'injected' }));
   assert.equal(response.status, 201);
   assert.equal(response.body.emailSent, false);
-  assert.equal(insertParams[10], '');
-  assert.equal(insertParams[11], '');
+  assert.equal(insertParams[15], '');
+  assert.equal(insertParams[16], '');
   assert.equal((await routes.POST(request(null))).status, 400);
 });
 
@@ -128,8 +143,8 @@ test('Eniyan booking saves a pending request, emails once, and recovers the same
     if (sql.startsWith('SELECT')) return { rows: row ? [row] : [] };
     if (sql.startsWith('INSERT')) {
       inserts++;
-      assert.equal(params[12], bookingKey);
-      row = { id: 81, ...bookingDraft, booking_date: bookingDraft.bookingDate, booking_time: bookingDraft.bookingTime, status: 'pending', request_hash: params[13], manage_token: 'private-test-token' };
+      assert.equal(params[17], bookingKey);
+      row = { id: 81, ...bookingDraft, booking_date: bookingDraft.bookingDate, booking_time: bookingDraft.bookingTime, status: 'pending', request_hash: params[18], manage_token: 'private-test-token' };
       return { rows: [row] };
     }
     row.confirmation_sent_at = '2099-09-01';
@@ -176,7 +191,7 @@ test('concurrent booking retries recover the saved request without repeating ema
   let row;
   const route = loadBooking(async (sql, params) => {
     if (sql.startsWith('SELECT')) return { rows: row ? [row] : [] };
-    row = { id: 82, status: 'pending', request_hash: params[13], confirmation_sent_at: null };
+    row = { id: 82, status: 'pending', request_hash: params[18], confirmation_sent_at: null };
     throw Object.assign(Error('slot unique conflict'), { code: '23505' });
   }, async () => { throw Error('must not send'); });
   const result = await route.POST(bookingReq(bookingDraft));

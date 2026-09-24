@@ -15,7 +15,7 @@ export async function GET(_req: NextRequest, context: RouteContext) {
   }
 
   const { rows } = await query(
-    `SELECT id, name, email, phone, service, message, booking_date::text, booking_time, scheduled_at::text,
+    `SELECT id, name, email, phone, service, package_id, booking_options, base_price, estimated_total, quote_required, message, booking_date::text, booking_time, scheduled_at::text,
             timezone, status, client_notes, gallery_id, confirmation_sent_at::text, reminder_24h_sent_at::text,
             reminder_day_sent_at::text, created_at::text
      FROM bookings

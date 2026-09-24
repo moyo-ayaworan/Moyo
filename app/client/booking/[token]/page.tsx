@@ -13,6 +13,11 @@ type Booking = {
   email: string;
   phone: string;
   service: string;
+  package_id: string;
+  booking_options: Record<string, string | number | boolean>;
+  base_price: number;
+  estimated_total: number;
+  quote_required: boolean;
   message: string;
   booking_date: string;
   booking_time: string;
@@ -201,8 +206,10 @@ export default function ClientBookingPortalPage() {
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="border border-white/10 bg-white/[0.025] p-4">
-                    <p className="text-[10px] uppercase tracking-[0.22em] text-white/35">Service</p>
-                    <p className="mt-2 capitalize text-white">{booking.service}</p>
+                    <p className="text-[10px] uppercase tracking-[0.22em] text-white/35">Package & estimate</p>
+                    <p className="mt-2 text-white">{booking.package_id || booking.service}</p>
+                    <p className="mt-1 text-sm text-accent">₦{Number(booking.estimated_total || 0).toLocaleString('en-NG')}{booking.quote_required ? ' + final quote' : ''}</p>
+                    {booking.quote_required && <p className="mt-2 text-xs leading-relaxed text-white/45">Variable travel or custom additions are confirmed by the studio before payment.</p>}
                   </div>
                   <div className="border border-white/10 bg-white/[0.025] p-4">
                     <p className="text-[10px] uppercase tracking-[0.22em] text-white/35">Client</p>

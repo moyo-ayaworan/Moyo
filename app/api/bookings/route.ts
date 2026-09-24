@@ -5,6 +5,7 @@ import { query } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
 import { BOOKING_TIMES, isCalendarDate, parseBookingDate } from '@/lib/bookingDates';
 import { bookingDetailsError } from '@/lib/bookingRequest';
+import { calculateBookingEstimate, formatNaira } from '@/lib/bookingRates';
 
 export const runtime = 'nodejs';
 
@@ -18,6 +19,11 @@ type BookingRow = {
   email: string;
   phone: string;
   service: string;
+  package_id: string;
+  booking_options: Record<string, unknown>;
+  base_price: number;
+  estimated_total: number;
+  quote_required: boolean;
   message: string;
   booking_date: string;
   booking_time: string;
@@ -97,12 +103,16 @@ async function sendBookingEmails(booking: BookingRow, origin: string) {
 
   const when = formatBookingDate(booking.booking_date, booking.booking_time);
   const portalUrl = `${origin}/client/booking/${booking.manage_token}`;
+  const estimateLine = `${formatNaira(Number(booking.estimated_total || 0))}${booking.quote_required ? ' + items requiring a final studio quote' : ''}`;
   const studioHtml = `
     <h2>New booking request</h2>
     <p><strong>Name:</strong> ${escapeHtml(booking.name)}</p>
     <p><strong>Email:</strong> ${escapeHtml(booking.email)}</p>
     <p><strong>Phone:</strong> ${escapeHtml(booking.phone || 'Not provided')}</p>
     <p><strong>Service:</strong> ${escapeHtml(booking.service)}</p>
+    <p><strong>Package:</strong> ${escapeHtml(booking.package_id || booking.service)}</p>
+    <p><strong>Current estimate:</strong> ${escapeHtml(estimateLine)}</p>
+    <p><strong>Options:</strong> ${escapeHtml(JSON.stringify(booking.booking_options || {}))}</p>
     <p><strong>Date:</strong> ${escapeHtml(when)} (${STUDIO_TIMEZONE})</p>
     <p><strong>Client portal:</strong> <a href="${escapeHtml(portalUrl)}">${escapeHtml(portalUrl)}</a></p>
     <p><strong>Message:</strong><br>${escapeHtml(booking.message || 'No message added.').replace(/\n/g, '<br />')}</p>
@@ -115,6 +125,8 @@ async function sendBookingEmails(booking: BookingRow, origin: string) {
     <p>The studio has received your details and will confirm the final brief, location, and next steps.</p>
     <p>You can view your booking status here: <a href="${escapeHtml(portalUrl)}">${escapeHtml(portalUrl)}</a></p>
     <p>Service: ${escapeHtml(booking.service)}</p>
+    <p>Current estimate: <strong>${escapeHtml(estimateLine)}</strong></p>
+    ${booking.quote_required ? '<p>Travel, rush delivery or custom additions still require studio confirmation before payment.</p>' : ''}
   `;
 
   await transporter.sendMail({
@@ -123,7 +135,7 @@ async function sendBookingEmails(booking: BookingRow, origin: string) {
     replyTo: booking.email,
     subject: `New booking request: ${booking.name} - ${when}`,
     html: studioHtml,
-    text: `New booking request\nName: ${booking.name}\nEmail: ${booking.email}\nPhone: ${booking.phone || 'Not provided'}\nService: ${booking.service}\nDate: ${when}\nClient portal: ${portalUrl}\nMessage: ${booking.message || 'No message added.'}`,
+    text: `New booking request\nName: ${booking.name}\nEmail: ${booking.email}\nPhone: ${booking.phone || 'Not provided'}\nPackage: ${booking.package_id || booking.service}\nEstimate: ${estimateLine}\nOptions: ${JSON.stringify(booking.booking_options || {})}\nDate: ${when}\nClient portal: ${portalUrl}\nMessage: ${booking.message || 'No message added.'}`,
   });
 
   const clientDelivery = await transporter.sendMail({
@@ -132,7 +144,7 @@ async function sendBookingEmails(booking: BookingRow, origin: string) {
     replyTo: CONTACT_EMAIL,
     subject: `Booking #${booking.id} received - ${when}`,
     html: clientHtml,
-    text: `Hi ${booking.name}, booking reference #${booking.id}. Your request for ${when} (${STUDIO_TIMEZONE}) has been received. View your booking status here: ${portalUrl}`,
+    text: `Hi ${booking.name}, booking reference #${booking.id}. Your request for ${when} (${STUDIO_TIMEZONE}) has been received. Current estimate: ${estimateLine}. View your booking status here: ${portalUrl}`,
   });
 
   return !clientDelivery.rejected?.length && Boolean(clientDelivery.accepted?.length);
@@ -165,7 +177,7 @@ export async function GET(req: NextRequest) {
       const unauthorized = requireAdmin(req);
       if (unauthorized) return unauthorized;
       const { rows } = await query(
-        `SELECT id, name, email, phone, service, message, booking_date::text, booking_time, scheduled_at::text, timezone, status,
+        `SELECT id, name, email, phone, service, package_id, booking_options, base_price, estimated_total, quote_required, message, booking_date::text, booking_time, scheduled_at::text, timezone, status,
                 manage_token, client_notes, internal_notes, gallery_id, confirmation_sent_at::text, reminder_24h_sent_at::text, reminder_day_sent_at::text, created_at::text, updated_at::text
          FROM bookings
          ORDER BY scheduled_at DESC
@@ -231,6 +243,8 @@ export async function POST(req: NextRequest) {
     const email = normalize(body.email).toLowerCase();
     const phone = normalize(body.phone);
     const service = normalize(body.service);
+    const packageId = normalize(body.packageId);
+    const estimate = calculateBookingEstimate(packageId, body.options);
     const message = normalize(body.message);
     const bookingDate = normalize(body.bookingDate);
     const bookingTime = normalize(body.bookingTime);
@@ -246,10 +260,10 @@ export async function POST(req: NextRequest) {
     if (!name || !email || !service || !bookingDate || !bookingTime) {
       return NextResponse.json({ error: 'Name, email, service, date, and time are required.' }, { status: 400 });
     }
-    const detailsError = bookingDetailsError({ name, email, phone, service, message, bookingDate, bookingTime }, fromEniyan);
+    const detailsError = bookingDetailsError({ name, email, phone, service, packageId, options: estimate.options, message, bookingDate, bookingTime }, fromEniyan);
     if (detailsError) return NextResponse.json({ error: detailsError }, { status: 400 });
     if (creationKey) {
-      requestHash = crypto.createHash('sha256').update(JSON.stringify({ name, email, phone, service, message, bookingDate, bookingTime })).digest('hex');
+      requestHash = crypto.createHash('sha256').update(JSON.stringify({ name, email, phone, service, packageId, options: estimate.options, message, bookingDate, bookingTime })).digest('hex');
       const previous = await findPrevious();
       if (previous) return previous;
     }
@@ -261,11 +275,11 @@ export async function POST(req: NextRequest) {
     }
 
     const { rows } = await query(
-      `INSERT INTO bookings (name, email, phone, service, message, booking_date, booking_time, scheduled_at, timezone, manage_token, client_notes, internal_notes, creation_key, request_hash)
-       VALUES ($1, $2, $3, $4, $5, $6::date, $7, $8, $9, $10, $11, $12, $13, $14)
-       RETURNING id, name, email, phone, service, message, booking_date::text, booking_time, scheduled_at::text, timezone, status,
+      `INSERT INTO bookings (name, email, phone, service, package_id, booking_options, base_price, estimated_total, quote_required, message, booking_date, booking_time, scheduled_at, timezone, manage_token, client_notes, internal_notes, creation_key, request_hash)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11::date, $12, $13, $14, $15, $16, $17, $18, $19)
+       RETURNING id, name, email, phone, service, package_id, booking_options, base_price, estimated_total, quote_required, message, booking_date::text, booking_time, scheduled_at::text, timezone, status,
                  manage_token, client_notes, internal_notes, gallery_id, confirmation_sent_at::text, reminder_24h_sent_at::text, reminder_day_sent_at::text, created_at::text`,
-      [name, email, phone, service, message, bookingDate, bookingTime, scheduledAt.toISOString(), STUDIO_TIMEZONE, createManageToken(), clientNotes, internalNotes, creationKey || null, requestHash || null]
+      [name, email, phone, service, packageId, JSON.stringify(estimate.options), estimate.basePrice, estimate.estimatedTotal, estimate.quoteRequired, message, bookingDate, bookingTime, scheduledAt.toISOString(), STUDIO_TIMEZONE, createManageToken(), clientNotes, internalNotes, creationKey || null, requestHash || null]
     );
 
     const booking = rows[0] as BookingRow;
