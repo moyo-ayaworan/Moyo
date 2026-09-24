@@ -23,11 +23,11 @@ test('studio pointer is browser-rendered, with native fallbacks and no hidden cu
   assert.match(css, /--studio-cursor: url\('\/cursor-lucide-outline.svg'\) 4 4/);
   assert.match(css, /\[data-theme='light'\] body\s*\{\s*--studio-cursor: url\('\/cursor-lucide-outline-light.svg'\) 4 4/);
   assert.match(css, /cursor: var\(--studio-cursor\), auto/);
-  assert.match(css, /cursor: url\('\/cursor-lucide-click.svg'\) 9 9, pointer/);
-  assert.match(css, /cursor: url\('\/cursor-lucide-zoom.svg'\) 11 11, zoom-in/);
-  assert.match(css, /cursor: url\('\/cursor-lucide-grab.svg'\) 8 3, grab/);
-  assert.match(css, /cursor: url\('\/cursor-lucide-blocked.svg'\) 3 3, not-allowed/);
-  assert.match(css, /cursor: url\('\/cursor-lucide-loading.svg'\) 4 4, wait/);
+  assert.match(css, /cursor: url\('\/cursor-lucide-click.svg\?v=3'\) 9 9, pointer/);
+  assert.match(css, /cursor: url\('\/cursor-lucide-zoom.svg\?v=3'\) 11 11, zoom-in/);
+  assert.match(css, /cursor: url\('\/cursor-lucide-grab.svg\?v=3'\) 8 3, grab/);
+  assert.match(css, /cursor: url\('\/cursor-lucide-blocked.svg\?v=3'\) 3 3, not-allowed/);
+  assert.match(css, /cursor: url\('\/cursor-lucide-loading.svg\?v=3'\) 4 4, wait/);
   assert.match(css, /cursor: text/);
   assert.match(css, /not-allowed/);
   const lucideSource = fs.readFileSync('node_modules/lucide-react/dist/esm/icons/mouse-pointer-2.js', 'utf8');
@@ -49,6 +49,7 @@ test('studio pointer is browser-rendered, with native fallbacks and no hidden cu
     assert.match(svg, /stroke-width="2"/);
     assert.match(svg, /cursor-LICENSE.txt/);
     assert.match(svg, /#fffdfa/);
+    assert.match(svg, /#080808/);
     assert.match(svg, /#920110/);
     assert.doesNotMatch(svg, /<script|<filter|<animate|href=/);
   }
