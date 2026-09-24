@@ -237,7 +237,13 @@ export default function EniyanChat() {
   const { language } = useLanguage();
   const pathname = usePathname();
   const { resolvedTheme, theme } = useTheme();
-  const copy = ENIYAN_COPY[language] || ENIYAN_COPY.EN;
+  const baseCopy = ENIYAN_COPY[language] || ENIYAN_COPY.EN;
+  const copy = {
+    ...baseCopy,
+    title: 'Ẹnìyàn',
+    placeholder: baseCopy.placeholder.replaceAll('Eniyan', 'Ẹnìyàn'),
+    greeting: baseCopy.greeting.replaceAll('Eniyan', 'Ẹnìyàn'),
+  };
   const isLight = (resolvedTheme || theme) === 'light';
   const reducedMotion = useReducedMotion();
   const booking = useEniyanBooking();
@@ -435,11 +441,11 @@ export default function EniyanChat() {
             <div className="grid min-h-0 min-w-0 flex-1 grid-rows-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_280px]">
               <section className="flex min-h-0 min-w-0 flex-col">
                 {booking.active ? <EniyanBooking flow={booking} isLight={isLight} /> : trackingOpen ? <section className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
-                  <button type="button" onClick={() => setTrackingOpen(false)} className="mb-4 min-h-11 rounded-lg border border-current/25 px-3 py-2 text-xs">Back to Eniyan</button>
+                  <button type="button" onClick={() => setTrackingOpen(false)} className="mb-4 min-h-11 rounded-lg border border-current/25 px-3 py-2 text-xs">Back to Ẹnìyàn</button>
                   <BookingAccess compact isLight={isLight} />
-                  <p className="mt-4 text-[11px] leading-relaxed opacity-60">For your privacy, Eniyan never displays booking details in chat and only sends access to the email attached to the booking.</p>
+                  <p className="mt-4 text-[11px] leading-relaxed opacity-60">For your privacy, Ẹnìyàn never displays booking details in chat and only sends access to the email attached to the booking.</p>
                 </section> : <>
-                <div ref={scrollRef} role="log" aria-label="Conversation with Eniyan" aria-live="polite" aria-relevant="additions" className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-3 py-4 sm:space-y-5 sm:px-5 sm:py-5">
+                <div ref={scrollRef} role="log" aria-label="Conversation with Ẹnìyàn" aria-live="polite" aria-relevant="additions" className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-3 py-4 sm:space-y-5 sm:px-5 sm:py-5">
                   {messages.map((message) => {
                     const links = message.role === 'assistant' ? getEniyanLinks(message.content) : [];
 
@@ -540,7 +546,7 @@ export default function EniyanChat() {
                     }}
                   >
                     <label className="sr-only" htmlFor="eniyan-message">
-                      Message Eniyan
+                      Message Ẹnìyàn
                     </label>
                     <textarea
                       id="eniyan-message"
@@ -651,7 +657,7 @@ export default function EniyanChat() {
             ? 'border-black/10 bg-white/80 text-black/70 hover:border-black/18 hover:bg-[#ffffff] hover:text-black'
             : 'border-white/10 bg-[#171717]/86 text-white/68 hover:border-white/18 hover:bg-[#1f1f1f]/90 hover:text-white/86'
         }`}
-        aria-label={isOpen ? 'Hide Eniyan chat' : 'Open Eniyan chat'}
+        aria-label={isOpen ? 'Hide Ẹnìyàn chat' : 'Open Ẹnìyàn chat'}
       >
         {isOpen ? (
           <>
@@ -661,7 +667,7 @@ export default function EniyanChat() {
         ) : (
           <>
             <EniyanSign compact />
-            <span className="pr-1 text-[10px] font-semibold uppercase tracking-[0.16em]">Ask Eniyan</span>
+            <span className="pr-1 text-[10px] font-semibold uppercase tracking-[0.16em]">Ask Ẹnìyàn</span>
           </>
         )}
       </button>

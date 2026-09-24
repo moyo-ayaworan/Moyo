@@ -742,6 +742,7 @@ export default function AdminPage() {
   });
   const [editingArtworks, setEditingArtworks] = useState<Record<number, ArtworkEditForm>>({});
   const [editingBookings, setEditingBookings] = useState<Record<number, BookingEditForm>>({});
+  const [emailingBookings, setEmailingBookings] = useState<Record<number, boolean>>({});
   const [editingArtworkId, setEditingArtworkId] = useState<number | null>(null);
   const [digitalProductForm, setDigitalProductForm] = useState({
     title: '',
@@ -2171,6 +2172,25 @@ export default function AdminPage() {
     }
   };
 
+  const emailBookingTracking = async (booking: Booking) => {
+    if (emailingBookings[booking.id]) return;
+    setEmailingBookings((prev) => ({ ...prev, [booking.id]: true }));
+    try {
+      const res = await fetch('/api/bookings', {
+        method: 'PUT', headers, credentials: 'same-origin',
+        body: JSON.stringify({ id: booking.id, action: 'sendTracking' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.booking) throw new Error(data.error || 'Unable to send tracking details');
+      setBookings((prev) => prev.map((item) => item.id === booking.id ? data.booking : item));
+      setMessage({ text: data.message || `Tracking details sent to ${booking.email}`, type: 'success' });
+    } catch (error) {
+      setMessage({ text: error instanceof Error ? error.message : 'Unable to send tracking details', type: 'error' });
+    } finally {
+      setEmailingBookings((prev) => ({ ...prev, [booking.id]: false }));
+    }
+  };
+
   const createGalleryFromBooking = async (booking: Booking) => {
     const accessCode = generateAccessCode();
     const slugBase = `${booking.name || 'client'}-${booking.id}`;
@@ -2801,7 +2821,7 @@ export default function AdminPage() {
                         onChange={(e) => updateBookingDraft(booking.id, { internalNotes: e.target.value })}
                       />
 
-                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
                         <button
                           type="button"
                           onClick={() => saveBooking(booking)}
@@ -2815,6 +2835,15 @@ export default function AdminPage() {
                           className="border border-accent/45 px-3 py-3 text-[9px] font-bold uppercase tracking-[0.16em] text-accent transition-colors hover:bg-accent hover:text-black"
                         >
                           Copy Link
+                        </button>
+                        <button
+                          type="button"
+                          aria-busy={Boolean(emailingBookings[booking.id])}
+                          disabled={Boolean(emailingBookings[booking.id])}
+                          onClick={() => emailBookingTracking(booking)}
+                          className="border border-green-400/35 px-3 py-3 text-[9px] font-bold uppercase tracking-[0.16em] text-green-300 transition-colors hover:bg-green-400 hover:text-black disabled:opacity-50"
+                        >
+                          {emailingBookings[booking.id] ? 'Sending…' : 'Email Tracking'}
                         </button>
                         <button
                           type="button"

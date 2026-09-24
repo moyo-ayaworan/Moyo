@@ -139,7 +139,7 @@ function buildFallbackReply(messages: unknown, page?: PageContext) {
       : `Browse photography at ${ENIYAN_GUIDED_LINKS.photographyPortfolio} or fine art at ${ENIYAN_GUIDED_LINKS.artWorks}.`;
   }
   if (/\b(contact|email|phone|call|human|person)\b/.test(latest)) return 'You can reach the studio at ijabikenm@gmail.com or +2348148192201. I am an AI guide, not a member of the studio team.';
-  if (/\b(hi|hello|hey|thanks|thank you)\b/.test(latest)) return 'Mo ki o! I am Eniyan, the AI studio guide. Would you like help with photography, artwork, or an existing client gallery?';
+  if (/\b(hi|hello|hey|thanks|thank you)\b/.test(latest)) return 'Mo ki o! I am Ẹnìyàn, the AI studio guide. Would you like help with photography, artwork, or an existing client gallery?';
   return 'I can help with photography, fine art, and finding your way around the studio site. Are you looking to book photography, commission artwork, or view an existing client gallery?';
 }
 

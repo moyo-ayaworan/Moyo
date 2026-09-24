@@ -149,10 +149,27 @@ test('Eniyan booking saves a pending request, emails once, and recovers the same
   assert.equal(inserts, 1);
   assert.equal(deliveries.length, 2, 'one studio email and one client email only');
   assert.ok(deliveries[1].text.includes('/client/booking/private-test-token'));
+  assert.match(deliveries[1].subject, /#81/);
+  assert.match(deliveries[1].text, /reference #81/i);
   const changed = await route.POST(bookingReq({ ...bookingDraft, bookingTime: '11:00' }));
   assert.equal(changed.status, 409);
   assert.equal(changed.body.code, 'request_key_conflict');
   assert.equal(inserts, 1);
+});
+
+test('admin can email private tracking details with the booking reference', async () => {
+  const booking = { id: 91, name: 'Tracking Client', email: 'tracking@example.test', booking_date: '2099-09-12', booking_time: '09:00', manage_token: 'private-tracking-token' };
+  let delivery;
+  const route = loadBooking(async sql => sql.startsWith('SELECT') ? { rows: [booking] } : { rows: [{ ...booking, confirmation_sent_at: '2099-09-01' }] }, async message => {
+    delivery = message;
+    return { accepted: [message.to], rejected: [] };
+  });
+  const result = await route.PUT(bookingReq({ id: 91, action: 'sendTracking' }));
+  assert.equal(result.status, 200);
+  assert.equal(delivery.to, booking.email);
+  assert.match(delivery.subject, /#91/);
+  assert.match(delivery.text, /private-tracking-token/);
+  assert.ok(result.body.booking.confirmation_sent_at);
 });
 
 test('concurrent booking retries recover the saved request without repeating emails', async () => {

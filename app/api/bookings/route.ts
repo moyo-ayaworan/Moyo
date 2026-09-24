@@ -110,6 +110,7 @@ async function sendBookingEmails(booking: BookingRow, origin: string) {
   const clientHtml = `
     <h2>Your booking request is in</h2>
     <p>Hi ${escapeHtml(booking.name)},</p>
+    <p><strong>Booking reference: #${booking.id}</strong></p>
     <p>Your requested session time is <strong>${escapeHtml(when)}</strong> (${STUDIO_TIMEZONE}).</p>
     <p>The studio has received your details and will confirm the final brief, location, and next steps.</p>
     <p>You can view your booking status here: <a href="${escapeHtml(portalUrl)}">${escapeHtml(portalUrl)}</a></p>
@@ -129,12 +130,31 @@ async function sendBookingEmails(booking: BookingRow, origin: string) {
     from: config.from,
     to: booking.email,
     replyTo: CONTACT_EMAIL,
-    subject: `Booking request received - ${when}`,
+    subject: `Booking #${booking.id} received - ${when}`,
     html: clientHtml,
-    text: `Hi ${booking.name}, your booking request for ${when} (${STUDIO_TIMEZONE}) has been received. View your booking status here: ${portalUrl}`,
+    text: `Hi ${booking.name}, booking reference #${booking.id}. Your request for ${when} (${STUDIO_TIMEZONE}) has been received. View your booking status here: ${portalUrl}`,
   });
 
   return !clientDelivery.rejected?.length && Boolean(clientDelivery.accepted?.length);
+}
+
+async function sendTrackingEmail(booking: BookingRow, origin: string) {
+  const config = getTransportConfig();
+  if (!config) throw new Error('Email transport is not configured.');
+  const transporter = nodemailer.createTransport(config.host
+    ? { host: config.host, port: config.port, secure: config.secure, auth: { user: config.user, pass: config.pass } }
+    : { service: 'gmail', auth: { user: config.user, pass: config.pass } });
+  const portalUrl = `${origin}/client/booking/${booking.manage_token}`;
+  const when = formatBookingDate(booking.booking_date, booking.booking_time);
+  const delivery = await transporter.sendMail({
+    from: config.from,
+    to: booking.email,
+    replyTo: CONTACT_EMAIL,
+    subject: `Your booking tracking details - #${booking.id}`,
+    html: `<h2>Your private booking portal</h2><p>Hi ${escapeHtml(booking.name)},</p><p><strong>Booking reference: #${booking.id}</strong></p><p>Requested session: ${escapeHtml(when)} (${STUDIO_TIMEZONE}).</p><p><a href="${escapeHtml(portalUrl)}">Open and track your booking</a></p><p>Keep this link private. You can also give reference #${booking.id} and your booking email to Ẹnìyàn to have the link sent again.</p>`,
+    text: `Hi ${booking.name}, your booking reference is #${booking.id}. Track your booking here: ${portalUrl}\n\nRequested session: ${when} (${STUDIO_TIMEZONE}). Keep this link private.`,
+  });
+  return !delivery.rejected?.length && Boolean(delivery.accepted?.length);
 }
 
 export async function GET(req: NextRequest) {
@@ -284,6 +304,26 @@ export async function PUT(req: NextRequest) {
   try {
     const body = await req.json() as Record<string, unknown>;
     const id = Number(body.id);
+    if (body.action === 'sendTracking') {
+      if (!Number.isInteger(id) || id <= 0) return NextResponse.json({ error: 'Missing booking id.' }, { status: 400 });
+      const { rows } = await query(
+        `SELECT id, name, email, phone, service, message, booking_date::text, booking_time, scheduled_at::text, timezone, status,
+                manage_token, client_notes, internal_notes, gallery_id, confirmation_sent_at::text, reminder_24h_sent_at::text, reminder_day_sent_at::text, created_at::text
+         FROM bookings WHERE id = $1 LIMIT 1`,
+        [id]
+      );
+      const booking = rows[0] as BookingRow | undefined;
+      if (!booking) return NextResponse.json({ error: 'Booking not found.' }, { status: 404 });
+      const delivered = await sendTrackingEmail(booking, req.nextUrl.origin);
+      if (!delivered) return NextResponse.json({ error: 'The tracking email was rejected by the mail provider.' }, { status: 502 });
+      const updated = await query(
+        `UPDATE bookings SET confirmation_sent_at = NOW(), updated_at = NOW() WHERE id = $1
+         RETURNING id, name, email, phone, service, message, booking_date::text, booking_time, scheduled_at::text, timezone, status,
+                   manage_token, client_notes, internal_notes, gallery_id, confirmation_sent_at::text, reminder_24h_sent_at::text, reminder_day_sent_at::text, created_at::text, updated_at::text`,
+        [id]
+      );
+      return NextResponse.json({ booking: updated.rows[0], message: `Tracking details sent to ${booking.email}.` });
+    }
     const status = normalize(body.status).toLowerCase();
     const clientNotes = normalize(body.clientNotes).slice(0, 2000);
     const internalNotes = normalize(body.internalNotes).slice(0, 2000);

@@ -2,7 +2,7 @@ export const ENIYAN_KNOWLEDGE = `
 Brand:
 - Ijabiken Moyo is a photography and fine art practice focused on visual storytelling, portraiture, editorial image-making, commercial photography, and original artwork.
 - The website has two main paths: Photography and Fine Art.
-- Eniyan means person or human in Yoruba. Eniyan should sound warm, concise, elegant, practical, and human.
+- Ẹnìyàn means person or human in Yoruba. Ẹnìyàn should sound warm, concise, elegant, practical, and human.
 
 Primary visitor goals:
 - Help people choose where to go on the site.

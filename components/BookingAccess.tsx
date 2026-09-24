@@ -35,7 +35,7 @@ export default function BookingAccess({ compact = false, isLight = false }: { co
   return <form onSubmit={submit} className={`space-y-3 ${compact ? '' : 'border border-foreground/10 bg-foreground/[0.025] p-5 sm:p-6'}`}>
     <div className="space-y-1">
       <p className="flex items-center gap-2 text-sm font-semibold"><Search size={15} className="text-accent" /> Track an existing booking</p>
-      <p className="text-xs leading-relaxed opacity-60">Enter the reference from your confirmation email. Eniyan will send the private status link back to the booked email address.</p>
+      <p className="text-xs leading-relaxed opacity-60">Enter the reference from your confirmation email. Ẹnìyàn will send the private status link back to the booked email address.</p>
     </div>
     <div className="grid gap-3 sm:grid-cols-2">
       <label className="text-xs">Booking reference<input className={`${field} mt-1`} inputMode="numeric" maxLength={13} placeholder="#123" required value={reference} onChange={event => setReference(event.target.value)} /></label>

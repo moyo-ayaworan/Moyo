@@ -17,9 +17,9 @@ export default function EniyanBooking({ flow, isLight }: { flow: EniyanBookingFl
   const serviceLabel = ENIYAN_BOOKING_SERVICES.find(item => item.id === draft.service)?.label || draft.service;
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(flow.now));
 
-  return <section aria-label="Book with Eniyan" className={`min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-4 sm:p-5 ${isLight ? 'text-[#141414]' : 'text-[#f5f5f5]'}`}>
+  return <section aria-label="Book with Ẹnìyàn" className={`min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-4 sm:p-5 ${isLight ? 'text-[#141414]' : 'text-[#f5f5f5]'}`}>
     <div className="space-y-2">
-      <p className="text-[10px] uppercase tracking-widest opacity-65">Eniyan · guided booking · {step === 'service' ? '1 / 4' : step === 'schedule' ? '2 / 4' : step === 'details' ? '3 / 4' : step === 'review' ? '4 / 4' : 'Saved'}</p>
+      <p className="text-[10px] uppercase tracking-widest opacity-65">Ẹnìyàn · guided booking · {step === 'service' ? '1 / 4' : step === 'schedule' ? '2 / 4' : step === 'details' ? '3 / 4' : step === 'review' ? '4 / 4' : 'Saved'}</p>
       <h3 ref={heading} tabIndex={-1} className="text-2xl outline-none">{title}</h3>
       {step !== 'complete' && <p className="text-xs leading-relaxed opacity-75">Nothing is submitted until you review your details and press “Confirm booking request”. All times are Lagos time (WAT, UTC+1).</p>}
     </div>
