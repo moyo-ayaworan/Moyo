@@ -32,8 +32,11 @@ export async function buildDocumentPdf(doc: Document, calculation: Calculation |
   const isReceipt = doc.display_kind === 'receipt' || (doc.display_kind !== 'invoice' && Boolean(doc.paid_at));
   const label = doc.document_type === 'contract' ? 'CONTRACT' : isReceipt ? 'RECEIPT' : 'INVOICE';
   const logo = path.join(process.cwd(), 'public', 'brand', 'moyo-logo-red.png');
-  const foreground = '#eeeae5';
-  const accent = '#e06673';
+  const light = doc.billing_details?.documentTheme === 'light';
+  const foreground = light ? '#17181a' : '#eeeae5';
+  const background = light ? '#fffdfa' : '#151618';
+  const divider = light ? '#ded7cf' : '#303135';
+  const accent = light ? '#920110' : '#e06673';
   let y = 80;
   let page = 0;
   const font = (size: number, bold = false) => pdf.font(bold ? 'Bold' : 'Body').fontSize(size);
@@ -43,7 +46,7 @@ export async function buildDocumentPdf(doc: Document, calculation: Calculation |
   const newPage = () => {
     pdf.addPage();
     page++;
-    pdf.rect(0, 0, 612, 792).fill('#151618');
+    pdf.rect(0, 0, 612, 792).fill(background);
     pdf.rect(48, 59, 516, 3).fill('#920110');
     if (existsSync(logo)) pdf.image(logo, 48, 17, { fit: [65, 34] });
     else text('MOYO', 48, 22, 16, true, accent);
@@ -109,7 +112,7 @@ export async function buildDocumentPdf(doc: Document, calculation: Calculation |
         cells.forEach((cell, column) => { if (cell[line]) text(cell[line], [48, 314, 360, 462][column], y, column === 0 ? 10 : 9); });
         y += 17;
       }
-      pdf.moveTo(48, y + 3).lineTo(564, y + 3).lineWidth(0.5).stroke('#303135');
+      pdf.moveTo(48, y + 3).lineTo(564, y + 3).lineWidth(0.5).stroke(divider);
       y += 18;
     }
     ensure(115);

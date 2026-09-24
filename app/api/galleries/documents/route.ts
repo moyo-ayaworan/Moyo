@@ -329,7 +329,7 @@ function emailHtml(doc: GalleryDocument) {
       </tr>
     `
     : '';
-  return `
+  const html = `
     <head><meta name="color-scheme" content="dark"><meta name="supported-color-schemes" content="dark"></head>
     <body style="margin:0;padding:0;background:#0b0c0e;color:#eeeae5;font-family:Arial,Helvetica,sans-serif;">
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;background:#0b0c0e;">
@@ -407,6 +407,14 @@ function emailHtml(doc: GalleryDocument) {
       </table>
     </body>
   `;
+  if (doc.billing_details?.documentTheme !== 'light') return html;
+  return html
+    .replaceAll('#0b0c0e', '#f2eee8')
+    .replaceAll('#151618', '#fffdfa')
+    .replaceAll('#303135', '#ded7cf')
+    .replaceAll('#eeeae5', '#17181a')
+    .replaceAll('#a5a5ab', '#626269')
+    .replace('<meta name="color-scheme" content="dark"><meta name="supported-color-schemes" content="dark">', '<meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light">');
 }
 
 async function getDocument(id: string) {

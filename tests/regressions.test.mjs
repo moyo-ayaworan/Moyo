@@ -622,6 +622,21 @@ test('invoice, deposit receipt and agreement PDFs remain separately downloadable
   assert.equal((await route.GET({ nextUrl: new URL('https://example.test/?id=1&format=pdf&kind=receipt&paymentId=wrong') })).status, 400);
 });
 
+test('invoice and receipt PDFs inherit the selected light or dark document theme', async () => {
+  for (const documentTheme of ['dark', 'light']) {
+    const invoice = { ...depositInvoice, billing_details: { ...depositInvoice.billing_details, documentTheme }, display_kind: 'invoice' };
+    const receipt = { ...invoice, display_kind: 'receipt', paid_at: '2026-09-24T10:00:00.000Z', receipt_payment: invoice.payments[0] };
+    const invoicePdf = await documentPdf.buildDocumentPdf(invoice, null);
+    const receiptPdf = await documentPdf.buildDocumentPdf(receipt, null);
+    assert.match(renderedPdfText.get(invoicePdf), /INVOICE/);
+    assert.match(renderedPdfText.get(receiptPdf), /RECEIPT/);
+    if (process.env.DOCUMENT_QA_DIR) {
+      fs.writeFileSync(`${process.env.DOCUMENT_QA_DIR}/${documentTheme}-invoice.pdf`, invoicePdf);
+      fs.writeFileSync(`${process.env.DOCUMENT_QA_DIR}/${documentTheme}-receipt.pdf`, receiptPdf);
+    }
+  }
+});
+
 test('invoice email includes the optional agreement; deposit email reports only money actually received', async () => {
   const { route: recording, current } = paymentRoute(); await recording.PUT(request(paymentBody));
   let email;

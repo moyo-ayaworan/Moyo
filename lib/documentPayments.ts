@@ -3,6 +3,7 @@ export type BillingDetails = {
   sessionDate: string;
   agreementScope: string;
   agreementTerms: string;
+  documentTheme?: 'dark' | 'light';
 };
 export type DocumentPayment = {
   id: string;
@@ -29,7 +30,7 @@ export function paymentSummary(doc: PaymentFields) {
   const confirmed = Boolean(doc.billing_details?.sessionDate && total > 0 && paid >= (deposit || total));
   return { total, paid, balance, deposit, confirmed };
 }
-export function normalizeBilling(input: { depositType?: unknown; depositValue?: unknown; sessionDate?: unknown; agreementScope?: unknown; agreementTerms?: unknown; addAgreement?: unknown }, total: number): BillingDetails {
+export function normalizeBilling(input: { depositType?: unknown; depositValue?: unknown; sessionDate?: unknown; agreementScope?: unknown; agreementTerms?: unknown; addAgreement?: unknown; documentTheme?: unknown }, total: number): BillingDetails {
   if (input.depositValue != null && !['string', 'number'].includes(typeof input.depositValue)) throw new Error('Enter a valid booking deposit.');
   const raw = Number(input.depositValue || 0);
   if (!Number.isFinite(raw) || raw < 0 || !['fixed', 'percent', undefined].includes(input.depositType as string | undefined)) throw new Error('Enter a valid booking deposit.');
@@ -41,7 +42,8 @@ export function normalizeBilling(input: { depositType?: unknown; depositValue?: 
   const agreementScope = input.addAgreement === true && typeof input.agreementScope === 'string' ? input.agreementScope.trim() : '';
   const agreementTerms = input.addAgreement === true && typeof input.agreementTerms === 'string' ? input.agreementTerms.trim() : '';
   if (input.addAgreement === true && (!agreementScope || !agreementTerms || agreementScope.length > 3000 || agreementTerms.length > 3000)) throw new Error('Add agreement scope and terms, at most 3000 characters each.');
-  return { depositAmount, sessionDate, agreementScope, agreementTerms };
+  const documentTheme = input.documentTheme === 'light' ? 'light' : 'dark';
+  return { depositAmount, sessionDate, agreementScope, agreementTerms, documentTheme };
 }
 export function receiptLabel(doc: PaymentFields, receipt: Pick<DocumentPayment, 'totalPaid' | 'balance'>) {
   return doc.billing_details?.depositAmount && receipt.totalPaid <= doc.billing_details.depositAmount ? 'Booking deposit' : receipt.balance > 0 ? 'Part payment' : 'Final payment';

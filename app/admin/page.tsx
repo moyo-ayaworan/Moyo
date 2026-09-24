@@ -129,6 +129,7 @@ type GalleryDocument = ManagedDocument & {
 
 type GalleryDocumentForm = {
   documentType: 'invoice' | 'contract';
+  documentTheme: 'dark' | 'light';
   depositType: 'fixed' | 'percent';
   depositValue: string;
   sessionDate: string;
@@ -250,6 +251,7 @@ const compressedImageMaxDimension = 2400;
 
 const defaultDocumentForm: GalleryDocumentForm = {
   documentType: 'invoice',
+  documentTheme: 'dark',
   depositType: 'fixed',
   depositValue: '',
   sessionDate: '',
@@ -429,44 +431,48 @@ function DocumentPreview({ gallery, form }: { gallery: Gallery; form: GalleryDoc
   const title = form.title.trim() || `Photography ${labelText}`;
   const email = form.clientEmail.trim() || 'client@email.com';
   const terms = form.terms.trim() || 'Contract terms, usage rights, payment, and delivery notes will appear here.';
+  const light = form.documentTheme === 'light';
+  const palette = light
+    ? { background: '#fffdfa', foreground: '#17181a', muted: '#626269', divider: '#ded7cf' }
+    : { background: '#151618', foreground: '#eeeae5', muted: '#a5a5ab', divider: '#303135' };
 
   return (
-    <aside className="min-w-0 overflow-hidden border border-white/10 bg-[#151618] text-[#eeeae5] shadow-2xl" style={{ colorScheme: 'dark' }}>
+    <aside className="min-w-0 overflow-hidden border shadow-2xl" style={{ colorScheme: light ? 'light' : 'dark', background: palette.background, color: palette.foreground, borderColor: palette.divider }}>
       <div className="h-1 bg-[#920110]" />
       <div className="flex min-w-0 flex-col gap-7 p-5 sm:p-7">
         <div className="flex flex-wrap items-start justify-between gap-6 pb-3">
           <div>
             <p className="text-sm font-semibold">MOYO AYAWORAN<span className="text-[#d44958]">.</span></p>
-            <p className="mt-2 text-[11px] leading-relaxed text-[#a5a5ab]">Photography & Fine Art<br />ijabikenm@gmail.com</p>
+            <p className="mt-2 text-[11px] leading-relaxed" style={{ color: palette.muted }}>Photography & Fine Art<br />ijabikenm@gmail.com</p>
           </div>
           <div className="text-right">
             <p className="text-2xl font-light tracking-[0.18em] sm:text-3xl">{label}</p>
-            <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-[#a5a5ab]">Draft · Live preview</p>
+            <p className="mt-2 text-[10px] uppercase tracking-[0.18em]" style={{ color: palette.muted }}>Draft · Live preview</p>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-5 border-y border-white/10 py-5 text-xs">
+        <div className="grid grid-cols-2 gap-5 border-y py-5 text-xs" style={{ borderColor: palette.divider }}>
           <div className="min-w-0">
-            <p className="text-[9px] uppercase tracking-[0.2em] text-[#a5a5ab]">{form.documentType === 'contract' ? 'Prepared for' : 'Billed to'}</p>
+            <p className="text-[9px] uppercase tracking-[0.2em]" style={{ color: palette.muted }}>{form.documentType === 'contract' ? 'Prepared for' : 'Billed to'}</p>
             <p className="mt-2 font-semibold [overflow-wrap:anywhere]">{gallery.client_name || 'Client'}</p>
-            <p className="mt-1 text-[#a5a5ab] [overflow-wrap:anywhere]">{email}</p>
+            <p className="mt-1 [overflow-wrap:anywhere]" style={{ color: palette.muted }}>{email}</p>
           </div>
           {form.documentType === 'invoice' && <div className="grid grid-cols-2 gap-3">
-            <div><p className="text-[9px] uppercase tracking-[0.2em] text-[#a5a5ab]">Currency</p><p className="mt-2">{form.currency || 'NGN'}</p></div>
-            <div><p className="text-[9px] uppercase tracking-[0.2em] text-[#a5a5ab]">Due by</p><p className="mt-2 [overflow-wrap:anywhere]">{dueDate}</p></div>
+            <div><p className="text-[9px] uppercase tracking-[0.2em]" style={{ color: palette.muted }}>Currency</p><p className="mt-2">{form.currency || 'NGN'}</p></div>
+            <div><p className="text-[9px] uppercase tracking-[0.2em]" style={{ color: palette.muted }}>Due by</p><p className="mt-2 [overflow-wrap:anywhere]">{dueDate}</p></div>
           </div>}
         </div>
         <div className="min-w-0">
-          <p className="mb-4 text-xs text-[#a5a5ab] [overflow-wrap:anywhere]">{title}</p>
-          {form.documentType === 'contract' ? <div className="space-y-3 text-xs leading-relaxed [overflow-wrap:anywhere]"><p className="text-[9px] uppercase tracking-[0.2em] text-[#a5a5ab]">Scope of work</p>{lines.map((line, index) => <p key={index}>{line.description}</p>)}</div> : <table className="w-full table-fixed text-left text-[11px]">
-            <thead className="border-b border-white/10 text-[8px] uppercase tracking-[0.16em] text-[#a5a5ab]">
+          <p className="mb-4 text-xs [overflow-wrap:anywhere]" style={{ color: palette.muted }}>{title}</p>
+          {form.documentType === 'contract' ? <div className="space-y-3 text-xs leading-relaxed [overflow-wrap:anywhere]"><p className="text-[9px] uppercase tracking-[0.2em]" style={{ color: palette.muted }}>Scope of work</p>{lines.map((line, index) => <p key={index}>{line.description}</p>)}</div> : <table className="w-full table-fixed text-left text-[11px]">
+            <thead className="border-b text-[8px] uppercase tracking-[0.16em]" style={{ color: palette.muted, borderColor: palette.divider }}>
               <tr><th className="w-[40%] pb-3 font-normal">Item</th><th className="w-[10%] pb-3 text-right font-normal">Qty</th><th className="w-[25%] pb-3 text-right font-normal">Rate</th><th className="w-[25%] pb-3 text-right font-normal">Amount</th></tr>
             </thead>
-            <tbody className="divide-y divide-white/10">
+            <tbody>
               {lines.map((line, index) => (
-                <tr key={index} className="align-top">
+                <tr key={index} className="align-top border-b" style={{ borderColor: palette.divider }}>
                   <td className="py-4 pr-3 leading-relaxed [overflow-wrap:anywhere]">{line.description || 'Untitled item'}</td>
                   <td className="py-4 text-right tabular-nums [overflow-wrap:anywhere]">{form.documentType === 'invoice' ? line.quantity : '—'}</td>
-                  <td className="py-4 pl-2 text-right tabular-nums text-[#a5a5ab] [overflow-wrap:anywhere]">{form.documentType === 'invoice' ? formatDocumentAmount(line.unitPrice, form.currency) : '—'}</td>
+                  <td className="py-4 pl-2 text-right tabular-nums [overflow-wrap:anywhere]" style={{ color: palette.muted }}>{form.documentType === 'invoice' ? formatDocumentAmount(line.unitPrice, form.currency) : '—'}</td>
                   <td className="py-4 pl-2 text-right tabular-nums [overflow-wrap:anywhere]">{form.documentType === 'invoice' ? formatDocumentAmount(line.total, form.currency) : '—'}</td>
                 </tr>
               ))}
@@ -474,22 +480,22 @@ function DocumentPreview({ gallery, form }: { gallery: Gallery; form: GalleryDoc
           </table>}
         </div>
         {form.documentType === 'invoice' && (
-          <div className="ml-auto grid w-full max-w-[280px] gap-3 text-xs tabular-nums text-[#a5a5ab]">
+          <div className="ml-auto grid w-full max-w-[280px] gap-3 text-xs tabular-nums" style={{ color: palette.muted }}>
             <div className="flex justify-between gap-4"><span>Subtotal</span><span>{formatDocumentAmount(calculation.subtotal, form.currency)}</span></div>
             <div className="flex justify-between gap-4"><span>Discount</span><span>-{formatDocumentAmount(calculation.discount, form.currency, `${form.currency || 'NGN'} 0`)}</span></div>
             <div className="flex justify-between gap-4"><span>Tax {calculation.taxRate ? `(${calculation.taxRate}%)` : ''}</span><span>{formatDocumentAmount(calculation.tax, form.currency, `${form.currency || 'NGN'} 0`)}</span></div>
-            <div className="flex justify-between gap-4 border-t border-[#920110] pt-4 text-base text-[#eeeae5]"><span>Total due</span><span className="font-semibold">{amount}</span></div>
+            <div className="flex justify-between gap-4 border-t border-[#920110] pt-4 text-base" style={{ color: palette.foreground }}><span>Total due</span><span className="font-semibold">{amount}</span></div>
             {Number(form.depositValue) > 0 && <><div className="flex justify-between gap-4"><span>Booking deposit</span><span>{formatDocumentAmount(form.depositType === 'percent' ? Math.round(calculation.total * Number(form.depositValue)) / 100 : Number(form.depositValue), form.currency)}</span></div><p className="text-[11px] leading-relaxed">This deposit is part of the total. Booking is confirmed after the required payment is received and the session date is agreed.</p></>}
             {form.sessionDate && <p>Agreed session: {form.sessionDate}</p>}
             {form.addAgreement && <p>Separate agreement attached when emailed.</p>}
           </div>
         )}
-        <div className="mt-3 border-t border-white/10 pt-5">
-          <p className="text-[9px] uppercase tracking-[0.2em] text-[#a5a5ab]">{form.documentType === 'contract' ? 'Terms' : 'Payment & Terms'}</p>
-          {form.documentType === 'invoice' && <p className="mt-2 text-xs text-[#eeeae5]">Bank transfer / studio confirmation</p>}
-          <p className="mt-3 whitespace-pre-wrap text-xs leading-relaxed text-[#a5a5ab] [overflow-wrap:anywhere]">{terms}</p>
+        <div className="mt-3 border-t pt-5" style={{ borderColor: palette.divider }}>
+          <p className="text-[9px] uppercase tracking-[0.2em]" style={{ color: palette.muted }}>{form.documentType === 'contract' ? 'Terms' : 'Payment & Terms'}</p>
+          {form.documentType === 'invoice' && <p className="mt-2 text-xs">Bank transfer / studio confirmation</p>}
+          <p className="mt-3 whitespace-pre-wrap text-xs leading-relaxed [overflow-wrap:anywhere]" style={{ color: palette.muted }}>{terms}</p>
         </div>
-        <p className="pt-6 text-[9px] uppercase tracking-[0.2em] text-[#a5a5ab]">Thank you for creating with Moyo Ayaworan.<br /><br />Ijabiken Moyosoreoluwa<br />Creative Director, MOYO AYAWORAN</p>
+        <p className="pt-6 text-[9px] uppercase tracking-[0.2em]" style={{ color: palette.muted }}>Thank you for creating with Moyo Ayaworan.<br /><br />Ijabiken Moyosoreoluwa<br />Creative Director, MOYO AYAWORAN</p>
       </div>
     </aside>
   );
@@ -2221,6 +2227,23 @@ export default function AdminPage() {
                                   onChange={(e) => updateGalleryDocumentForm(gal.id, { clientEmail: e.target.value })}
                                 />
                               </div>
+                              <fieldset className="space-y-2">
+                                <legend className={label}>Document appearance</legend>
+                                <div className="grid grid-cols-2 gap-2">
+                                  {(['dark', 'light'] as const).map((theme) => (
+                                    <button
+                                      key={theme}
+                                      type="button"
+                                      aria-pressed={docForm.documentTheme === theme}
+                                      onClick={() => updateGalleryDocumentForm(gal.id, { documentTheme: theme })}
+                                      className={`min-h-11 border px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] transition-colors ${docForm.documentTheme === theme ? 'border-accent bg-accent text-white' : 'border-white/15 text-white/60 hover:border-white/35'}`}
+                                    >
+                                      {theme} document
+                                    </button>
+                                  ))}
+                                </div>
+                                <p className="text-xs text-white/45">Applies to the invoice and every receipt created from it.</p>
+                              </fieldset>
                               <input
                                 className={inputClass}
                                 maxLength={140}
