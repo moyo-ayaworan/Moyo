@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import EniyanBooking from '@/components/EniyanBooking';
+import BookingAccess from '@/components/BookingAccess';
 import { useEniyanBooking } from '@/lib/useEniyanBooking';
 import { wantsEniyanBooking } from '@/lib/bookingRequest';
 import { ENIYAN_ROUTES as ROUTE_LABELS, ENIYAN_MESSAGE_LIMIT, getEniyanLinks } from '@/lib/eniyanNavigation';
@@ -17,6 +18,7 @@ import {
   MessageCircle,
   Palette,
   RotateCcw,
+  Search,
   Send,
   Images,
   X,
@@ -85,7 +87,7 @@ const ENIYAN_COPY: Record<LanguageCode, {
     placeholder: 'Ask Eniyan...',
     thinking: 'Thinking',
     greeting: "Mo ki o. I'm Eniyan, your guide around Ijabiken Moyo's world. Tell me what you want to do and I'll help you find the right page or next step.",
-    starterPrompts: ['Help me choose a service', 'Book a photography session', 'Commission an artwork', 'Find my client gallery'],
+    starterPrompts: ['Help me choose a service', 'Book a photography session', 'Track my booking status', 'Commission an artwork', 'Find my client gallery'],
     features: {
       portfolio: { label: 'See', title: 'Photography work', action: 'Explore' },
       bookings: { label: 'Book', title: 'Start a session', action: 'Inquire' },
@@ -241,6 +243,7 @@ export default function EniyanChat() {
   const booking = useEniyanBooking();
   const [failedMessage, setFailedMessage] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [trackingOpen, setTrackingOpen] = useState(false);
   const [viewport, setViewport] = useState<{ height: number; inset: number } | null>(null);
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -288,6 +291,11 @@ export default function EniyanChat() {
     if (trimmed.length > ENIYAN_MESSAGE_LIMIT) { setError(`Please keep messages under ${ENIYAN_MESSAGE_LIMIT} characters.`); return; }
     if (wantsEniyanBooking(trimmed)) {
       setInput(''); setError(''); setFailedMessage(null); setIsOpen(true); booking.start();
+      return;
+    }
+    if (/\b(track|status|find|recover|lost)\b.{0,45}\b(booking|appointment|session|link)\b|\b(booking|appointment)\b.{0,30}\b(status|link)\b/i.test(trimmed)) {
+      setInput(''); setError(''); setFailedMessage(null); setIsOpen(true); setTrackingOpen(true);
+      setMessages(current => [...current, { id: createId(), role: 'user', content: trimmed }, { id: createId(), role: 'assistant', mode: 'guided', content: 'I can help you safely recover your private booking-status link. Enter the booking reference and the same email used to book; I’ll send the link there.' }]);
       return;
     }
 
@@ -345,6 +353,7 @@ export default function EniyanChat() {
   function resetChat() {
     if (isSending || booking.locked) return;
     booking.cancel();
+    setTrackingOpen(false);
     setMessages([{ id: 'welcome', role: 'assistant', content: copy.greeting }]);
     setInput('');
     setError('');
@@ -425,7 +434,11 @@ export default function EniyanChat() {
 
             <div className="grid min-h-0 min-w-0 flex-1 grid-rows-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_280px]">
               <section className="flex min-h-0 min-w-0 flex-col">
-                {booking.active ? <EniyanBooking flow={booking} isLight={isLight} /> : <>
+                {booking.active ? <EniyanBooking flow={booking} isLight={isLight} /> : trackingOpen ? <section className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+                  <button type="button" onClick={() => setTrackingOpen(false)} className="mb-4 min-h-11 rounded-lg border border-current/25 px-3 py-2 text-xs">Back to Eniyan</button>
+                  <BookingAccess compact isLight={isLight} />
+                  <p className="mt-4 text-[11px] leading-relaxed opacity-60">For your privacy, Eniyan never displays booking details in chat and only sends access to the email attached to the booking.</p>
+                </section> : <>
                 <div ref={scrollRef} role="log" aria-label="Conversation with Eniyan" aria-live="polite" aria-relevant="additions" className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-3 py-4 sm:space-y-5 sm:px-5 sm:py-5">
                   {messages.map((message) => {
                     const links = message.role === 'assistant' ? getEniyanLinks(message.content) : [];
@@ -497,7 +510,10 @@ export default function EniyanChat() {
                 </div>
 
                 <div className={`shrink-0 border-t px-3 py-3 sm:px-5 sm:py-4 ${isLight ? 'border-black/10' : 'border-white/10'}`}>
-                  <button type="button" disabled={isSending} onClick={() => { setInput(''); booking.start(); }} className="mb-2 inline-flex min-h-11 items-center gap-2 rounded-lg border border-current/25 px-3 text-xs font-semibold disabled:opacity-40"><CalendarCheck className="size-4" aria-hidden="true" />Book a session with Eniyan</button>
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    <button type="button" disabled={isSending} onClick={() => { setInput(''); setTrackingOpen(false); booking.start(); }} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-current/25 px-3 text-xs font-semibold disabled:opacity-40"><CalendarCheck className="size-4" aria-hidden="true" />Book a session</button>
+                    <button type="button" disabled={isSending} onClick={() => { setInput(''); setTrackingOpen(true); }} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-current/25 px-3 text-xs font-semibold disabled:opacity-40"><Search className="size-4" aria-hidden="true" />Track my booking</button>
+                  </div>
                   <div className={`${shortViewport ? 'hidden' : 'flex'} mb-3 max-w-full gap-2 overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch]`}>
                     {copy.starterPrompts.map((prompt, index) => (
                       <button

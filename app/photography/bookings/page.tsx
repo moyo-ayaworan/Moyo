@@ -8,6 +8,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { useTranslate } from '@/lib/translations';
 import { useProfile } from '@/context/ProfileContext';
 import BookingForm from '@/components/BookingForm';
+import BookingAccess from '@/components/BookingAccess';
 
 export default function BookingsPage() {
     const { language } = useLanguage();
@@ -36,6 +37,10 @@ export default function BookingsPage() {
                     </div>
 
                     <BookingForm embedded />
+
+                    <div className="mx-auto max-w-3xl pt-4">
+                        <BookingAccess />
+                    </div>
                 </motion.div>
             </div>
             <Footer />
