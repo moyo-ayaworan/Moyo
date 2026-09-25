@@ -32,7 +32,6 @@ export default function ArtShopPage() {
     const [collection, setCollection] = useState<Collection | null>(null);
     const [error, setError] = useState(false);
     const [attempt, setAttempt] = useState(0);
-    const email = collection?.email || 'ijabikenm@gmail.com';
 
     useEffect(() => {
         const controller = new AbortController();
@@ -55,13 +54,7 @@ export default function ArtShopPage() {
         }
     }, [collection]);
 
-    const inquiryUrl = (item?: ShopItem, kind?: string) => {
-        const subject = item ? `Shop inquiry: ${item.title}` : 'Shop / private viewing inquiry';
-        const body = item
-            ? `Hello Moyo,\n\nI would like to order ${item.title} (${kind}, reference ${item.id}).\n${item.price ? `Listed price: ${item.price}\n` : ''}\nPlease confirm availability, payment options, and delivery details.\n\nThank you.`
-            : 'Hello Moyo,\n\nI would like to ask about available works or arrange a private viewing.\n\nThank you.';
-        return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    };
+    const inquiryUrl = (item?: ShopItem) => item ? `/art/commissions?artworkId=${item.id}&title=${encodeURIComponent(item.title)}` : '/art/commissions?type=private-viewing';
 
     const sections = collection ? [
         { title: 'Available prints', kind: 'Print', items: collection.artworks, note: 'Print sizes, pricing, and delivery are confirmed personally by the studio.' },
@@ -123,10 +116,10 @@ export default function ArtShopPage() {
                                             {(item.details || item.medium || item.dimensions) && <p className="mt-4 text-sm leading-relaxed text-foreground/70">{translateText(item.details || [item.medium, item.dimensions].filter(Boolean).join(' / '))}</p>}
                                             {item.description && <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-foreground/65">{translateText(item.description)}</p>}
                                             <div className="mt-auto w-full pt-8">
-                                                <a href={inquiryUrl(item, section.kind)} aria-label={`${translateText('Inquire to order')}: ${item.title}`} className="inline-flex min-h-12 w-full items-center justify-between gap-3 border border-foreground bg-foreground px-5 py-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-background transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent">
+                                                <Link href={inquiryUrl(item)} aria-label={`${translateText('Inquire to order')}: ${item.title}`} className="inline-flex min-h-12 w-full items-center justify-between gap-3 border border-foreground bg-foreground px-5 py-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-background transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent">
                                                     {translateText('Inquire to order')} <ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden="true" />
-                                                </a>
-                                                <p className="mt-3 text-xs leading-relaxed text-foreground/60">{translateText('Opens your email app. The studio will confirm payment and delivery before you order.')}</p>
+                                                </Link>
+                                                <p className="mt-3 text-xs leading-relaxed text-foreground/60">{translateText('Creates a private collector request. The studio will confirm availability, payment and delivery.')}</p>
                                             </div>
                                         </div>
                                     </article>
@@ -139,7 +132,7 @@ export default function ArtShopPage() {
                 <section className="mt-20 border-t border-foreground/15 pt-10 md:mt-28" aria-label={translateText('Contact the studio')}>
                     <h2 className="font-heading text-3xl italic text-foreground">{translateText('Something in mind?')}</h2>
                     <p className="mt-4 max-w-xl text-sm leading-relaxed text-foreground/65">{translateText('For print requests, private viewings, or questions about an order, speak with the studio.')}</p>
-                    <a href={inquiryUrl()} className="mt-5 inline-flex min-h-11 max-w-full items-center gap-3 text-sm text-foreground underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"><Mail className="h-4 w-4 shrink-0" aria-hidden="true" /><span className="break-all">{email}</span></a>
+                    <Link href={inquiryUrl()} className="mt-5 inline-flex min-h-11 max-w-full items-center gap-3 text-sm text-foreground underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"><Mail className="h-4 w-4 shrink-0" aria-hidden="true" /><span>Start a private collector inquiry</span></Link>
                 </section>
             </div>
             <Footer />

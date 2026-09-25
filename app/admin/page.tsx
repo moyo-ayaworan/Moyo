@@ -42,6 +42,7 @@ type Artwork = {
   description: string;
   is_featured: boolean;
   is_available: boolean;
+  availability_status: string;
 };
 
 type ArtworkEditForm = {
@@ -55,6 +56,7 @@ type ArtworkEditForm = {
   description: string;
   isFeatured: boolean;
   isAvailable: boolean;
+  availabilityStatus: string;
 };
 
 const createArtworkEditForm = (artwork: Artwork): ArtworkEditForm => ({
@@ -68,6 +70,7 @@ const createArtworkEditForm = (artwork: Artwork): ArtworkEditForm => ({
   description: artwork.description || '',
   isFeatured: artwork.is_featured,
   isAvailable: artwork.is_available,
+  availabilityStatus: artwork.availability_status || (artwork.is_available ? 'available' : 'archive'),
 });
 
 const createEmptyArtworkEditForm = (): ArtworkEditForm => ({
@@ -81,6 +84,7 @@ const createEmptyArtworkEditForm = (): ArtworkEditForm => ({
   description: '',
   isFeatured: false,
   isAvailable: false,
+  availabilityStatus: 'archive',
 });
 
 type DigitalProduct = {
@@ -185,6 +189,7 @@ type Content = {
 type Contact = { phone: string; email: string; address: string };
 type Social = { id: number; platform: string; url: string; icon?: string };
 type Order = { id: number; items: unknown[]; total_price: number; status: string; customer_email: string };
+type ArtInquiry = { id: number; inquiry_type: string; artwork_id: number | null; artwork_title?: string; name: string; email: string; phone: string; details: Record<string, string>; status: string; manage_token: string; gallery_id: number | null; client_notes: string; internal_notes: string; created_at: string };
 type Booking = {
   id: number;
   name: string;
@@ -720,6 +725,8 @@ export default function AdminPage() {
 
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [artInquiries, setArtInquiries] = useState<ArtInquiry[]>([]);
+  const [artInquiryEdits, setArtInquiryEdits] = useState<Record<number, { status: string; galleryId: string; clientNotes: string; internalNotes: string }>>({});
   const [digitalProducts, setDigitalProducts] = useState<DigitalProduct[]>([]);
   const [documentFeedback, setDocumentFeedback] = useState<Record<number, { text: string; type: 'success' | 'error' }>>({});
   const documentSaveSessions = useRef(new Map<number, ReturnType<typeof createDocumentSaveSession>>());
@@ -905,9 +912,10 @@ export default function AdminPage() {
       return;
     }
     try {
-      const [artRes, bookingRes, digitalRes, galRes, documentRes, contentRes, contactRes, socialRes, orderRes] = await Promise.all([
+      const [artRes, bookingRes, artInquiryRes, digitalRes, galRes, documentRes, contentRes, contactRes, socialRes, orderRes] = await Promise.all([
         fetch('/api/artworks'),
         fetch('/api/bookings?view=admin', { headers, credentials: 'same-origin' }),
+        fetch('/api/art-inquiries', { headers, credentials: 'same-origin' }),
         fetch('/api/digital-products'),
         fetch('/api/galleries', { headers, credentials: 'same-origin' }),
         fetch('/api/galleries/documents', { headers, credentials: 'same-origin' }),
@@ -920,6 +928,7 @@ export default function AdminPage() {
 
       const artData = await readJsonResponse<{ artworks?: Artwork[] }>(artRes, 'Failed to load artworks');
       const bookingData = await readJsonResponse<{ bookings?: Booking[] }>(bookingRes, 'Failed to load bookings');
+      const artInquiryData = await readJsonResponse<{ inquiries?: ArtInquiry[] }>(artInquiryRes, 'Failed to load art inquiries');
       const digitalData = await readJsonResponse<{ products?: DigitalProduct[] }>(digitalRes, 'Failed to load digital products');
       const galData = await readJsonResponse<{ galleries?: Gallery[] }>(galRes, 'Failed to load galleries');
       const documentData = await readJsonResponse<{ documents?: GalleryDocument[] }>(documentRes, 'Failed to load documents');
@@ -931,6 +940,8 @@ export default function AdminPage() {
 
       setArtworks(artData.artworks || []);
       setBookings(bookingData.bookings || []);
+      setArtInquiries(artInquiryData.inquiries || []);
+      setArtInquiryEdits((artInquiryData.inquiries || []).reduce((acc, inquiry) => { acc[inquiry.id] = { status: inquiry.status, galleryId: inquiry.gallery_id ? String(inquiry.gallery_id) : '', clientNotes: inquiry.client_notes || '', internalNotes: inquiry.internal_notes || '' }; return acc; }, {} as Record<number, { status: string; galleryId: string; clientNotes: string; internalNotes: string }>));
       setEditingBookings(
         (bookingData.bookings || []).reduce((acc: Record<number, BookingEditForm>, booking: Booking) => {
           acc[booking.id] = createBookingEditForm(booking);
@@ -1409,6 +1420,7 @@ export default function AdminPage() {
         description: draft.description,
         isFeatured: draft.isFeatured,
         isAvailable: draft.isAvailable,
+        availabilityStatus: draft.availabilityStatus,
       }),
     });
     const data = await res.json();
@@ -2170,6 +2182,15 @@ export default function AdminPage() {
     setMessage({ text: 'Booking updated', type: 'success' });
   };
 
+  const saveArtInquiry = async (inquiry: ArtInquiry) => {
+    const draft = artInquiryEdits[inquiry.id]; if (!draft) return;
+    const res = await fetch('/api/art-inquiries', { method: 'PUT', headers, credentials: 'same-origin', body: JSON.stringify({ id: inquiry.id, status: draft.status, galleryId: draft.galleryId ? Number(draft.galleryId) : null, clientNotes: draft.clientNotes, internalNotes: draft.internalNotes }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.inquiry) return setMessage({ text: data.error || 'Unable to update art inquiry', type: 'error' });
+    setArtInquiries(current => current.map(item => item.id === inquiry.id ? { ...item, ...data.inquiry } : item));
+    setMessage({ text: `ART-${inquiry.id} updated`, type: 'success' });
+  };
+
   const copyBookingPortal = async (booking: Booking) => {
     try {
       await navigator.clipboard.writeText(getBookingPortalUrl(booking.manage_token));
@@ -2905,6 +2926,18 @@ export default function AdminPage() {
           >
           <section className="grid min-w-0 gap-8 lg:grid-cols-2 lg:items-start lg:gap-12">
             <div className={sectionCard}>
+              <div className="space-y-4 border-b border-white/10 pb-7">
+                <div><p className="text-[10px] uppercase tracking-[0.3em] text-accent">Collector workflow</p><h2 className="mt-2 font-heading text-2xl italic text-white">Art inquiries & commissions</h2></div>
+                {artInquiries.length === 0 && <p className="text-sm text-white/40">No collector inquiries yet.</p>}
+                {artInquiries.map(inquiry => { const draft = artInquiryEdits[inquiry.id]; if (!draft) return null; return <div key={inquiry.id} className="space-y-3 border border-white/10 bg-black/20 p-4">
+                  <div className="flex flex-wrap justify-between gap-3"><div><p className="text-white">{inquiry.name} · ART-{inquiry.id}</p><p className="text-xs text-white/45">{inquiry.artwork_title || inquiry.inquiry_type} · {inquiry.email} {inquiry.phone}</p></div><a target="_blank" rel="noreferrer" href={`/collector/${inquiry.manage_token}`} className="text-xs text-accent underline">Open portal</a></div>
+                  <p className="text-xs leading-relaxed text-white/55">{Object.entries(inquiry.details || {}).filter(([, value]) => value).map(([key, value]) => `${key}: ${value}`).join(' · ')}</p>
+                  <div className="grid gap-3 sm:grid-cols-2"><select className={inputClass} value={draft.status} onChange={e => setArtInquiryEdits(current => ({ ...current, [inquiry.id]: { ...draft, status: e.target.value } }))}>{['received','consultation','quoted','reserved','deposit-paid','in-progress','ready','delivered','closed'].map(status => <option key={status} value={status}>{status.replace('-', ' ')}</option>)}</select><select className={inputClass} value={draft.galleryId} onChange={e => setArtInquiryEdits(current => ({ ...current, [inquiry.id]: { ...draft, galleryId: e.target.value } }))}><option value="">No financial/gallery record</option>{galleries.map(gallery => <option key={gallery.id} value={gallery.id}>{gallery.client_name} / {gallery.slug}</option>)}</select></div>
+                  <textarea className={inputClass} rows={2} placeholder="Collector-visible progress, shipping, framing or delivery update" value={draft.clientNotes} onChange={e => setArtInquiryEdits(current => ({ ...current, [inquiry.id]: { ...draft, clientNotes: e.target.value } }))} />
+                  <textarea className={inputClass} rows={2} placeholder="Private studio notes" value={draft.internalNotes} onChange={e => setArtInquiryEdits(current => ({ ...current, [inquiry.id]: { ...draft, internalNotes: e.target.value } }))} />
+                  <button type="button" onClick={() => saveArtInquiry(inquiry)} className="w-full bg-white px-4 py-3 text-xs font-semibold uppercase tracking-wider text-black">Save collector record</button>
+                </div>; })}
+              </div>
               <h2 className="text-2xl font-heading text-white italic">Artwork</h2>
               <form className="space-y-4" onSubmit={handleArtworkSubmit}>
                 <div className="space-y-2">
@@ -3070,7 +3103,7 @@ export default function AdminPage() {
                       <div className="min-w-0 flex-1">
                         <p className="text-white font-heading italic">{art.title}</p>
                         <p className="text-[10px] text-white/40 uppercase tracking-widest">
-                          {[art.category, art.year].filter(Boolean).join(' / ')}
+                          {[art.category, art.year, art.availability_status].filter(Boolean).join(' / ')}
                         </p>
                         {(art.medium || art.dimensions) && (
                           <p className="mt-1 text-xs text-white/45">
@@ -3165,6 +3198,7 @@ export default function AdminPage() {
                             />
                           </div>
                         </div>
+                        <div className="space-y-2"><label className={label}>Collector availability</label><select className={inputClass} value={draft.availabilityStatus} onChange={e => updateArtworkDraft(art.id, { availabilityStatus: e.target.value })}>{['available', 'reserved', 'sold', 'commissioned', 'exhibition', 'archive'].map(status => <option key={status} value={status}>{status}</option>)}</select></div>
                         <div className="space-y-2">
                           <label className={label}>Archive Note</label>
                           <textarea

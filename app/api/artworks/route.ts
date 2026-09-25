@@ -13,7 +13,8 @@ type ArtworkUpdateKey =
   | 'dimensions'
   | 'description'
   | 'isFeatured'
-  | 'isAvailable';
+  | 'isAvailable'
+  | 'availabilityStatus';
 
 type ArtworkPayload = {
   title?: unknown;
@@ -26,6 +27,7 @@ type ArtworkPayload = {
   description?: unknown;
   isFeatured?: unknown;
   isAvailable?: unknown;
+  availabilityStatus?: unknown;
 };
 
 function normalizeArtworkPayload(body: ArtworkPayload) {
@@ -40,6 +42,7 @@ function normalizeArtworkPayload(body: ArtworkPayload) {
     description: String(body.description || '').trim(),
     isFeatured: body.isFeatured ?? false,
     isAvailable: body.isAvailable ?? false,
+    availabilityStatus: ['available', 'reserved', 'sold', 'commissioned', 'exhibition', 'archive'].includes(String(body.availabilityStatus)) ? String(body.availabilityStatus) : body.isAvailable ? 'available' : 'archive',
   };
 }
 
@@ -51,8 +54,8 @@ async function createArtwork(body: ArtworkPayload) {
 
   const creationKey = createHash('sha256').update(JSON.stringify(artwork)).digest('hex');
   const { rows } = await query(
-    `INSERT INTO artworks (title, price, image, category, year, medium, dimensions, description, is_featured, is_available, creation_key)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+    `INSERT INTO artworks (title, price, image, category, year, medium, dimensions, description, is_featured, is_available, availability_status, creation_key)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
      ON CONFLICT (creation_key) DO UPDATE SET creation_key = EXCLUDED.creation_key
      RETURNING *`,
     [
@@ -66,6 +69,7 @@ async function createArtwork(body: ArtworkPayload) {
       artwork.description,
       artwork.isFeatured,
       artwork.isAvailable,
+      artwork.availabilityStatus,
       creationKey,
     ]
   );
@@ -115,9 +119,9 @@ export async function PUT(req: NextRequest) {
   const fields: string[] = [];
   const values: unknown[] = [];
   let idx = 1;
-  for (const key of ['title', 'price', 'image', 'category', 'year', 'medium', 'dimensions', 'description', 'isFeatured', 'isAvailable'] satisfies ArtworkUpdateKey[]) {
+  for (const key of ['title', 'price', 'image', 'category', 'year', 'medium', 'dimensions', 'description', 'isFeatured', 'isAvailable', 'availabilityStatus'] satisfies ArtworkUpdateKey[]) {
     if (key in updates) {
-      const col = key === 'isFeatured' ? 'is_featured' : key === 'isAvailable' ? 'is_available' : key;
+      const col = key === 'isFeatured' ? 'is_featured' : key === 'isAvailable' ? 'is_available' : key === 'availabilityStatus' ? 'availability_status' : key;
       fields.push(`${col} = $${idx}`);
       values.push(updates[key]);
       idx++;

@@ -78,6 +78,25 @@ async function initializeTables(connection: PoolClient) {
     ALTER TABLE artworks ADD COLUMN IF NOT EXISTS dimensions TEXT DEFAULT '';
     ALTER TABLE artworks ADD COLUMN IF NOT EXISTS description TEXT DEFAULT '';
     ALTER TABLE artworks ALTER COLUMN is_available SET DEFAULT FALSE;
+    ALTER TABLE artworks ADD COLUMN IF NOT EXISTS availability_status TEXT DEFAULT 'archive';
+    UPDATE artworks SET availability_status = 'available' WHERE is_available = TRUE AND availability_status = 'archive';
+
+    CREATE TABLE IF NOT EXISTS art_inquiries (
+      id SERIAL PRIMARY KEY,
+      inquiry_type TEXT NOT NULL DEFAULT 'commission',
+      artwork_id INTEGER REFERENCES artworks(id) ON DELETE SET NULL,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      phone TEXT DEFAULT '',
+      details JSONB NOT NULL DEFAULT '{}'::jsonb,
+      status TEXT NOT NULL DEFAULT 'received',
+      manage_token TEXT UNIQUE NOT NULL,
+      gallery_id INTEGER,
+      client_notes TEXT DEFAULT '',
+      internal_notes TEXT DEFAULT '',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
 
     CREATE TABLE IF NOT EXISTS galleries (
       id SERIAL PRIMARY KEY,

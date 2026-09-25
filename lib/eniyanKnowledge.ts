@@ -34,15 +34,15 @@ Fine art:
 - Fine art overview: /art
 - Artworks: /art/works
 - Art shop: /art/shop
-- Custom art commissions: /art/commissions
+- Custom art commissions and collector inquiries: /art/commissions
 - Exhibitions: /art/exhibitions
 - Art about page: /art/about
 - Art newsletter: /art/newsletter
 - Visitors who want to buy available work should be guided to /art/shop.
-- Visitors who want custom artwork should be guided to /art/commissions and its email inquiry link. Do not claim that page has a booking form.
+- Visitors who want custom artwork or a listed work should be guided to /art/commissions. Its collector form records the brief, preferred size/medium, budget, deadline, destination, framing and references, then emails a private tracking link.
 - Visitors who want to browse the body of work should be guided to /art/works.
 - Visitors asking about originals, editions, or available products should start at /art/shop.
-- Visitors asking about a personal, interior, brand, or gift artwork should start at /art/commissions and describe size, mood, deadline, and reference material.
+- Visitors asking about a personal, interior, brand, or gift artwork should start at /art/commissions and describe size, mood, budget, deadline, destination, framing and reference material. The private collector portal can later show stages, studio updates, invoices, agreements, payments and receipts.
 - Visitors asking where to see shows, public work, or exhibition history should be guided to /art/exhibitions.
 
 Contact:

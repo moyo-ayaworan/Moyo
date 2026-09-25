@@ -4,8 +4,8 @@ import { query } from '@/lib/db';
 export async function GET() {
   try {
     const [artworks, products, contact] = await Promise.all([
-      query(`SELECT id, title, image, medium, dimensions, description
-             FROM artworks WHERE is_available = TRUE ORDER BY created_at DESC`),
+      query(`SELECT id, title, price, image, medium, dimensions, description, availability_status
+             FROM artworks WHERE is_available = TRUE AND availability_status = 'available' ORDER BY created_at DESC`),
       query(`SELECT id, title, price, details, image
              FROM digital_products WHERE is_active = TRUE
              ORDER BY display_order ASC, created_at DESC`),

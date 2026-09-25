@@ -23,6 +23,7 @@ type Artwork = {
     description?: string;
     is_featured?: boolean;
     is_available?: boolean;
+    availability_status?: string;
 };
 
 function isSvgImage(src: string) {
@@ -71,6 +72,7 @@ export default function WorksPage() {
         { label: 'Medium', value: work.medium },
         { label: 'Dimensions', value: work.dimensions },
         { label: 'Edition / Print', value: work.is_available ? 'Print option available by artist discretion' : '' },
+        { label: 'Collector status', value: work.availability_status ? work.availability_status.replace('-', ' ') : 'Archive' },
     ].filter((item) => item.value);
 
     return (
@@ -161,6 +163,7 @@ export default function WorksPage() {
                                                     {translateText(work.year)}
                                                 </p>
                                             )}
+                                            <p className="text-[10px] uppercase tracking-[0.28em] text-accent/70">{translateText((work.availability_status || 'archive').replace('-', ' '))}</p>
                                         </div>
                                     </figcaption>
                                 </figure>

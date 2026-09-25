@@ -8,6 +8,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { useTranslate } from '@/lib/translations';
 import GlareHover from '@/components/GlareHover';
 import SeoImage from '@/components/SeoImage';
+import ArtInquiryForm from '@/components/ArtInquiryForm';
 
 export default function ArtCommissionsPage() {
     const { language } = useLanguage();
@@ -94,12 +95,11 @@ export default function ArtCommissionsPage() {
                         glareSize={170}
                         transitionDuration={780}
                         className="glass"
-                        contentClassName="p-12 text-center space-y-12 md:p-20"
+                        contentClassName="p-6 text-center space-y-10 sm:p-10 md:p-14"
                     >
                         <h2 className="text-3xl font-heading text-white italic">{t('commissionsPage.startConversation')}</h2>
-                        <button className="bg-white text-black px-12 py-5 text-[10px] tracking-[0.5em] uppercase font-bold hover:bg-accent transition-colors">
-                            {t('commissionsPage.inquireNow')}
-                        </button>
+                        <p className="mx-auto max-w-xl text-sm leading-relaxed text-white/50">Tell the studio about the work, space, budget, deadline, and delivery destination. You will receive a private tracking link after submitting.</p>
+                        <ArtInquiryForm />
                     </GlareHover>
                 </motion.div>
             </div>

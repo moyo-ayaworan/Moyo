@@ -113,7 +113,7 @@ function buildFallbackReply(messages: unknown, page?: PageContext) {
     return `Open ${ENIYAN_GUIDED_LINKS.clientGallery} and enter your access details there, not in this chat. Preview your photographs and approve your favourites. Finished files are available once the studio has uploaded them and verified payment. Lost your access details? Contact ijabikenm@gmail.com.`;
   }
   if (/\b(commission|custom|gift|painting|drawn|drawing)\b/.test(latest)) {
-    return `For a custom artwork, visit ${ENIYAN_GUIDED_LINKS.artCommissions} and use the email inquiry link. Share the size, mood, timeline, budget range, and references. The studio will confirm the scope and quote.`;
+    return `For a custom artwork, visit ${ENIYAN_GUIDED_LINKS.artCommissions}. The collector form records size, medium, budget, story, deadline, delivery destination, framing and references, then emails a private tracking link. The studio confirms scope, price, shipping and timing.`;
   }
   if (/\b(newsletter|updates|subscribe)\b/.test(latest)) {
     return `Join photography updates at ${ENIYAN_GUIDED_LINKS.photographyNewsletter} or fine art updates at ${ENIYAN_GUIDED_LINKS.artNewsletter}.`;

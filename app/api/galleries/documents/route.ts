@@ -507,6 +507,8 @@ export async function GET(req: NextRequest) {
          JOIN galleries g ON g.id = d.gallery_id
          WHERE d.id = $2 AND EXISTS (
            SELECT 1 FROM bookings b WHERE b.manage_token = $1 AND b.gallery_id = d.gallery_id
+           UNION ALL
+           SELECT 1 FROM art_inquiries i WHERE i.manage_token = $1 AND i.gallery_id = d.gallery_id
          )
          LIMIT 1`,
         [token, id]
