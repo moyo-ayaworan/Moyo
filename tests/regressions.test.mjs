@@ -41,7 +41,7 @@ function load(file, mocks = {}, globals = {}) {
   const compiledModule = { exports: {} };
   vm.runInNewContext(source, {
     module: compiledModule, exports: compiledModule.exports,
-    require: (name) => name in mocks ? mocks[name] : (name === '@/lib/documentPayments' || name === './documentPayments') ? load('lib/documentPayments.ts') : name === '@/lib/bookingRates' ? load('lib/bookingRates.ts') : requireDependency(name),
+    require: (name) => name in mocks ? mocks[name] : (name === '@/lib/documentPayments' || name === './documentPayments') ? load('lib/documentPayments.ts') : (name === '@/lib/bookingRates' || name === './bookingRates') ? load('lib/bookingRates.ts') : requireDependency(name),
     process: { cwd: () => process.cwd(), env: { DATABASE_URL: 'postgres://localhost/test', ADMIN_KEY: 'test-key', SMTP_USER: 'test@example.test', SMTP_PASS: 'test' } },
     console: { error() {} }, URL, Date, Buffer, AbortSignal, ...globals,
   });
@@ -54,6 +54,7 @@ const next = { NextResponse: class {
 } };
 const dates = load('lib/bookingDates.ts');
 const bookingRates = load('lib/bookingRates.ts');
+const bookingFinance = load('lib/bookingFinance.ts');
 const bookingRequest = load('lib/bookingRequest.ts', { '@/lib/bookingDates': dates });
 const request = (body) => ({ json: async () => body, nextUrl: new URL('https://example.test/api/bookings') });
 
@@ -77,6 +78,23 @@ test('booking rates calculate only published prices and flag variable costs for 
   const travel = bookingRates.calculateBookingEstimate('family-two', { locationType: 'outside-lagos', locationAddress: 'Abuja' });
   assert.equal(travel.estimatedTotal, 100000);
   assert.ok(travel.quoteReasons.includes('location and travel'));
+});
+
+test('legacy booking finance follows its linked invoice, deposits and completed payments', () => {
+  const finance = bookingFinance.getBookingFinance(
+    { service: 'portrait', package_id: '', estimated_total: 0 },
+    [{ document_type: 'invoice', amount: 250000, currency: 'NGN', created_at: '2026-09-24', billing_details: { depositAmount: 100000 }, payments: [{ amount: 100000 }] }]
+  );
+  assert.equal(finance.sessionValue, 250000);
+  assert.equal(finance.invoiceTotal, 250000);
+  assert.equal(finance.depositRequired, 100000);
+  assert.equal(finance.paid, 100000);
+  assert.equal(finance.balance, 150000);
+  assert.equal(finance.fullyPaid, false);
+  const paid = bookingFinance.getBookingFinance({ service: 'portrait' }, [{ document_type: 'invoice', amount: 50000, paid_at: '2026-09-24' }]);
+  assert.equal(paid.paid, 50000);
+  assert.equal(paid.balance, 0);
+  assert.equal(paid.fullyPaid, true);
 });
 
 test('saved bookings succeed even when confirmation delivery fails', async () => {

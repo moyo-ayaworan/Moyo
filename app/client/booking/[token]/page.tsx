@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { CalendarDays, CheckCircle2, Clock, CreditCard, Download, FileText, ImageIcon, Mail, RefreshCw } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { getBookingFinance } from '@/lib/bookingFinance';
+import { getBookingPackage } from '@/lib/bookingRates';
 
 type Booking = {
   id: number;
@@ -41,7 +43,7 @@ type PortalDocument = {
   due_date: string;
   sent_at: string | null;
   paid_at: string | null;
-  billing_details?: { agreementScope?: string } | null;
+  billing_details?: { agreementScope?: string; depositAmount?: number } | null;
   payments?: Array<{ id: string; amount: number; receivedAt: string; balance: number }>;
   created_at: string;
 };
@@ -88,6 +90,7 @@ export default function ClientBookingPortalPage() {
   const [gallery, setGallery] = useState<PortalGallery | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const finance = useMemo(() => booking ? getBookingFinance(booking, documents) : null, [booking, documents]);
 
   const timeline = useMemo(() => {
     const status = booking?.status || 'pending';
@@ -207,8 +210,8 @@ export default function ClientBookingPortalPage() {
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="border border-white/10 bg-white/[0.025] p-4">
                     <p className="text-[10px] uppercase tracking-[0.22em] text-white/35">Package & estimate</p>
-                    <p className="mt-2 text-white">{booking.package_id || booking.service}</p>
-                    <p className="mt-1 text-sm text-accent">₦{Number(booking.estimated_total || 0).toLocaleString('en-NG')}{booking.quote_required ? ' + final quote' : ''}</p>
+                    <p className="mt-2 text-white">{getBookingPackage(booking.package_id)?.label || booking.package_id || booking.service}</p>
+                    <p className="mt-1 text-sm text-accent">{finance && finance.sessionValue > 0 ? `${finance.currency === 'NGN' ? '₦' : `${finance.currency} `}${finance.sessionValue.toLocaleString('en-NG')}` : 'Price not recorded'}{booking.quote_required ? ' + final quote' : ''}</p>
                     {booking.quote_required && <p className="mt-2 text-xs leading-relaxed text-white/45">Variable travel or custom additions are confirmed by the studio before payment.</p>}
                   </div>
                   <div className="border border-white/10 bg-white/[0.025] p-4">
@@ -216,6 +219,10 @@ export default function ClientBookingPortalPage() {
                     <p className="mt-2 text-white">{booking.name}</p>
                   </div>
                 </div>
+
+                {finance?.hasInvoice && <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  {([['Invoiced', finance.invoiceTotal], ['Deposit', finance.depositRequired], ['Paid', finance.paid], ['Balance', finance.balance]] as const).map(([label, value]) => <div key={label} className="border border-white/10 bg-white/[0.025] p-4"><p className="text-[10px] uppercase tracking-[0.2em] text-white/35">{label}</p><p className={`mt-2 text-sm ${label === 'Paid' && value > 0 ? 'text-green-300' : label === 'Balance' && value > 0 ? 'text-accent' : 'text-white'}`}>{finance.currency === 'NGN' ? '₦' : `${finance.currency} `}{value.toLocaleString('en-NG')}</p></div>)}
+                </div>}
 
                 <div className="border border-white/10 bg-white/[0.025] p-4">
                   <p className="text-[10px] uppercase tracking-[0.22em] text-white/35">Project brief</p>

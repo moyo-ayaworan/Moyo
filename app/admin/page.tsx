@@ -2,6 +2,8 @@
 import DocumentManager, { type ManagedDocument } from '@/components/admin/DocumentManager';
 import BillingOptions from '@/components/admin/BillingOptions';
 import { normalizeBilling } from '@/lib/documentPayments';
+import { getBookingFinance } from '@/lib/bookingFinance';
+import { getBookingPackage } from '@/lib/bookingRates';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -2725,6 +2727,8 @@ export default function AdminPage() {
               {bookings.map((booking) => {
                 const draft = editingBookings[booking.id] || createBookingEditForm(booking);
                 const portalUrl = getBookingPortalUrl(booking.manage_token);
+                const finance = getBookingFinance(booking, booking.gallery_id ? galleryDocuments[booking.gallery_id] || [] : []);
+                const packageName = getBookingPackage(booking.package_id)?.label || booking.package_id || booking.service;
                 const matchingGallery = galleries.find((gallery) =>
                   gallery.id === booking.gallery_id ||
                   gallery.client_name.toLowerCase().trim() === booking.name.toLowerCase().trim()
@@ -2751,10 +2755,19 @@ export default function AdminPage() {
                         </div>
                         <div className="border border-white/10 bg-white/[0.025] p-3">
                           <p className="text-[10px] uppercase tracking-[0.2em] text-white/35">Package & estimate</p>
-                          <p className="mt-2 text-sm text-white/75">{booking.package_id || booking.service}</p>
-                          <p className="mt-1 text-sm text-accent">₦{Number(booking.estimated_total || 0).toLocaleString('en-NG')}{booking.quote_required ? ' + final quote' : ''}</p>
+                          <p className="mt-2 text-sm text-white/75">{packageName}</p>
+                          <p className="mt-1 text-sm text-accent">{finance.sessionValue > 0 ? `${finance.currency === 'NGN' ? '₦' : `${finance.currency} `}${finance.sessionValue.toLocaleString('en-NG')}` : 'Price not recorded'}{booking.quote_required ? ' + final quote' : ''}</p>
                         </div>
                       </div>
+
+                      {finance.hasInvoice && <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        {([
+                          ['Invoiced', finance.invoiceTotal],
+                          ['Deposit', finance.depositRequired],
+                          ['Paid', finance.paid],
+                          ['Balance', finance.balance],
+                        ] as const).map(([label, value]) => <div key={label} className="border border-white/10 bg-white/[0.025] p-3"><p className="text-[9px] uppercase tracking-[0.18em] text-white/35">{label}</p><p className={`mt-2 text-sm ${label === 'Paid' && value > 0 ? 'text-green-300' : label === 'Balance' && value > 0 ? 'text-accent' : 'text-white/75'}`}>{finance.currency === 'NGN' ? '₦' : `${finance.currency} `}{value.toLocaleString('en-NG')}</p></div>)}
+                      </div>}
 
                       <div className="border border-white/10 bg-white/[0.025] p-3">
                         <p className="text-[10px] uppercase tracking-[0.2em] text-white/35">Brief</p>
