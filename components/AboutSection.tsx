@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import GlareHover from '@/components/GlareHover';
 import { useSiteSettings } from '@/lib/useSiteSettings';
 import SeoImage from '@/components/SeoImage';
+import Link from 'next/link';
 interface AboutSectionProps {
     profileType: 'photography' | 'art';
 }
@@ -96,9 +97,9 @@ export default function AboutSection({ profileType }: AboutSectionProps) {
                     <div className="flex items-center justify-between border-t border-foreground/10 pt-8">
                         <div className="space-y-1">
                             <p className="text-[10px] tracking-widest text-foreground/30 uppercase">Ijabiken Moyo</p>
-                            <p className="text-[10px] tracking-widest text-accent uppercase underline underline-offset-8 cursor-pointer hover:text-foreground transition-colors">
+                            <Link href={profileType === 'photography' ? '/photography/about' : '/art/about'} className="inline-block text-[10px] tracking-widest text-accent uppercase underline underline-offset-8 hover:text-foreground transition-colors">
                                 {t('common.readFullBio')}
-                            </p>
+                            </Link>
                         </div>
                     </div>
                 </motion.div>

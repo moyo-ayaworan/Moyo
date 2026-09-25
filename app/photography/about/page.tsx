@@ -14,9 +14,11 @@ export default function PhotographyAboutPage() {
     const { t, translateText } = useTranslate(language);
     const bioParagraphs = [
         'Moyo Ayaworan is a Lagos-based photographer creating portraits, weddings, family stories, editorial images and commissioned work. His approach begins with people: helping them feel at ease, noticing the moments between poses and preserving images that remain meaningful beyond the occasion.',
-        'His OND in General Art and HND in Painting, both awarded with Upper Credit at Yaba College of Technology, give him a strong command of composition, cinematic light and colour. This fine-art foundation shapes the visual character of his photography while allowing each subject and story to remain central.',
+        'His relationship with image-making began through art. Early mentorship from a secondary-school fine arts teacher encouraged him to look closely at gesture, atmosphere and the emotional life of a subject. That foundation continues to influence the sensitivity and intention he brings to every photographic session.',
+        'He earned an Ordinary National Diploma in General Art with Upper Credit and completed a Higher National Diploma in Painting with Upper Credit at Yaba College of Technology. This training gives him a strong command of composition, cinematic light, colour and visual narrative while allowing each person and story to remain central.',
         'Museum, exhibition and installation experience strengthened his collaborative, detail-led way of working. Whether planning a portrait or documenting a celebration, he balances careful preparation with the freedom to recognise honest, unrepeatable moments.',
-        'His art practice continues to inform the atmosphere and emotional depth of his images. International exhibition experience and recognition as a LIMCAF Top 100 artist in 2024 form part of that background, but the photography practice remains focused on giving every client a thoughtful and beautiful experience.',
+        'His art practice continues to inform the atmosphere and emotional depth of his photographs. Working across painting, digital media and photography helps him see beyond documentation and build images with mood, shape and lasting visual presence.',
+        'His work has been presented in Nigeria and internationally, and he was recognised as a Life In My City Art Festival Top 100 artist in 2024. That wider creative experience supports a photography practice focused on giving every client a thoughtful process, beautiful photographs and work that feels personal to them.',
     ];
 
     return (
@@ -82,6 +84,11 @@ export default function PhotographyAboutPage() {
                                     </span>
                                 ))}
                             </div>
+                        </div>
+
+                        <div className="grid gap-6 border-t border-white/10 pt-8 sm:grid-cols-2">
+                            <div><p className="text-[10px] uppercase tracking-[0.3em] text-accent">OND</p><p className="mt-3 text-sm leading-relaxed text-white/55">General Art<br /><span className="text-white">Upper Credit</span></p></div>
+                            <div><p className="text-[10px] uppercase tracking-[0.3em] text-accent">HND</p><p className="mt-3 text-sm leading-relaxed text-white/55">Painting<br /><span className="text-white">Upper Credit</span></p></div>
                         </div>
                     </div>
                 </div>
