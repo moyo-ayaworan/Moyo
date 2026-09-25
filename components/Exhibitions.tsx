@@ -4,17 +4,8 @@ import { motion } from 'framer-motion';
 import { useLanguage } from '@/context/LanguageContext';
 import { useTranslate } from '@/lib/translations';
 import GlareHover from '@/components/GlareHover';
-
-const events = [
-    { year: '2023', title: 'Inspiring Minds', venue: 'Embassy of Spain · Thought Pyramid', city: 'Abuja' },
-    { year: '2023', title: 'GELEDE COMES', venue: 'Yaba Art Museum', city: 'Lagos' },
-    { year: '2023', title: 'Visual Energy', venue: 'Shodex Art Gallery', city: 'Lagos' },
-    { year: '2023', title: 'TotalEnergies Open House Exhibition', venue: 'TotalEnergies', city: 'Lagos' },
-    { year: '2023', title: 'FIX IT', venue: 'Thought Pyramid · Life in My City Art Festival', city: 'Lagos' },
-    { year: '2023', title: 'Life Art and Nature', venue: 'Shodex Art Gallery', city: 'Lagos' },
-    { year: '2022', title: 'TotalEnergies Open House Exhibition', venue: 'TotalEnergies', city: 'Lagos' },
-    { year: '2022', title: 'Group Exhibition', venue: 'Disrupt Art · Christie · NFT Media Labs · Schiff Insurance · Cincinnati Museum', city: 'International collaboration' },
-];
+import Link from 'next/link';
+import { exhibitionRecords } from '@/lib/artArchive';
 
 export default function Exhibitions() {
     const { language } = useLanguage();
@@ -38,14 +29,15 @@ export default function Exhibitions() {
 
                     {/* List */}
                     <div className="md:w-2/3 space-y-px bg-foreground/5 border border-foreground/5">
-                        {events.map((event, index) => (
+                        {exhibitionRecords.map((event, index) => (
                             <motion.div
-                                key={index}
+                                key={event.slug}
                                 initial={{ opacity: 0 }}
                                 whileInView={{ opacity: 1 }}
                                 transition={{ duration: 0.8, delay: index * 0.1 }}
                                 className="group relative border-b border-foreground/5 transition-all duration-500 last:border-0"
                             >
+                                <Link href={`/art/exhibitions/${event.slug}`} className="block focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent" aria-label={`View ${event.title} exhibition details`}>
                                 <GlareHover
                                     width="100%"
                                     height="auto"
@@ -78,6 +70,7 @@ export default function Exhibitions() {
                                         </span>
                                     </div>
                                 </GlareHover>
+                                </Link>
                             </motion.div>
                         ))}
                     </div>

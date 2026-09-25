@@ -8,6 +8,8 @@ import { useLanguage } from '@/context/LanguageContext';
 import { useTranslate } from '@/lib/translations';
 import GlareHover from '@/components/GlareHover';
 import SeoImage from '@/components/SeoImage';
+import Link from 'next/link';
+import { exhibitionRecords, professionalEngagements, workshopRecords } from '@/lib/artArchive';
 
 export default function ArtAboutPage() {
     const { language } = useLanguage();
@@ -59,6 +61,13 @@ export default function ArtAboutPage() {
                             <div><p className="text-[10px] uppercase tracking-[0.35em] text-accent">Education</p><p className="mt-4 text-sm leading-relaxed text-white/55">2020–2022 · Ordinary National Diploma in General Art, Upper Credit<br />Yaba College of Technology, Lagos</p></div>
                             <div><p className="text-[10px] uppercase tracking-[0.35em] text-accent">Professional engagement</p><p className="mt-4 text-sm leading-relaxed text-white/55">2020 · Intern, Yaba Art Museum<br />2023 · Installation teams, Yaba Art Museum and Yusuf Grillo Museum</p></div>
                         </div>
+
+                        <section className="space-y-10 border-t border-white/10 pt-12">
+                            <div><p className="text-[10px] uppercase tracking-[0.35em] text-accent">Selected exhibitions</p><div className="mt-5 divide-y divide-white/10 border-y border-white/10">{exhibitionRecords.map((item) => <Link key={item.slug} href={`/art/exhibitions/${item.slug}`} className="group grid gap-2 py-5 sm:grid-cols-[70px_1fr] sm:gap-5"><span className="text-xs text-white/30">{item.year}</span><span><strong className="font-heading text-lg font-normal text-white transition-colors group-hover:text-accent">{item.title}</strong><span className="mt-1 block text-xs leading-relaxed text-white/40">{item.venue} · {item.city}</span></span></Link>)}</div></div>
+                            <div><p className="text-[10px] uppercase tracking-[0.35em] text-accent">Workshops and collaborations</p><div className="mt-5 space-y-6">{workshopRecords.map((item) => <div key={item.title}><h3 className="font-heading text-lg text-white">{item.year} · {item.title}</h3><p className="mt-2 text-sm leading-relaxed text-white/45">{item.detail}</p></div>)}</div></div>
+                            <div><p className="text-[10px] uppercase tracking-[0.35em] text-accent">Museum and installation experience</p><div className="mt-5 space-y-6">{professionalEngagements.map((item) => <div key={item.title}><h3 className="font-heading text-lg text-white">{item.year} · {item.title}</h3><p className="mt-2 text-sm leading-relaxed text-white/45">{item.detail}</p></div>)}</div></div>
+                            <div><p className="text-[10px] uppercase tracking-[0.35em] text-accent">Languages</p><p className="mt-4 text-sm leading-relaxed text-white/55">Yoruba and English</p></div>
+                        </section>
                     </div>
 
                     <div className="space-y-8 lg:col-span-5 lg:space-y-12">
