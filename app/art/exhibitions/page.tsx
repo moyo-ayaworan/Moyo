@@ -13,6 +13,14 @@ import SeoImage from '@/components/SeoImage';
 export default function ArtExhibitionsPage() {
     const { language } = useLanguage();
     const { t } = useTranslate(language);
+    const development = [
+        ['The Oceans and the Interpreters', 'Collaboration with Elom20ce, Musquiqui Chihying, Gregor Kasper and Eva Kwame · Centre for Contemporary Art Lagos, Yaba Art Museum, Crews Culture Foundation and Hong-Gah Museum, Taiwan'],
+        ['How to Make Snail II', 'Workshop with Chang Enman, supported by Temitayo Ogunbiyi'],
+        ['Installation Workshop', 'Workshop with Peter Okotor · Yaba Art Museum'],
+        ['Body Culture', 'Annual Performance Art Intensive Workshop · Yaba Art Museum'],
+        ['The Resource Lab', 'Workshop with Sogbesan Oluwatoyin · Asa Heritage Foundation Africa'],
+        ['Exhibition installation', 'Installation teams for GELEDE COMES, The Oceans and the Interpreters, and Yusuf Grillo Museum'],
+    ];
 
     return (
         <main className="bg-background min-h-screen">
@@ -31,6 +39,10 @@ export default function ArtExhibitionsPage() {
                 </motion.header>
 
                 <Exhibitions />
+
+                <section className="mt-28 border-t border-white/10 pt-20 md:mt-36 md:pt-24">
+                    <div className="grid gap-12 md:grid-cols-[0.7fr_1.3fr] md:gap-20"><div><p className="text-[10px] uppercase tracking-[0.45em] text-accent">Practice development</p><h2 className="mt-5 font-heading text-3xl italic text-white md:text-4xl">Workshops and collaborations</h2><p className="mt-5 max-w-sm text-sm leading-relaxed text-white/45">Selected museum, installation, performance and cross-cultural programmes documented in the artist’s professional record.</p></div><div className="divide-y divide-white/10 border-y border-white/10">{development.map(([title, detail]) => <div key={title} className="py-6"><h3 className="font-heading text-xl text-white">{title}</h3><p className="mt-2 text-sm leading-relaxed text-white/45">{detail}</p></div>)}</div></div>
+                </section>
 
                 {/* Catalog Section */}
                 <div className="mt-40 border-t border-white/5 pt-32 grid md:grid-cols-2 gap-24 items-center">

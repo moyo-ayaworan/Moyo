@@ -6,10 +6,14 @@ import { useTranslate } from '@/lib/translations';
 import GlareHover from '@/components/GlareHover';
 
 const events = [
-    { year: '2026', title: 'Presence in Absence', venue: 'Galería de Arte', city: 'Madrid' },
-    { year: '2025', title: 'Ancestral Form', venue: 'Stellar Space', city: 'London' },
-    { year: '2024', title: 'Quiet Tension', venue: 'MOMA P1', city: 'New York' },
-    { year: '2023', title: 'Inherited Memory', venue: 'The Archive', city: 'Paris' },
+    { year: '2023', title: 'Inspiring Minds', venue: 'Embassy of Spain · Thought Pyramid', city: 'Abuja' },
+    { year: '2023', title: 'GELEDE COMES', venue: 'Yaba Art Museum', city: 'Lagos' },
+    { year: '2023', title: 'Visual Energy', venue: 'Shodex Art Gallery', city: 'Lagos' },
+    { year: '2023', title: 'TotalEnergies Open House Exhibition', venue: 'TotalEnergies', city: 'Lagos' },
+    { year: '2023', title: 'FIX IT', venue: 'Thought Pyramid · Life in My City Art Festival', city: 'Lagos' },
+    { year: '2023', title: 'Life Art and Nature', venue: 'Shodex Art Gallery', city: 'Lagos' },
+    { year: '2022', title: 'TotalEnergies Open House Exhibition', venue: 'TotalEnergies', city: 'Lagos' },
+    { year: '2022', title: 'Group Exhibition', venue: 'Disrupt Art · Christie · NFT Media Labs · Schiff Insurance · Cincinnati Museum', city: 'International collaboration' },
 ];
 
 export default function Exhibitions() {

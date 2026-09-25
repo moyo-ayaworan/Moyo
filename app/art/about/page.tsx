@@ -11,11 +11,11 @@ import SeoImage from '@/components/SeoImage';
 
 export default function ArtAboutPage() {
     const { language } = useLanguage();
-    const { t } = useTranslate(language);
+    const { t, translateText } = useTranslate(language);
     const bioParagraphs = [
-        t('about.art.text1'),
-        t('about.art.text2'),
-        t('about.art.text3'),
+        'Ijabiken Moyosoreoluwa, known as Moyo Ayaworan, is a Nigerian visual artist and photographer based in Lagos. His practice centres on contemporary portraiture and the raw emotional conditions carried by the human figure.',
+        'Working across photography, painting and digital media, he uses moody, dramatic colour to give each image emotional depth. The movement between camera and studio practice allows observation, composition and material experimentation to inform one another.',
+        'He studied General Art at Yaba College of Technology, graduating with an Upper Credit Ordinary National Diploma in 2022. His professional development includes work with Yaba Art Museum and participation in exhibitions, installations and collaborative workshops across Lagos and Abuja.',
     ];
 
     return (
@@ -36,7 +36,7 @@ export default function ArtAboutPage() {
                             className="max-w-2xl space-y-8 text-base leading-relaxed text-white/60 md:space-y-12 md:text-xl"
                         >
                             {bioParagraphs.map((paragraph) => (
-                                <p key={paragraph}>{paragraph}</p>
+                                <p key={paragraph}>{translateText(paragraph)}</p>
                             ))}
                         </motion.div>
 
@@ -53,6 +53,11 @@ export default function ArtAboutPage() {
                                 <span className="text-[10px] tracking-[0.4em] uppercase text-accent">{t('profilePage.base')}</span>
                                 <p className="text-[10px] tracking-widest text-white/40 uppercase leading-relaxed whitespace-pre-line">{t('profilePage.baseItems')}</p>
                             </div>
+                        </div>
+
+                        <div className="grid gap-8 border-t border-white/10 pt-10 md:grid-cols-2">
+                            <div><p className="text-[10px] uppercase tracking-[0.35em] text-accent">Education</p><p className="mt-4 text-sm leading-relaxed text-white/55">2020–2022 · Ordinary National Diploma in General Art, Upper Credit<br />Yaba College of Technology, Lagos</p></div>
+                            <div><p className="text-[10px] uppercase tracking-[0.35em] text-accent">Professional engagement</p><p className="mt-4 text-sm leading-relaxed text-white/55">2020 · Intern, Yaba Art Museum<br />2023 · Installation teams, Yaba Art Museum and Yusuf Grillo Museum</p></div>
                         </div>
                     </div>
 

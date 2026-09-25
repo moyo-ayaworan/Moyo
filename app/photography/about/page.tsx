@@ -11,11 +11,11 @@ import SeoImage from '@/components/SeoImage';
 
 export default function PhotographyAboutPage() {
     const { language } = useLanguage();
-    const { t } = useTranslate(language);
+    const { t, translateText } = useTranslate(language);
     const bioParagraphs = [
-        t('about.photography.text1'),
-        t('about.photography.text2'),
-        t('about.photography.text3'),
+        'Ijabiken Moyosoreoluwa is a Nigerian photographer and visual artist whose approach to portraiture is grounded in close observation of emotion, identity and the human condition.',
+        'His formal training in General Art at Yaba College of Technology shapes his use of composition, colour and visual narrative. He moves between the camera, painting and digital media, bringing a fine-art sensibility to portraits and commissioned photography.',
+        'His museum, exhibition and installation experience has strengthened a collaborative and detail-led working method. That background informs how he develops concepts, works with subjects and creates photographs for personal, editorial and commercial contexts.',
     ];
 
     return (
@@ -66,16 +66,16 @@ export default function PhotographyAboutPage() {
 
                         <div className="space-y-8 text-base leading-relaxed text-white/50 md:space-y-12 md:text-xl">
                             {bioParagraphs.slice(0, 2).map((paragraph) => (
-                                <p key={paragraph}>{paragraph}</p>
+                                <p key={paragraph}>{translateText(paragraph)}</p>
                             ))}
                             <div className="h-px w-20 bg-accent/50" />
                             <p>{bioParagraphs[2]}</p>
                         </div>
 
                         <div className="space-y-8">
-                            <span className="text-[10px] uppercase tracking-[0.32em] text-accent md:tracking-[0.5em]">{t('profilePage.selectedClients')}</span>
+                            <span className="text-[10px] uppercase tracking-[0.32em] text-accent md:tracking-[0.5em]">Selected experience</span>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-8">
-                                {['Vogue', 'L\'Officiel', 'The New York Times', 'Nike', 'Apple', 'Aesthetica'].map((client) => (
+                                {['Yaba Art Museum', 'Yusuf Grillo Museum', 'Centre for Contemporary Art Lagos', 'TotalEnergies Open House', 'Thought Pyramid', 'Shodex Art Gallery'].map((client) => (
                                     <span key={client} className="text-[10px] tracking-[0.3em] uppercase text-white/30 border-l border-white/5 pl-4">
                                         {client}
                                     </span>
