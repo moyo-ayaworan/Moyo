@@ -81,6 +81,8 @@ export default function Navbar() {
     const artLinks = [
         { name: t('common.fineArt'), href: '/art' },
         { name: t('common.works'), href: '/art/works' },
+        { name: translateText('Shop'), href: '/art/shop' },
+        { name: t('common.commissions'), href: '/art/commissions' },
         { name: t('common.exhibitions'), href: '/art/exhibitions' },
         { name: t('common.about'), href: '/art/about' },
     ];
