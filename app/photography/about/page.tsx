@@ -13,9 +13,9 @@ export default function PhotographyAboutPage() {
     const { language } = useLanguage();
     const { t, translateText } = useTranslate(language);
     const bioParagraphs = [
-        'Ijabiken Moyosoreoluwa is a Nigerian photographer and visual artist whose approach to portraiture is grounded in close observation of emotion, identity and the human condition.',
-        'His formal training in General Art at Yaba College of Technology shapes his use of composition, colour and visual narrative. He moves between the camera, painting and digital media, bringing a fine-art sensibility to portraits and commissioned photography.',
-        'His museum, exhibition and installation experience has strengthened a collaborative and detail-led working method. That background informs how he develops concepts, works with subjects and creates photographs for personal, editorial and commercial contexts.',
+        'Ijabiken Moyosoreoluwa is a Nigerian photographer and visual artist whose portraiture is grounded in close observation of emotion, identity and the human condition.',
+        'His training in Painting at Yaba College of Technology shapes his use of composition, cinematic light, colour and visual narrative. Moving between the camera and studio practice, he brings a fine-art sensibility to personal, editorial and commissioned photography.',
+        'His museum, exhibition and installation experience has strengthened a collaborative and detail-led working method. His work has been presented in Nigeria and internationally, and he was selected as a Life In My City Art Festival Top 100 artist in 2024.',
     ];
 
     return (
@@ -75,7 +75,7 @@ export default function PhotographyAboutPage() {
                         <div className="space-y-8">
                             <span className="text-[10px] uppercase tracking-[0.32em] text-accent md:tracking-[0.5em]">Selected experience</span>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-8">
-                                {['Yaba Art Museum', 'Yusuf Grillo Museum', 'Centre for Contemporary Art Lagos', 'TotalEnergies Open House', 'Thought Pyramid', 'Shodex Art Gallery'].map((client) => (
+                                {['LIMCAF Top 100 · 2024', 'The Currency Lab · Freiburg', 'Yaba Art Museum', 'Centre for Contemporary Art Lagos', 'Thought Pyramid', 'Cincinnati Museum collaboration'].map((client) => (
                                     <span key={client} className="text-[10px] tracking-[0.3em] uppercase text-white/30 border-l border-white/5 pl-4">
                                         {client}
                                     </span>

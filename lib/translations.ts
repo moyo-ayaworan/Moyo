@@ -36,13 +36,13 @@ export const translations = {
             photography: {
                 headline: "Intentionality & Light",
                 text1: "Ijabiken Moyosoreoluwa is a Lagos-based contemporary photographer and visual artist whose work seamlessly bridges commercial excellence and fine art.",
-                text2: "He earned an Upper Credit Ordinary National Diploma in General Art from Yaba College of Technology in 2022. That training informs his portraiture, use of colour, visual storytelling and digital image-making.",
+                text2: "He earned an Upper Credit Ordinary National Diploma in General Art and completed a Higher National Diploma in Painting with Upper Credit at Yaba College of Technology. That training informs his portraiture, use of colour, visual storytelling and digital image-making.",
                 text3: "This unique artistic perspective extends into his commercial practice, where he documents weddings, corporate events, and creative projects with an editorial edge. Moyosoreoluwa’s ability to blend traditional artistic principles with contemporary digital media makes him a highly sought-after visual storyteller for both private clients and creative brands.",
             },
             art: {
                 headline: "Identity & Memory",
                 text1: "Ijabiken Moyosoreoluwa is a Lagos-based contemporary photographer and visual artist whose work seamlessly bridges commercial excellence and fine art.",
-                text2: "He earned an Upper Credit Ordinary National Diploma in General Art from Yaba College of Technology in 2022. That training informs his portraiture, use of colour, visual storytelling and digital image-making.",
+                text2: "He earned an Upper Credit Ordinary National Diploma in General Art and completed a Higher National Diploma in Painting with Upper Credit at Yaba College of Technology. That training informs his portraiture, use of colour, visual storytelling and digital image-making.",
                 text3: "This unique artistic perspective extends into his commercial practice, where he documents weddings, corporate events, and creative projects with an editorial edge. Moyosoreoluwa’s ability to blend traditional artistic principles with contemporary digital media makes him a highly sought-after visual storyteller for both private clients and creative brands.",
             }
         },

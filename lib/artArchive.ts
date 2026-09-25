@@ -15,6 +15,9 @@ export type ExhibitionRecord = {
 };
 
 export const exhibitionRecords: ExhibitionRecord[] = [
+  { slug: 'the-currency-lab-2025', year: '2025', title: 'The Currency Lab', venue: 'E-WERK Freiburg · Galerie für Gegenwartskunst', city: 'Freiburg, Germany', context: 'Group exhibition presented in Freiburg, Germany.', references: [] },
+  { slug: 'humanism-enugu-2024', year: '2024', title: 'HUMANISM', venue: 'International Conference Centre, IMT', city: 'Enugu, Nigeria', context: 'Group exhibition presented at the International Conference Centre, Institute of Management and Technology.', references: [] },
+  { slug: 'humanism-limcaf-2024', year: '2024', title: 'HUMANISM', venue: 'Thought Pyramid · Life In My City Art Festival', city: 'Nigeria', context: 'Group exhibition presented for the Life In My City Art Festival (LIMCAF).', references: [] },
   { slug: 'inspiring-minds-2023', year: '2023', title: 'Inspiring Minds', venue: 'Thought Pyramid', city: 'Wuse, Abuja', context: 'Group exhibition presented by the Embassy of Spain.', references: [] },
   { slug: 'gelede-comes-2023', year: '2023', title: 'GELEDE COMES', venue: 'Yaba Art Museum', city: 'Lagos, Nigeria', context: 'Group exhibition presented by Yaba Art Museum.', references: [] },
   { slug: 'visual-energy-2023', year: '2023', title: 'Visual Energy', venue: 'Shodex Art Gallery', city: 'Lagos, Nigeria', context: 'Group exhibition presented by Shodex Art Gallery.', references: [] },
@@ -38,6 +41,10 @@ export const professionalEngagements = [
   { year: '2023', title: 'Installation Team · GELEDE COMES', detail: 'Yaba Art Museum, Yaba, Lagos, Nigeria.' },
   { year: '2023', title: 'Installation Team · The Oceans and the Interpreters', detail: 'Centre for Contemporary Art Lagos, Yaba Art Museum, Crews Culture Foundation and Hong-Gah Museum, Taiwan.' },
   { year: '2020', title: 'Intern · Yaba Art Museum', detail: 'Yaba College of Technology, Lagos, Nigeria.' },
+];
+
+export const awardRecords = [
+  { year: '2024', title: 'LIMCAF Top 100 Artist', detail: 'Selected among the Top 100 artists at the Life In My City Art Festival.' },
 ];
 
 export function getExhibition(slug: string) {

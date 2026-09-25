@@ -9,7 +9,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { useTranslate } from '@/lib/translations';
 import GalleryMedia from '@/components/GalleryMedia';
 import GlareHover from '@/components/GlareHover';
-import { Check, ChevronLeft, ChevronRight, Maximize2, X, Heart, ArrowDown, Mail } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Maximize2, X, Heart, ArrowDown, Mail, LockKeyhole } from 'lucide-react';
 
 type ClientGallery = {
     id: number;
@@ -537,7 +537,7 @@ export default function ClientGalleryPage() {
                         {gallery.finished_count > 0 && (
                             <section id="finished-collection" className="scroll-mt-28">
                             <p className="mb-6 text-center text-[10px] uppercase tracking-[0.3em] text-accent">02 / Yours to keep</p>
-                            <GlareHover width="100%" height="auto" background="rgba(255,255,255,0.05)" borderRadius="2px" borderColor="rgba(255,255,255,0.1)" glareOpacity={0.16} className="mx-auto max-w-3xl" contentClassName="p-6 text-center space-y-5">
+                            <GlareHover width="100%" height="auto" background="rgba(255,255,255,0.03)" borderRadius="2px" borderColor="rgba(255,255,255,0.1)" glareOpacity={0.12} className="mx-auto w-full" contentClassName="p-5 text-center space-y-8 sm:p-8 md:p-10">
                                 <div className="space-y-2">
                                     <h2 className="text-2xl font-heading text-white italic">{t('clientGallery.finishedWorkTitle')}</h2>
                                     <p className="text-white/45 text-sm leading-relaxed">
@@ -547,9 +547,18 @@ export default function ClientGalleryPage() {
                                     </p>
                                 </div>
 
-                                {gallery.payment_verified ? (
+                                {gallery.finished_images.length > 0 ? (
                                     <div className="space-y-8">
-                                        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
+                                        {!gallery.payment_verified && (
+                                            <div className="flex flex-col items-center justify-between gap-5 border border-accent/25 bg-accent/[0.04] p-5 text-left sm:flex-row sm:p-6">
+                                                <div className="flex items-start gap-4">
+                                                    <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-accent/30 text-accent"><LockKeyhole className="h-4 w-4" /></span>
+                                                    <div><p className="text-sm font-medium text-white">Your finished gallery is ready to enjoy.</p><p className="mt-1 max-w-xl text-xs leading-relaxed text-white/45">View every photograph at full-screen preview size. Original-file downloads unlock automatically after the studio confirms full payment.</p></div>
+                                                </div>
+                                                {gallery.payment_url && <a href={gallery.payment_url} target="_blank" rel="noreferrer" className="w-full shrink-0 bg-white px-5 py-3 text-center text-[10px] font-bold uppercase tracking-[0.28em] text-black transition-colors hover:bg-accent sm:w-auto">{t('clientGallery.payOnline')}</a>}
+                                            </div>
+                                        )}
+                                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                                             {gallery.finished_images.map((image, index) => (
                                                 <div
                                                     key={`${image}-${index}`}
@@ -569,17 +578,17 @@ export default function ClientGalleryPage() {
                                                     <span className="image-overlay-chip absolute left-3 top-3 rounded-full border px-3 py-1 text-[9px] uppercase tracking-[0.18em] backdrop-blur-sm">
                                                         {t('clientGallery.finishedWorkTitle')} {index + 1}
                                                     </span>
-                                                    <a
+                                                    {gallery.payment_verified ? <a
                                                         href={getFinishedDownloadUrl(image)}
                                                         className="absolute bottom-3 left-3 right-3 z-10 border border-white/25 bg-white px-3 py-3 text-center text-[10px] font-bold uppercase tracking-[0.24em] text-black transition-colors hover:border-accent hover:bg-accent"
                                                     >
                                                         {t('clientGallery.downloadFinishedWork')}
-                                                    </a>
+                                                    </a> : <span className="absolute bottom-3 left-3 right-3 z-10 inline-flex items-center justify-center gap-2 border border-white/20 bg-black/55 px-3 py-3 text-center text-[9px] font-semibold uppercase tracking-[0.2em] text-white/65 backdrop-blur-md"><LockKeyhole className="h-3 w-3" /> Download unlocks after payment</span>}
                                                 </div>
                                             ))}
                                         </div>
 
-                                        <div className="border-t border-white/10 pt-8 text-left">
+                                        <div className={`${gallery.payment_verified ? '' : 'hidden'} border-t border-white/10 pt-8 text-left`}>
                                             {gallery.review_submitted_at ? (
                                                 <div className="space-y-4 text-center">
                                                     <p className="text-[10px] uppercase tracking-[0.35em] text-accent">
@@ -765,7 +774,7 @@ export default function ClientGalleryPage() {
                             >
                                 <Check className="h-4 w-4" />
                                 {selectedImageSet.has(activeImage) ? t('ui.selected') : t('ui.selectImage')}
-                            </button> : <a href={getFinishedDownloadUrl(activeImage)} className="absolute bottom-3 right-3 bg-white px-5 py-4 text-xs text-black">Download original</a>}
+                            </button> : gallery.payment_verified ? <a href={getFinishedDownloadUrl(activeImage)} className="absolute bottom-3 right-3 bg-white px-5 py-4 text-xs text-black">Download original</a> : <span className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-2 border border-white/20 bg-black/60 px-5 py-3 text-[10px] uppercase tracking-[0.22em] text-white/70 backdrop-blur-md"><LockKeyhole className="h-3.5 w-3.5" /> Viewing preview · download locked</span>}
                         </div>
                     </div>
                 </div>

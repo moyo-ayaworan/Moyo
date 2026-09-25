@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { getCloudinaryPreviewUrl } from '@/lib/mediaUrl';
 
 function toStringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
@@ -54,7 +55,9 @@ export async function POST(req: NextRequest) {
       slug: gallery.slug,
       images: allImages,
       approved_images: approvedImages,
-      finished_images: gallery.payment_verified ? finishedImages : [],
+      finished_images: gallery.payment_verified
+        ? finishedImages
+        : finishedImages.map((image) => getCloudinaryPreviewUrl(image, { width: 1600, crop: 'limit', quality: 80 })),
       payment_verified: gallery.payment_verified || false,
       payment_url: gallery.payment_url || '',
       review_rating: gallery.review_rating || null,

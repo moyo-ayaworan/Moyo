@@ -9,15 +9,23 @@ import { useTranslate } from '@/lib/translations';
 import GlareHover from '@/components/GlareHover';
 import SeoImage from '@/components/SeoImage';
 import Link from 'next/link';
-import { exhibitionRecords, professionalEngagements, workshopRecords } from '@/lib/artArchive';
+import { awardRecords, exhibitionRecords, professionalEngagements, workshopRecords } from '@/lib/artArchive';
 
 export default function ArtAboutPage() {
     const { language } = useLanguage();
     const { t, translateText } = useTranslate(language);
     const bioParagraphs = [
-        'Ijabiken Moyosoreoluwa, known as Moyo Ayaworan, is a Nigerian visual artist and photographer based in Lagos. His practice centres on contemporary portraiture and the raw emotional conditions carried by the human figure.',
-        'Working across photography, painting and digital media, he uses moody, dramatic colour to give each image emotional depth. The movement between camera and studio practice allows observation, composition and material experimentation to inform one another.',
-        'He studied General Art at Yaba College of Technology, graduating with an Upper Credit Ordinary National Diploma in 2022. His professional development includes work with Yaba Art Museum and participation in exhibitions, installations and collaborative workshops across Lagos and Abuja.',
+        'Ijabiken Moyosoreoluwa is a multidisciplinary Nigerian artist whose practice spans traditional and digital painting, photography, oils and acrylics. Through photography, he most powerfully captures the raw emotional intensity of the human condition.',
+        'Guided early by the mentorship of a secondary-school fine arts teacher, he developed an artistic voice grounded in close observation, authenticity and emotional depth. His moody, dramatic use of colour explores identity, vulnerability and the shared human experience.',
+        'He earned an Upper Credit Ordinary National Diploma in General Art from Yaba College of Technology in 2022 and has since completed a Higher National Diploma in Painting with Upper Credit. His work with Yaba Art Museum and participation in exhibitions, installations and collaborative workshops continue to expand his technical and curatorial experience.',
+        'His work has been presented in Nigeria and internationally, including a group exhibition associated with the Cincinnati Museum in Ohio and The Currency Lab in Freiburg, Germany. In 2024, he was selected as one of the Life In My City Art Festival Top 100 artists.',
+        'Based in Lagos, he draws from the energy of the city and the cultural histories that surround him. His work creates a dialogue between an inner world and a broader human narrative, allowing personal and collective stories to converge.',
+    ];
+    const statementParagraphs = [
+        'My work explores the inner landscape: the deep, cerebral realms of emotion, identity and the silent battles we wage within ourselves. Inspired by the inner wars I fight, I use dramatic, cinematic lighting and moody colours to evoke the tension, resilience and raw vulnerability that define the human experience.',
+        'Each piece I create—whether through photography, acrylic, oil on canvas or digital painting—serves as an intimate reflection of these struggles. My portraits are more than representations; they are personal narratives that invite viewers to confront their own inner conflicts and emotions.',
+        'By merging traditional and digital techniques, I aim to bridge the tangible and the abstract. Bold contrasts and atmospheric tones are deliberate tools for expressing the complexity of our inner worlds, where light and shadow, strength and fragility coexist.',
+        'Each piece is an extension of myself: a glimpse into a space that is both private and universal. I share these inner wars openly, trusting that their echoes will resonate with others and invite a pause for reflection, connection and introspection.',
     ];
 
     return (
@@ -58,11 +66,14 @@ export default function ArtAboutPage() {
                         </div>
 
                         <div className="grid gap-8 border-t border-white/10 pt-10 md:grid-cols-2">
-                            <div><p className="text-[10px] uppercase tracking-[0.35em] text-accent">Education</p><p className="mt-4 text-sm leading-relaxed text-white/55">2020–2022 · Ordinary National Diploma in General Art, Upper Credit<br />Yaba College of Technology, Lagos</p></div>
+                            <div><p className="text-[10px] uppercase tracking-[0.35em] text-accent">Education</p><p className="mt-4 text-sm leading-relaxed text-white/55">2020–2022 · Ordinary National Diploma in General Art, Upper Credit<br />Higher National Diploma in Painting · Upper Credit<br />Yaba College of Technology, Lagos</p></div>
                             <div><p className="text-[10px] uppercase tracking-[0.35em] text-accent">Professional engagement</p><p className="mt-4 text-sm leading-relaxed text-white/55">2020 · Intern, Yaba Art Museum<br />2023 · Installation teams, Yaba Art Museum and Yusuf Grillo Museum</p></div>
                         </div>
 
+                        <section className="border-t border-white/10 pt-12"><p className="text-[10px] uppercase tracking-[0.4em] text-accent">Artist statement</p><h2 className="mt-5 font-heading text-3xl italic text-white">The inner landscape</h2><div className="mt-8 max-w-2xl space-y-7 text-base leading-relaxed text-white/55">{statementParagraphs.map((paragraph) => <p key={paragraph}>{translateText(paragraph)}</p>)}</div></section>
+
                         <section className="space-y-10 border-t border-white/10 pt-12">
+                            <div><p className="text-[10px] uppercase tracking-[0.35em] text-accent">Awards and recognition</p><div className="mt-5 space-y-6">{awardRecords.map((item) => <div key={item.title}><h3 className="font-heading text-lg text-white">{item.year} · {item.title}</h3><p className="mt-2 text-sm leading-relaxed text-white/45">{item.detail}</p></div>)}</div></div>
                             <div><p className="text-[10px] uppercase tracking-[0.35em] text-accent">Selected exhibitions</p><div className="mt-5 divide-y divide-white/10 border-y border-white/10">{exhibitionRecords.map((item) => <Link key={item.slug} href={`/art/exhibitions/${item.slug}`} className="group grid gap-2 py-5 sm:grid-cols-[70px_1fr] sm:gap-5"><span className="text-xs text-white/30">{item.year}</span><span><strong className="font-heading text-lg font-normal text-white transition-colors group-hover:text-accent">{item.title}</strong><span className="mt-1 block text-xs leading-relaxed text-white/40">{item.venue} · {item.city}</span></span></Link>)}</div></div>
                             <div><p className="text-[10px] uppercase tracking-[0.35em] text-accent">Workshops and collaborations</p><div className="mt-5 space-y-6">{workshopRecords.map((item) => <div key={item.title}><h3 className="font-heading text-lg text-white">{item.year} · {item.title}</h3><p className="mt-2 text-sm leading-relaxed text-white/45">{item.detail}</p></div>)}</div></div>
                             <div><p className="text-[10px] uppercase tracking-[0.35em] text-accent">Museum and installation experience</p><div className="mt-5 space-y-6">{professionalEngagements.map((item) => <div key={item.title}><h3 className="font-heading text-lg text-white">{item.year} · {item.title}</h3><p className="mt-2 text-sm leading-relaxed text-white/45">{item.detail}</p></div>)}</div></div>
