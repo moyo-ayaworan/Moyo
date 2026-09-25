@@ -91,6 +91,16 @@ export default function ClientBookingPortalPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const finance = useMemo(() => booking ? getBookingFinance(booking, documents) : null, [booking, documents]);
+  const paymentStatus = useMemo(() => {
+    if (!finance) return 'Pending studio confirmation';
+    const money = (value: number) => `${finance.currency === 'NGN' ? '₦' : `${finance.currency} `}${value.toLocaleString('en-NG')}`;
+    if (finance.fullyPaid) return 'Paid in full';
+    if (finance.paid > 0 && finance.depositRequired > 0 && finance.paid >= finance.depositRequired) return `Deposit received · ${money(finance.balance)} balance`;
+    if (finance.paid > 0) return `Part payment received · ${money(finance.balance)} balance`;
+    if (gallery?.payment_verified) return 'Payment verified';
+    if (gallery?.payment_url) return 'Payment link ready';
+    return 'Pending studio confirmation';
+  }, [finance, gallery]);
 
   const timeline = useMemo(() => {
     const status = booking?.status || 'pending';
@@ -174,11 +184,11 @@ export default function ClientBookingPortalPage() {
                 <div className="grid gap-3 border-t border-white/10 pt-5">
                   <div className="border border-white/10 bg-black/20 p-3">
                     <p className="text-[10px] uppercase tracking-[0.22em] text-white/35">Payment</p>
-                    <p className={`mt-2 text-sm ${gallery?.payment_verified ? 'text-green-300' : 'text-white/60'}`}>
-                      {gallery?.payment_verified ? 'Verified' : gallery?.payment_url ? 'Payment link ready' : 'Pending studio confirmation'}
+                    <p className={`mt-2 text-sm ${finance?.paid || gallery?.payment_verified ? 'text-green-300' : 'text-white/60'}`}>
+                      {paymentStatus}
                     </p>
                   </div>
-                  {gallery?.payment_url && !gallery.payment_verified && (
+                  {gallery?.payment_url && !gallery.payment_verified && (!finance?.hasInvoice || finance.balance > 0) && (
                     <a href={gallery.payment_url} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 border border-accent/45 px-4 py-3 text-[10px] uppercase tracking-[0.18em] text-accent transition-colors hover:bg-accent hover:text-black">
                       <CreditCard size={14} />
                       Pay Booking
