@@ -34,16 +34,16 @@ export const translations = {
         },
         about: {
             photography: {
-                headline: "Intentionality & Light",
-                text1: "Ijabiken Moyosoreoluwa is a Lagos-based contemporary photographer and visual artist whose work seamlessly bridges commercial excellence and fine art.",
-                text2: "He earned an Upper Credit Ordinary National Diploma in General Art and completed a Higher National Diploma in Painting with Upper Credit at Yaba College of Technology. That training informs his portraiture, use of colour, visual storytelling and digital image-making.",
-                text3: "This unique artistic perspective extends into his commercial practice, where he documents weddings, corporate events, and creative projects with an editorial edge. Moyosoreoluwa’s ability to blend traditional artistic principles with contemporary digital media makes him a highly sought-after visual storyteller for both private clients and creative brands.",
+                headline: "People, Light & Memory",
+                text1: "Moyo Ayaworan is a Lagos-based photographer creating portraits, weddings, family stories and commissioned imagery with warmth, precision and emotional clarity.",
+                text2: "His OND in General Art and HND in Painting, both awarded with Upper Credit, shape how he uses cinematic light, colour and composition. That fine-art background gives the photographs a distinctive visual language without taking attention away from the people in them.",
+                text3: "His photographic practice is collaborative and calm. He helps clients feel comfortable, pays attention to the details that matter, and creates polished images that still feel honest, personal and alive.",
             },
             art: {
-                headline: "Identity & Memory",
-                text1: "Ijabiken Moyosoreoluwa is a Lagos-based contemporary photographer and visual artist whose work seamlessly bridges commercial excellence and fine art.",
-                text2: "He earned an Upper Credit Ordinary National Diploma in General Art and completed a Higher National Diploma in Painting with Upper Credit at Yaba College of Technology. That training informs his portraiture, use of colour, visual storytelling and digital image-making.",
-                text3: "This unique artistic perspective extends into his commercial practice, where he documents weddings, corporate events, and creative projects with an editorial edge. Moyosoreoluwa’s ability to blend traditional artistic principles with contemporary digital media makes him a highly sought-after visual storyteller for both private clients and creative brands.",
+                headline: "Inner Landscapes",
+                text1: "Ijabiken Moyosoreoluwa is a multidisciplinary Nigerian artist whose practice investigates emotion, identity and the silent conflicts carried within the human figure.",
+                text2: "Working through painting, photography and digital media, he combines dramatic colour, cinematic light and atmospheric contrast to move between vulnerability and strength, the private self and shared human experience.",
+                text3: "Trained in General Art and Painting at Yaba College of Technology, his studio practice is shaped by museum work, installation, collaborative workshops and exhibitions in Nigeria and internationally.",
             }
         },
         booking: {

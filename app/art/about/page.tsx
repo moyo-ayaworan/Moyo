@@ -15,11 +15,11 @@ export default function ArtAboutPage() {
     const { language } = useLanguage();
     const { t, translateText } = useTranslate(language);
     const bioParagraphs = [
-        'Ijabiken Moyosoreoluwa is a multidisciplinary Nigerian artist whose practice spans traditional and digital painting, photography, oils and acrylics. Through photography, he most powerfully captures the raw emotional intensity of the human condition.',
-        'Guided early by the mentorship of a secondary-school fine arts teacher, he developed an artistic voice grounded in close observation, authenticity and emotional depth. His moody, dramatic use of colour explores identity, vulnerability and the shared human experience.',
+        'Ijabiken Moyosoreoluwa is a multidisciplinary Nigerian artist whose practice explores emotion, identity and the silent battles carried within the human figure. He works through painting, photography and digital media to examine the space between vulnerability and strength, private experience and shared humanity.',
+        'Guided early by the mentorship of a secondary-school fine arts teacher, he developed an artistic voice grounded in close observation and emotional honesty. Moody palettes, cinematic light and atmospheric contrast are not simply stylistic choices; they are tools for making internal states visible.',
         'He earned an Upper Credit Ordinary National Diploma in General Art from Yaba College of Technology in 2022 and has since completed a Higher National Diploma in Painting with Upper Credit. His work with Yaba Art Museum and participation in exhibitions, installations and collaborative workshops continue to expand his technical and curatorial experience.',
         'His work has been presented in Nigeria and internationally, including a group exhibition associated with the Cincinnati Museum in Ohio and The Currency Lab in Freiburg, Germany. In 2024, he was selected as one of the Life In My City Art Festival Top 100 artists.',
-        'Based in Lagos, he draws from the energy of the city and the cultural histories that surround him. His work creates a dialogue between an inner world and a broader human narrative, allowing personal and collective stories to converge.',
+        'Based in Lagos, he draws from the energy of the city and the cultural histories that surround him. His studio practice creates a dialogue between an inner world and a broader human narrative, allowing personal and collective stories to converge across materials and forms.',
     ];
     const statementParagraphs = [
         'My work explores the inner landscape: the deep, cerebral realms of emotion, identity and the silent battles we wage within ourselves. Inspired by the inner wars I fight, I use dramatic, cinematic lighting and moody colours to evoke the tension, resilience and raw vulnerability that define the human experience.',

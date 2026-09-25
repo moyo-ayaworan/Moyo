@@ -13,9 +13,10 @@ export default function PhotographyAboutPage() {
     const { language } = useLanguage();
     const { t, translateText } = useTranslate(language);
     const bioParagraphs = [
-        'Ijabiken Moyosoreoluwa is a Nigerian photographer and visual artist whose portraiture is grounded in close observation of emotion, identity and the human condition.',
-        'His training in Painting at Yaba College of Technology shapes his use of composition, cinematic light, colour and visual narrative. Moving between the camera and studio practice, he brings a fine-art sensibility to personal, editorial and commissioned photography.',
-        'His museum, exhibition and installation experience has strengthened a collaborative and detail-led working method. His work has been presented in Nigeria and internationally, and he was selected as a Life In My City Art Festival Top 100 artist in 2024.',
+        'Moyo Ayaworan is a Lagos-based photographer creating portraits, weddings, family stories, editorial images and commissioned work. His approach begins with people: helping them feel at ease, noticing the moments between poses and preserving images that remain meaningful beyond the occasion.',
+        'His OND in General Art and HND in Painting, both awarded with Upper Credit at Yaba College of Technology, give him a strong command of composition, cinematic light and colour. This fine-art foundation shapes the visual character of his photography while allowing each subject and story to remain central.',
+        'Museum, exhibition and installation experience strengthened his collaborative, detail-led way of working. Whether planning a portrait or documenting a celebration, he balances careful preparation with the freedom to recognise honest, unrepeatable moments.',
+        'His art practice continues to inform the atmosphere and emotional depth of his images. International exhibition experience and recognition as a LIMCAF Top 100 artist in 2024 form part of that background, but the photography practice remains focused on giving every client a thoughtful and beautiful experience.',
     ];
 
     return (

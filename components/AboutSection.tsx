@@ -13,7 +13,7 @@ interface AboutSectionProps {
 
 export default function AboutSection({ profileType }: AboutSectionProps) {
     const { language } = useLanguage();
-    const { t, translateText } = useTranslate(language);
+    const { t } = useTranslate(language);
     const settings = useSiteSettings();
     const [cmsAbout, setCmsAbout] = useState<{ text: string; image: string } | null>(null);
 
@@ -28,7 +28,7 @@ export default function AboutSection({ profileType }: AboutSectionProps) {
         ? t('about.photography.headline')
         : t('about.art.headline');
 
-    const bioParagraphs = cmsAbout?.text ? [cmsAbout.text] : [
+    const bioParagraphs = [
         t(`about.${profileType}.text1`),
         t(`about.${profileType}.text2`),
         t(`about.${profileType}.text3`),
@@ -88,7 +88,7 @@ export default function AboutSection({ profileType }: AboutSectionProps) {
                     <div className="max-w-lg space-y-6 md:space-y-8">
                         {bioParagraphs.map((paragraph) => (
                             <p key={paragraph} className="text-base leading-relaxed tracking-wide text-foreground/50 md:text-lg">
-                                {cmsAbout?.text ? translateText(paragraph) : paragraph}
+                                {paragraph}
                             </p>
                         ))}
                     </div>
