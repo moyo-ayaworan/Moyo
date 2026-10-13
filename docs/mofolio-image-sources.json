@@ -1,0 +1,50 @@
+[
+  {
+    "file": "public/mofolio/stock-couple.webp",
+    "photographer": "Jonathan Borba",
+    "source": "https://www.pexels.com/photo/romantic-outdoor-wedding-couple-portrait-30822475/",
+    "license": "https://www.pexels.com/license/",
+    "license_checked": "2026-10-13",
+    "width": 1200,
+    "height": 1799,
+    "bytes": 172382,
+    "sha256": "3950ee97252548ce462b11fe0b1c06cb5e4c4b9e52872d8940dbed35dc5b6044",
+    "use": "Website demonstration; no endorsement implied"
+  },
+  {
+    "file": "public/mofolio/stock-bride.webp",
+    "photographer": "Jonathan Borba",
+    "source": "https://www.pexels.com/photo/elegant-bridal-portrait-in-sunlit-outdoor-setting-30802778/",
+    "license": "https://www.pexels.com/license/",
+    "license_checked": "2026-10-13",
+    "width": 1200,
+    "height": 1800,
+    "bytes": 177156,
+    "sha256": "460af0cc18bdddd780bbfb46db6cd2cc303e8e9c839ab927d75246b1e4d1d730",
+    "use": "Website demonstration; no endorsement implied"
+  },
+  {
+    "file": "public/mofolio/stock-ceremony.webp",
+    "photographer": "Jonathan Borba",
+    "source": "https://www.pexels.com/photo/flower-bouquets-by-chairs-11994910/",
+    "license": "https://www.pexels.com/license/",
+    "license_checked": "2026-10-13",
+    "width": 900,
+    "height": 1350,
+    "bytes": 303276,
+    "sha256": "2f24849389272da9d9bbc9dd4c19cce601063fa6a60edd400093207506da38fd",
+    "use": "Website demonstration; no endorsement implied"
+  },
+  {
+    "file": "public/mofolio/stock-table.webp",
+    "photographer": "Jonathan Borba",
+    "source": "https://www.pexels.com/photo/set-table-for-a-wedding-reception-12846017/",
+    "license": "https://www.pexels.com/license/",
+    "license_checked": "2026-10-13",
+    "width": 1200,
+    "height": 800,
+    "bytes": 120056,
+    "sha256": "604f734235d0c2f522da79aade4a2edcafab94cf55cce7b958a879aee0bdcc52",
+    "use": "Website demonstration; no endorsement implied"
+  }
+]

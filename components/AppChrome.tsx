@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ProfileProvider } from '@/context/ProfileContext';
 import { LanguageProvider } from '@/context/LanguageContext';
@@ -12,6 +13,8 @@ const SocialLinks = dynamic(() => import('@/components/SocialLinks'), { ssr: fal
 const EniyanChat = dynamic(() => import('@/components/EniyanChat'), { ssr: false });
 
 export default function AppChrome({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const productPage = pathname === '/mofolio' || pathname.startsWith('/mofolio/');
   const [enablePointerEffects, setEnablePointerEffects] = useState(false);
 
   useEffect(() => {
@@ -35,8 +38,8 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
   const page = (
     <>
       {children}
-      <SocialLinks />
-      <EniyanChat />
+      {!productPage && <SocialLinks />}
+      {!productPage && <EniyanChat />}
     </>
   );
 
@@ -50,7 +53,7 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
     >
       <LanguageProvider>
         <ProfileProvider>
-          <SessionTracker />
+          {!productPage && <SessionTracker />}
           {enablePointerEffects ? (
             <>
               <ClickSpark

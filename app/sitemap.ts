@@ -5,6 +5,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     const lastModified = new Date('2026-08-04');
     const routes = [
         { path: '/', changeFrequency: 'monthly', priority: 1 },
+        { path: '/mofolio', changeFrequency: 'monthly', priority: 0.8 },
+        { path: '/mofolio/terms', changeFrequency: 'yearly', priority: 0.3 },
+        { path: '/mofolio/privacy', changeFrequency: 'yearly', priority: 0.3 },
         { path: '/photography', changeFrequency: 'weekly', priority: 0.9 },
         { path: '/photography/about', changeFrequency: 'monthly', priority: 0.7 },
         { path: '/photography/bookings', changeFrequency: 'monthly', priority: 0.8 },

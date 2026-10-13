@@ -76,6 +76,7 @@ export default function Navbar() {
         { name: t('common.bookings'), href: '/photography/bookings' },
         { name: t('common.clientGallery'), href: '/photography/client-gallery' },
         { name: t('common.about'), href: '/photography/about' },
+        { name: 'Stillbounds', href: '/mofolio' },
     ];
 
     const artLinks = [

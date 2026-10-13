@@ -747,13 +747,17 @@ test('rejected email recipients never mark an invoice as sent', async () => {
   assert.equal(markedSent, false);
 });
 
-test('gallery access hides finished files until payment is verified', async () => {
+test('gallery access returns transformed previews before payment is verified', async () => {
+  const original = 'https://res.cloudinary.com/demo/image/upload/v1/original.jpg';
   const route = load('app/api/galleries/access/route.ts', {
-    'next/server': next, '@/lib/db': { query: async () => ({ rows: [{ id: 1, images: ['proof.jpg'], finished_images: ['original.jpg'], payment_verified: false }] }) },
+    'next/server': next,
+    '@/lib/mediaUrl': load('lib/mediaUrl.ts'),
+    '@/lib/db': { query: async () => ({ rows: [{ id: 1, images: ['proof.jpg'], finished_images: [original], payment_verified: false }] }) },
   });
   const result = await route.POST(request({ accessCode: 'test' }));
   assert.equal(result.body.gallery.finished_count, 1);
-  assert.equal(result.body.gallery.finished_images.length, 0);
+  assert.equal(result.body.gallery.finished_images.length, 1);
+  assert.equal(result.body.gallery.finished_images[0], 'https://res.cloudinary.com/demo/image/upload/f_auto,q_80,c_limit,w_1600/v1/original.jpg');
 });
 
 

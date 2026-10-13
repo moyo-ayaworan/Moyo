@@ -1,0 +1,54 @@
+import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+const require=createRequire(new URL('../package.json',import.meta.url));
+const ts=require('typescript');
+const source=fs.readFileSync(new URL('../app/api/mofolio/beta/route.ts',import.meta.url),'utf8');
+const output=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const entries=new Map(), calls=[];
+let denied=true,limited=false,offline=false;
+const response=(value,options={})=>({status:options.status ?? 200,value,headers:options.headers});
+const context={exports:{},require(name){
+ if(name==='next/server')return {NextResponse:{json:response}};
+ if(name==='@/lib/stillboundsLegal')return {stillboundsLegalVersion:'2026-10-13-v1'};
+ if(name==='@/lib/auth')return {requireAdmin:()=>denied ? response({error:'Unauthorized'},{status:401}) : null};
+ if(name==='@/lib/rateLimit')return {rateLimit:async()=>limited ? response({error:'Too many requests'},{status:429}) : null};
+ if(name==='@/lib/db')return {query:async(sql,values)=>{
+   if(offline)throw Error('Offline');calls.push({sql,values});
+   if(sql.startsWith('INSERT')){
+     assert(sql.includes('VALUES ($1, $2, $2, NOW(), $2, $3'));
+     assert(sql.includes('ON CONFLICT (email) DO NOTHING RETURNING email'));
+     assert.equal(values[1],'2026-10-13-v1');assert.equal(typeof values[2],'boolean');
+     if(entries.has(values[0]))return {rows:[]};
+     const entry={email:values[0],created_at:'2026-10-13',terms_version:values[1],marketing_opt_in:values[2]};
+     entries.set(values[0],entry);return {rows:[entry]};
+   }
+   if(sql.startsWith('SELECT'))return {rows:[...entries.values()]};
+   return {rows:[]};
+ }};
+ throw Error(name);
+}};
+vm.runInNewContext(output,context);
+const request=data=>new Request('http://localhost/api/mofolio/beta',{method:'POST',body:JSON.stringify(data),headers:{'Content-Type':'application/json'}});
+const {POST,GET}=context.exports;
+assert.equal((await POST(request({email:'bad',termsAccepted:true}))).status,400);
+assert.equal((await POST(request({email:'test@example.com',termsAccepted:false}))).status,400);
+assert.equal((await POST(request({email:'legacy@example.com',consent:true}))).status,400);
+assert.equal((await POST(request({email:'test@example.com',termsAccepted:true,marketingConsent:'yes'}))).status,400);
+assert.equal(calls.length,0);
+const accepted=await POST(request({email:'  TEST@example.com ',termsAccepted:true}));
+assert.equal(accepted.status,200);assert.equal(accepted.value.alreadyRequested,false);
+assert.equal(entries.get('test@example.com').marketing_opt_in,false);
+assert(calls.some(call=>call.sql.includes('marketing_opt_in BOOLEAN NOT NULL DEFAULT FALSE')));
+assert.equal((await POST(request({email:'marketing@example.com',termsAccepted:true,marketingConsent:true}))).status,200);
+assert.equal(entries.get('marketing@example.com').marketing_opt_in,true);
+const duplicate=await POST(request({email:'test@example.com',termsAccepted:true,marketingConsent:true}));
+assert.equal(duplicate.status,200);assert.equal(duplicate.value.alreadyRequested,true);
+assert.equal(entries.get('test@example.com').marketing_opt_in,false);assert.equal(entries.size,2);
+const before=calls.length;await POST(request({email:'bot@example.com',termsAccepted:true,website:'spam'}));assert.equal(calls.length,before);
+limited=true;assert.equal((await POST(request({email:'limited@example.com',termsAccepted:true}))).status,429);limited=false;
+assert.equal((await GET(new Request('http://localhost'))).status,401);denied=false;
+assert.equal((await GET(new Request('http://localhost'))).value.requests.length,2);
+offline=true;assert.equal((await POST(request({email:'offline@example.com',termsAccepted:true}))).status,503);
+console.log('PASS isolated beta route: terms required, marketing optional, explicit preference/version saved, legacy defaults opt-out, duplicate preferences preserved, validation, bot field, rate limit, admin gating and database failure. No real PostgreSQL writes.');

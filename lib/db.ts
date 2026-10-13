@@ -11,8 +11,9 @@ function normalizeConnectionString(value: string) {
     const url = new URL(value);
     const sslMode = url.searchParams.get('sslmode');
 
-    if (sslMode && ['prefer', 'require', 'verify-ca'].includes(sslMode) && !url.searchParams.has('uselibpqcompat')) {
-      url.searchParams.set('uselibpqcompat', 'true');
+    if (sslMode && ['prefer', 'require', 'verify-ca'].includes(sslMode)) {
+      url.searchParams.set('sslmode', 'verify-full');
+      url.searchParams.delete('uselibpqcompat');
       return url.toString();
     }
   } catch {
@@ -24,7 +25,7 @@ function normalizeConnectionString(value: string) {
 
 const pool = new Pool({
   connectionString: normalizeConnectionString(connectionString),
-  ssl: { rejectUnauthorized: false },
+  ssl: { rejectUnauthorized: true },
 });
 
 let initialization: Promise<void> | undefined;
@@ -115,6 +116,12 @@ async function initializeTables(connection: PoolClient) {
       gallery_design TEXT DEFAULT 'editorial',
       is_locked BOOLEAN DEFAULT FALSE,
       created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS request_rate_limits (
+      rate_key TEXT PRIMARY KEY,
+      hits INTEGER NOT NULL DEFAULT 0,
+      window_start TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS gallery_documents (

@@ -1,0 +1,7 @@
+.node_modules-backup
+.retouch4me
+.qwen
+.next
+node_modules
+.git
+.env*
