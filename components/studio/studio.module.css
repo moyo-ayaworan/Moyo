@@ -1,0 +1,270 @@
+.shell {
+  min-height: 100svh;
+  background: #121212;
+  color: #fff;
+  padding: 48px 24px 80px;
+  font-family: Arial, Helvetica, sans-serif;
+}
+.inner {
+  max-width: 1080px;
+  margin: auto;
+}
+.top {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+  margin-bottom: 64px;
+}
+.brand {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.8px;
+}
+.muted {
+  color: #b3b3b3;
+  line-height: 1.7;
+}
+.eyebrow {
+  color: #ef6473;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 2px;
+}
+.title {
+  font-size: clamp(36px, 6vw, 64px);
+  letter-spacing: -2px;
+  line-height: 1.05;
+  font-weight: 500;
+  margin: 14px 0 20px;
+}
+.intro {
+  max-width: 680px;
+  margin-bottom: 38px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+.panel {
+  background: #1b1b1b;
+  border: 1px solid #333;
+  padding: 28px;
+  border-radius: 12px;
+}
+.panel h2 {
+  font-size: 22px;
+  margin: 0 0 16px;
+}
+.panel p {
+  line-height: 1.7;
+}
+.label {
+  display: block;
+  font-size: 13px;
+  margin: 20px 0 8px;
+}
+.input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #555;
+  border-radius: 6px;
+  background: #121212;
+  color: #fff;
+  font: inherit;
+}
+.code {
+  font-family: monospace;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+.check {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 22px 0;
+}
+.check input {
+  margin-top: 5px;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: #cf0015;
+}
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 18px;
+  border: 1px solid #555;
+  border-radius: 6px;
+  background: #252525;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.primary {
+  background: #cf0015;
+  border-color: #cf0015;
+}
+.button:disabled {
+  opacity: 0.45;
+  cursor: wait;
+}
+.button:focus-visible,
+.input:focus-visible,
+.shell a:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 4px;
+}
+.actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 18px 0;
+}
+.notice {
+  padding: 16px;
+  background: #252525;
+  border-left: 3px solid #cf0015;
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 24px 0;
+  overflow-wrap: anywhere;
+}
+.section {
+  margin-top: 48px;
+}
+.section h2 {
+  font-size: 24px;
+  margin-bottom: 20px;
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  border-top: 1px solid #333;
+  padding: 20px 0;
+}
+.row strong {
+  display: block;
+  font-size: 16px;
+}
+.row small {
+  display: block;
+  color: #b3b3b3;
+  line-height: 1.6;
+  margin-top: 6px;
+}
+.review {
+  max-width: 980px;
+  margin: 0 auto;
+}
+.preview {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: #252525;
+  max-height: 70svh;
+  object-fit: contain;
+  border: 1px solid #333;
+}
+.navigation {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0 32px;
+}
+.feedback {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 24px;
+}
+.comment {
+  padding: 16px 0;
+  border-top: 1px solid #333;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.comment small {
+  color: #b3b3b3;
+  font-size: 12px;
+}
+.center {
+  max-width: 520px;
+  margin: 70px auto;
+}
+.address {
+  display: block;
+  overflow-wrap: anywhere;
+  font-family: monospace;
+  font-size: 14px;
+  padding: 14px;
+  background: #121212;
+  border-radius: 6px;
+}
+.shell a {
+  color: inherit;
+}
+.empty {
+  color: #b3b3b3;
+  padding: 24px 0;
+  border-top: 1px solid #333;
+}
+.footer {
+  margin-top: 64px;
+  font-size: 12px;
+  color: #b3b3b3;
+}
+@media (max-width: 700px) {
+  .shell {
+    padding: 30px 18px 60px;
+  }
+  .top {
+    margin-bottom: 42px;
+  }
+  .grid,
+  .feedback {
+    grid-template-columns: 1fr;
+  }
+  .panel {
+    padding: 22px;
+  }
+  .row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .title {
+    letter-spacing: -1px;
+  }
+  .navigation .button {
+    padding: 12px;
+  }
+  .top a {
+    font-size: 13px;
+  }
+  .center {
+    margin: 40px auto;
+  }
+}
+
+.panel ol {
+  list-style: decimal;
+  padding-left: 22px;
+}
+.panel li {
+  margin: 8px 0;
+}
+.panel p {
+  margin: 16px 0;
+}

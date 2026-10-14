@@ -9,6 +9,8 @@ export default function robots(): MetadataRoute.Robots {
                 '/admin',
                 '/admin/',
                 '/api/admin/',
+                '/api/mofolio/studio/',
+                '/mofolio/review/',
                 '/api/upload/',
                 '/photography/client-gallery',
                 '/private/',

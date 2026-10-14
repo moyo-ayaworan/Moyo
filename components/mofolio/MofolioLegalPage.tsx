@@ -8,7 +8,7 @@ export default function MofolioLegalPage({title, introduction, sections}: Props)
     <header className={styles.header}><Link className={styles.logo} href="/mofolio">Stillbounds<span>.</span></Link><Link className={styles.headerCta} href="/mofolio#beta">Request beta access</Link></header>
     <main className={styles.legalMain}>
       <Link className={styles.legalBack} href="/mofolio">← Back to Stillbounds</Link>
-      <p className={styles.eyebrow}>Effective 13 October 2026</p>
+      <p className={styles.eyebrow}>Effective 14 October 2026</p>
       <h1>{title}</h1><p className={styles.legalIntro}>{introduction}</p>
       <nav className={styles.legalContents} aria-label={`${title} contents`}>{sections.map(([heading],index)=><a key={index} href={`#section-${index+1}`}>{String(index+1).padStart(2,'0')} · {heading}</a>)}</nav>
       <div className={styles.legalText}>{sections.map(([heading,paragraphs],index)=><section key={index} id={`section-${index+1}`}><h2>{index+1}. {heading}</h2>{paragraphs.map(paragraph=><p key={paragraph}>{paragraph}</p>)}</section>)}</div>

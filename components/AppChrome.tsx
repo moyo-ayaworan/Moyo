@@ -14,7 +14,7 @@ const EniyanChat = dynamic(() => import('@/components/EniyanChat'), { ssr: false
 
 export default function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const productPage = pathname === '/mofolio' || pathname.startsWith('/mofolio/');
+  const productPage = pathname === '/mofolio' || pathname.startsWith('/mofolio/') || pathname === '/admin/stillbounds';
   const [enablePointerEffects, setEnablePointerEffects] = useState(false);
 
   useEffect(() => {
