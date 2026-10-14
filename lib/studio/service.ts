@@ -41,7 +41,7 @@ async function reviewRecords(ids: string[], origin: string, owner = false) {
   if (!ids.length) return [];
   const [versions, media, comments] = await Promise.all([
     studioQuery(
-      `SELECT id,book_id,title,version,expires_at,state,watermark,decision,encrypted_code
+      `SELECT id,book_id,title,version,expires_at,state,watermark,decision,encrypted_code,spread_metadata
        FROM stillbounds_versions WHERE id=ANY($1::uuid[]) AND owner_id=$2`,
       [ids, OWNER],
     ),
@@ -70,14 +70,17 @@ async function reviewRecords(ids: string[], origin: string, owner = false) {
         revoked: v.state === "revoked",
         watermark: v.watermark,
         decision: v.decision,
-        spreads: media.rows
-          .filter((m) => m.version_id === id)
-          .map((m) => ({
-            id: m.id,
-            file: `spread-${m.index + 1}.jpg`,
-            width: m.width,
-            height: m.height,
-          })),
+        spreads:
+          v.state === "revoked"
+            ? v.spread_metadata
+            : media.rows
+                .filter((m) => m.version_id === id)
+                .map((m) => ({
+                  id: m.id,
+                  file: `spread-${m.index + 1}.jpg`,
+                  width: m.width,
+                  height: m.height,
+                })),
         comments: comments.rows
           .filter((c) => c.version_id === id)
           .map((c) => ({
@@ -501,18 +504,24 @@ export async function studioRequest(request: NextRequest, path: string[]) {
       if (current.state === "published") return;
       assertStudio(current.state === "draft", "Review revoked.", 409);
       const media = await db.query(
-        "SELECT COUNT(*) AS count FROM stillbounds_media WHERE version_id=$1",
+        "SELECT index,width,height FROM stillbounds_media WHERE version_id=$1 ORDER BY index",
         [id],
       );
       assertStudio(
-        Number(media.rows[0].count) === current.spread_ids.length,
+        media.rows.length === current.spread_ids.length,
         "Upload every spread before publishing.",
         409,
       );
+      const manifest = media.rows.map((m) => ({
+        id: current.spread_ids[m.index],
+        file: "spread-" + (m.index + 1) + ".jpg",
+        width: m.width,
+        height: m.height,
+      }));
       const code = secret();
       await db.query(
-        `UPDATE stillbounds_versions SET state='published',expires_at=NOW()+(retention_days*INTERVAL '1 day'),code_hash=$2,encrypted_code=$3 WHERE id=$1`,
-        [id, hash(code), encryptCode(code)],
+        `UPDATE stillbounds_versions SET state='published',expires_at=NOW()+(retention_days*INTERVAL '1 day'),code_hash=$2,encrypted_code=$3,spread_metadata=$4::jsonb WHERE id=$1`,
+        [id, hash(code), encryptCode(code), JSON.stringify(manifest)],
       );
     });
     return json(await reviewRecord(id, origin, true));

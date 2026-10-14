@@ -288,6 +288,16 @@ try {
   await request("/versions/" + id, "DELETE", undefined, device);
   await request("/reviews/" + id, "GET", undefined, client, 401);
   await request("/reviews/" + id + "/media/0", "GET", undefined, client, 401);
+  const revokedRecord = (
+    await request("/versions", "GET", undefined, device)
+  ).data.find((r) => r.id === id);
+  assert.equal(revokedRecord.revoked, true);
+  assert.ok(
+    revokedRecord.comments.every((c) =>
+      revokedRecord.spreads.some((s) => s.id === c.spreadId),
+    ),
+  );
+
   assert.equal(
     Number(
       (

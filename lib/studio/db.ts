@@ -42,8 +42,10 @@ CREATE TABLE IF NOT EXISTS stillbounds_versions (
  watermark BOOLEAN NOT NULL, retention_days INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'draft',
  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), expires_at TIMESTAMPTZ NOT NULL,
  decision TEXT NOT NULL DEFAULT 'pending', code_hash TEXT, encrypted_code TEXT,
+ spread_metadata JSONB NOT NULL DEFAULT '[]'::jsonb,
  gallery_id INTEGER, UNIQUE(owner_id,book_id,version)
 );
+ALTER TABLE stillbounds_versions ADD COLUMN IF NOT EXISTS spread_metadata JSONB NOT NULL DEFAULT '[]'::jsonb;
 CREATE TABLE IF NOT EXISTS stillbounds_media (
  version_id UUID NOT NULL REFERENCES stillbounds_versions(id) ON DELETE CASCADE,
  index INTEGER NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL, jpeg BYTEA NOT NULL,

@@ -121,6 +121,40 @@ try {
   assert.ok(review.url.startsWith(origin + "/mofolio/review/"));
   assert.ok(review.bytes > 0);
   assert.ok((await site.list()).some((r) => r.id === review.id));
+
+  const reviewCode = new URLSearchParams(new URL(review.url).hash.slice(1)).get(
+    "access",
+  );
+  const unlocked = await fetch(
+    local + "/api/mofolio/studio/reviews/" + review.id + "/unlock",
+    {
+      method: "POST",
+      headers: {
+        ...headers,
+        Origin: local,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ code: reviewCode }),
+    },
+  );
+  assert.equal(unlocked.status, 200);
+  const commented = await fetch(
+    local + "/api/mofolio/studio/reviews/" + review.id + "/comments",
+    {
+      method: "POST",
+      headers: {
+        ...headers,
+        Origin: local,
+        Cookie: unlocked.headers.get("set-cookie").split(";")[0],
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        spreadId: book.spreads[0].id,
+        text: "Synthetic feedback to verify revoked review metadata.",
+      }),
+    },
+  );
+  assert.equal(commented.status, 200);
   await site.revoke(review.id);
   assert.equal(
     (await site.list()).find((r) => r.id === review.id).revoked,
