@@ -1,12 +1,12 @@
 'use client';
-import { RegionalCharge, useRegionalPricingReady } from '@/components/RegionalPricing';
+import { RegionalCharge, useCheckoutPricing } from '@/components/RegionalPricing';
 import type { ProductSection } from '@/lib/productSections';
 import { getStorageItem, setStorageItem } from '@/lib/browserStorage';
 import { productShopPath } from '@/lib/productSections';
 import { useRef, useState } from 'react';
 import { ArrowUpRight, LoaderCircle } from 'lucide-react';
 export default function PaystackPurchase({productId,title,section,price}:{productId:number;title:string;section:ProductSection;price?:string}) {
-  const pricingReady = useRegionalPricingReady();
+  const { ready: pricingReady, currency, quote } = useCheckoutPricing(price || '');
   const request=useRef<{email:string;key:string}|null>(null),pending=useRef(false);
   const [email,setEmail]=useState(''),[error,setError]=useState(''),[loading,setLoading]=useState(false),[paymentPath,setPaymentPath]=useState('');
   const startCheckout=async(event:React.FormEvent)=>{
@@ -22,7 +22,7 @@ export default function PaystackPurchase({productId,title,section,price}:{produc
         request.current={email:normalizedEmail,key};
         setStorageItem('local',storageKey,key);
       }
-      const response=await fetch('/api/paystack/initialize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({productId,email:normalizedEmail,section,requestKey:request.current.key}),signal:controller.signal});
+      const response=await fetch('/api/paystack/initialize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({productId,email:normalizedEmail,section,requestKey:request.current.key,displayCurrency:currency,expectedAmount:quote?.amountMinor}),signal:controller.signal});
       const data=await response.json().catch(()=>({}));
       if(typeof data.paymentPath==='string'&&data.paymentPath.startsWith(`${productShopPath(section)}/payment?reference=`))setPaymentPath(data.paymentPath);
       if(response.ok&&data.paymentPath) {

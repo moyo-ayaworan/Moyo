@@ -80,6 +80,46 @@ test('account prices convert the server regional amount without doubling it agai
   return pricing;
  }});
  const Price=compiled.exports.RegionalPrice;
- assert.match(renderToStaticMarkup(React.createElement(Price,{value:60000,adjusted:true})),/60\.00/);
- assert.match(renderToStaticMarkup(React.createElement(Price,{value:30000})),/60\.00/);
+ assert.match(renderToStaticMarkup(React.createElement(Price,{value:60000,adjusted:true})),/\$60/);
+ assert.match(renderToStaticMarkup(React.createElement(Price,{value:30000})),/\$60/);
+});
+test('only USD prices round up to $10 before the regional multiplier; NGN amounts stay unchanged',()=>{
+ const rates={USD:0.000739};
+ assert.equal(pricing.checkoutQuote(3000000,1,'USD',rates).dollars,30);
+ assert.equal(pricing.checkoutQuote(3000000,2,'USD',rates).dollars,60);
+ assert.equal(pricing.checkoutQuote(2000000,1,'USD',rates).dollars,20);
+ assert.equal(pricing.checkoutQuote(2000000,2,'USD',rates).dollars,40);
+ for(const currency of ['NGN','GBP','EUR'])assert.equal(pricing.checkoutQuote(3000000,2,currency,rates).amountMinor,6000000);
+ assert.equal(pricing.checkoutQuote(3000000,1,'USD',{USD:0.001}).dollars,30);
+ for(const rate of [0,-1,NaN,Infinity,undefined])assert.throws(()=>pricing.checkoutQuote(3000000,1,'USD',{USD:rate}));
+});
+test('both checkout backends enforce rounded USD quotes and reject tampered client amounts',async()=>{
+ const originalFetch=globalThis.fetch;
+ const rates={NGN:1,USD:0.000739};
+ globalThis.fetch=async()=>({ok:true,json:async()=>({result:'success',base_code:'NGN',time_last_update_unix:Math.floor(Date.now()/1000),rates})});
+ try {
+  const {PaymentStore}=await import('../lib/payments/store.ts');
+  const {BillingService}=await import('../lib/stillbounds/billing-service.ts');
+  for(const [country,multiplier] of [['NG',1],['US',2]]){
+   let inserted,charged;
+   const store=new PaymentStore(async work=>work({query:async(sql,args)=>{
+    if(sql.includes('FROM digital_products'))return {rows:[{id:1,title:'Pack',price:'20000',product_url:'private-file',section:'photography'}]};
+    if(sql.includes('INSERT INTO payment_orders')){inserted=args;return {rows:[{amount_kobo:args[4]}]};}
+    return {rows:[]};
+   }}));
+   const quote=pricing.checkoutQuote(2000000,multiplier,'USD',rates);
+   const order=await store.createDigital(1,'buyer@example.test','test','test-request','photography',country,'USD',quote.amountMinor);
+   assert.equal(order.amount_kobo,quote.amountMinor);assert.equal(JSON.parse(inserted[7]).usd_price,20*multiplier);
+   await assert.rejects(store.createDigital(1,'buyer@example.test','test','test-request','photography',country,'USD',1),/quote changed/);
+   const service=new BillingService({enabled:true,checkoutEnabled:true,mode:'test',origin:'https://example.test',creatorUserId:''},{status:async()=>({account:null,devices:[]}),createOrder:async()=>null,saveCheckout:async()=>{},failOrder:async()=>{}},async(path,body)=>{charged=body;return {reference:body.reference,authorization_url:'https://checkout.paystack.com/test'};});
+   const user={id:'buyer',email:'buyer@example.test',emailVerified:true};
+   const sbQuote=pricing.checkoutQuote(3000000,multiplier,'USD',rates);
+   await service.checkout(user,country,'USD',sbQuote.amountMinor);
+   assert.equal(charged.amount,sbQuote.amountMinor);assert.equal(charged.currency,'NGN');
+   await assert.rejects(service.checkout(user,country,'USD',1),/quote changed/);
+  }
+  globalThis.fetch=async()=>{throw Error('offline');};
+  const failingStore=new PaymentStore(async work=>work({query:async sql=>({rows:sql.includes('FROM digital_products')?[{price:'20000',product_url:'private'}]:[]})}));
+  await assert.rejects(failingStore.createDigital(1,'buyer@example.test','test','key','photography','US','USD',1),/temporarily unavailable/);
+ }finally{globalThis.fetch=originalFetch;}
 });

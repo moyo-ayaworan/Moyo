@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import sharp from 'sharp';
 
 const source = await fs.readFile(new URL('../app/icon.svg', import.meta.url));
-await sharp(source).resize(180, 180).flatten({ background: '#920110' }).png().toFile(new URL('../app/apple-icon.png', import.meta.url).pathname);
+await sharp(source).resize(180, 180).flatten({ background: '#050505' }).png().toFile(new URL('../app/apple-icon.png', import.meta.url).pathname);
 const sizes = [16, 32, 48, 256];
 const images = await Promise.all(sizes.map(size => sharp(source).resize(size, size).png().toBuffer()));
 const header = Buffer.alloc(6 + sizes.length * 16);

@@ -1,3 +1,4 @@
+import { isDisplayCurrency } from '@/lib/regionalPricing';
 import { isProductSection, productShopPath } from '@/lib/productSections';
 import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
@@ -16,9 +17,11 @@ export async function POST(req: NextRequest) {
     if (typeof productId !== 'number' || !Number.isSafeInteger(productId) || productId <= 0 || productId > 2147483647 || !isPaymentEmail(email)) throw new PaymentError('Enter a valid product and email address.', 400);
     const section = body.section ?? 'photography';
     if (!isProductSection(section)) throw new PaymentError('Choose a valid product collection.', 400);
+    const displayCurrency = body.displayCurrency ?? 'NGN';
+    if (!isDisplayCurrency(displayCurrency)) throw new PaymentError('Choose a valid currency.', 400);
     const key = body.requestKey || randomUUID();
     if (typeof key !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(key)) throw new PaymentError('Invalid checkout request.', 400);
-    const order = await payments.createDigital(productId, email, mode, key, section, req.headers.get('x-vercel-ip-country') || '');
+    const order = await payments.createDigital(productId, email, mode, key, section, req.headers.get('x-vercel-ip-country') || '', displayCurrency, typeof body.expectedAmount === 'number' ? body.expectedAmount : undefined);
     // Reconcile retries before attempting to initialize the same reference again.
     let current = order;
     if (order.retry) {

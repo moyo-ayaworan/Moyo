@@ -7,3 +7,10 @@ ExchangeRate-API supplies daily NGN conversion estimates, cached server-side for
 Europe (including the UK) and USA use twice the base selling price. Africa and all other regions retain the base price. The server uses the Vercel country header for new shop and Stillbounds orders; a currency selection never changes the selling-price tier. Existing order amounts are preserved on retries. Missing country information uses the base tier. IP location is approximate and VPNs may change the detected region.
 
 Currency conversion changes presentation only. Paystack checkout and server-owned order amounts remain NGN. The purchase form shows the exact NGN charge. No converted amount or display preference is submitted as a payment amount. Stillbounds offers and account pages use the same regional amount as checkout. Bespoke booking invoices retain the amount set by the studio.
+
+
+## Rounded USD selling prices
+
+Only USD selling prices round the base NGN conversion up to the next $10, then apply the region multiplier. For example, at 0.000739 USD/NGN, Stillbounds is $30 in the base tier and $60 in Europe/USA. Existing NGN prices and other currency conversions retain their prior rules.
+
+Paystack still charges NGN. The browser shows the NGN quote before payment; both checkout backends independently fetch validated rates and compute the charge. Client-supplied expected amounts must match the server calculation for USD. Missing/stale rates or changed quotes stop checkout rather than silently charging another price. Existing payment orders retain their saved amount; incompatible retries must check the original checkout first. Shop order metadata records the USD selling price. Actual bank conversion rates and fees can differ from the quote.

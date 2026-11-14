@@ -50,3 +50,19 @@ export function regionalAmount(value: string | number, multiplier: 1 | 2) {
   const amount = nairaAmount(value);
   return amount === null ? value : amount * multiplier;
 }
+
+// Keep NGN prices unchanged. USD selling prices round the base price up to $10,
+// then apply the geographic tier. Paystack receives its exact NGN equivalent.
+export function checkoutQuote(baseMinor: number, multiplier: 1 | 2, currency: string, rates: Partial<Record<DisplayCurrency, number>>) {
+  if (!Number.isSafeInteger(baseMinor) || baseMinor <= 0) throw Error('Invalid price');
+  let amountMinor = baseMinor * multiplier;
+  let dollars: number | null = null;
+  if (currency === 'USD') {
+    const rate = rates.USD;
+    if (typeof rate !== 'number' || !Number.isFinite(rate) || rate <= 0) throw Error('USD pricing unavailable');
+    dollars = Math.ceil((baseMinor / 100 * rate - 1e-9) / 10) * 10 * multiplier;
+    amountMinor = Math.ceil(dollars / rate * 100);
+  }
+  if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0 || (dollars !== null && !Number.isSafeInteger(dollars))) throw Error('Invalid price');
+  return { amountMinor, dollars };
+}

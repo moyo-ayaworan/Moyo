@@ -1,4 +1,5 @@
-import { regionalMultiplier } from '../regionalPricing.ts';
+import { exchangeRates } from '../exchangeRates.ts';
+import { regionalMultiplier, checkoutQuote } from '../regionalPricing.ts';
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { PaymentError, isPaymentEmail, paymentMatches, priceToKobo, type PaymentMode, type PaymentOrder } from './policy.ts';
@@ -10,23 +11,31 @@ export class PaymentStore {
   transact: Transaction;
   constructor(transact: Transaction) { this.transact = transact; }
   async order(reference: string) { return this.transact(async c => (await c.query<PaymentOrder>('SELECT * FROM payment_orders WHERE reference=$1', [reference])).rows[0] || null); }
-  async createDigital(productId: number, email: string, mode: PaymentMode, requestKey: string, section: 'photography' | 'art' = 'photography', country = '') {
+  async createDigital(productId: number, email: string, mode: PaymentMode, requestKey: string, section: 'photography' | 'art' = 'photography', country = '', displayCurrency = 'NGN', expectedAmount?: number) {
+    if (displayCurrency === 'USD' && !Number.isSafeInteger(expectedAmount)) throw new PaymentError('Refresh this page to get a valid USD quote.', 400);
     return this.transact(async c => {
       // Serialize retries of one browser action, including after a lost HTTP response.
       await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['payment:' + requestKey]);
       const existing = (await c.query<PaymentOrder>('SELECT * FROM payment_orders WHERE request_key=$1', [requestKey])).rows[0];
       if (existing) {
         if (existing.kind !== 'digital' || existing.target_id !== productId || existing.email !== email || existing.mode !== mode || existing.shop_section !== section) throw new PaymentError('Checkout request belongs to different purchase details.');
+        if (existing.status !== 'paid' && typeof expectedAmount === 'number' && Number(existing.amount_kobo) !== expectedAmount) throw new PaymentError('An existing checkout has a different quote. Check the original payment before paying again.', 409);
         if (!['pending', 'failed', 'paid'].includes(existing.status)) throw new PaymentError('This payment needs studio review.');
         return { ...existing, retry: true };
       }
       const product = (await c.query('SELECT id,title,price,product_url,section FROM digital_products WHERE id=$1 AND section=$2 AND is_active=TRUE FOR SHARE', [productId, section])).rows[0];
       if (!product?.product_url) throw new PaymentError('This product is not available for checkout.', 404);
-      const amount = priceToKobo(product.price) * regionalMultiplier(country);
+      let amount = priceToKobo(product.price) * regionalMultiplier(country);
+      let usdPrice: number | null = null;
+      if (displayCurrency === 'USD') {
+        try { const quote = checkoutQuote(priceToKobo(product.price), regionalMultiplier(country), 'USD', (await exchangeRates()).rates); amount = quote.amountMinor; usdPrice = quote.dollars; }
+        catch { throw new PaymentError('USD pricing is temporarily unavailable. Refresh before checkout.', 503); }
+      }
+      if (typeof expectedAmount === 'number' && amount !== expectedAmount) throw new PaymentError('The price quote changed. Refresh this page before paying.', 409);
       if (!Number.isSafeInteger(amount)) throw new PaymentError('This price is not available for checkout.', 400);
       const order = (await c.query<PaymentOrder>(`INSERT INTO payment_orders(reference,mode,kind,target_id,email,amount_kobo,currency,title,delivery_url,metadata,request_key,shop_section)
         VALUES($1,$2,'digital',$3,$4,$5,'NGN',$6,$7,$8::jsonb,$9,$10) RETURNING *`,
-      [`moyo-${productId}-${randomUUID()}`, mode, productId, email, amount, product.title, product.product_url, JSON.stringify({ product_id: productId, payment_kind: 'digital', product_section: section, pricing_multiplier: regionalMultiplier(country) }), requestKey, section])).rows[0];
+      [`moyo-${productId}-${randomUUID()}`, mode, productId, email, amount, product.title, product.product_url, JSON.stringify({ product_id: productId, payment_kind: 'digital', product_section: section, pricing_multiplier: regionalMultiplier(country), display_currency: displayCurrency, usd_price: usdPrice }), requestKey, section])).rows[0];
       return order;
     });
   }

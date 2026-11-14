@@ -1,3 +1,4 @@
+import {isDisplayCurrency} from '@/lib/regionalPricing';
 import {NextRequest} from 'next/server';
 import {stillboundsAuth} from '@/lib/stillboundsAuth';
 import {rateLimit} from '@/lib/rateLimit';
@@ -26,7 +27,7 @@ async function handle(request:NextRequest,context:{params:Promise<{action:string
   const user={id:session.user.id,email:session.user.email,emailVerified:session.user.emailVerified};
   let result:unknown;
   if(action==='status')result=await service.status(user,country);
-  else if(action==='checkout')result=await service.checkout(user,country);
+  else if(action==='checkout'){const currency=body.displayCurrency??'NGN';if(!isDisplayCurrency(currency))throw new BillingError('INVALID_CURRENCY',400,'Choose a valid currency.');result=await service.checkout(user,country,currency,typeof body.expectedAmount==='number'?body.expectedAmount:undefined);}
   else if(action==='challenge'){service.requireEnabled();result=await service.store.challenge(service.config.mode,user.id,validateDevice(body));}
   else if(action==='activate'){if(typeof body.challengeId!=='string'||!/^[-a-f0-9]{36}$/.test(body.challengeId)||typeof body.signature!=='string'||!/^[A-Za-z0-9_-]{86}$/.test(body.signature))throw new BillingError('INVALID_DEVICE',400,'Invalid activation.');result=await service.activate(user,body.challengeId,body.signature,country);}
   else if(action==='verify'){if(typeof body.reference!=='string')throw new BillingError('INVALID_REFERENCE',400,'Invalid payment reference.');result=await service.verify(user,body.reference,country);}
