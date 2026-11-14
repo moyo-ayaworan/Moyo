@@ -1,12 +1,15 @@
 import { timingSafeEqual } from 'node:crypto';
 import nodemailer from 'nodemailer';
 import { query } from '@/lib/db';
+import { requireAdmin } from '@/lib/auth';
+import type { NextRequest } from 'next/server';
 export const runtime = 'nodejs';
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const expected = process.env.CRON_SECRET ? `Bearer ${process.env.CRON_SECRET}` : '';
   const actual = request.headers.get('authorization') || '';
   const headers = { 'Cache-Control': 'private, no-store' };
-  if (!expected || Buffer.byteLength(expected) !== Buffer.byteLength(actual) || !timingSafeEqual(Buffer.from(expected), Buffer.from(actual))) return Response.json({ error: 'Unauthorized' }, { status: 401, headers });
+  const cron = !!expected && Buffer.byteLength(expected) === Buffer.byteLength(actual) && timingSafeEqual(Buffer.from(expected), Buffer.from(actual));
+  if (!cron) { const unauthorized = requireAdmin(request, true); if (unauthorized) return unauthorized; }
   try {
     const { rows } = await query("SELECT 1 FROM operations_runs WHERE name='external-monitor' AND completed_at > NOW()-INTERVAL '26 hours' AND failed=0");
     if (rows.length) return Response.json({ healthy: true }, { headers });

@@ -28,6 +28,9 @@ function normalizeConnectionString(value: string) {
 const pool = new Pool({
   connectionString: normalizeConnectionString(connectionString),
   ssl: { rejectUnauthorized: true },
+  max: 4,
+  connectionTimeoutMillis: 10000,
+  statement_timeout: 30000,
 });
 
 let initialization: Promise<void> | undefined;

@@ -9,10 +9,10 @@ try {
     (SELECT COALESCE(SUM(total),0)::int FROM operations_failures WHERE bucket > NOW()-INTERVAL '2 hours') AS recent_server_errors,
     (SELECT COUNT(*)::int FROM payment_notifications WHERE sent_at IS NULL AND created_at < NOW()-INTERVAL '2 hours') AS overdue_receipts,
     (SELECT COUNT(*)::int FROM payment_orders WHERE mode='live' AND status IN ('review','disputed')) AS review_payments,
-    (SELECT COUNT(*)::int FROM payment_orders WHERE mode='live' AND status='pending' AND created_at < NOW()-INTERVAL '26 hours') AS old_checkouts,
-    (SELECT COUNT(*)::int FROM stillbounds_license_orders WHERE mode='live' AND status='pending' AND created_at < NOW()-INTERVAL '26 hours') AS stillbounds_old_checkouts,
+    (SELECT COUNT(*)::int FROM payment_orders WHERE mode='live' AND status='pending' AND updated_at < NOW()-INTERVAL '26 hours') AS overdue_verifications,
+    (SELECT COUNT(*)::int FROM stillbounds_license_orders o LEFT JOIN operations_checks c ON c.reference=o.reference WHERE o.mode='live' AND o.status='pending' AND COALESCE(c.checked_at,o.created_at) < NOW()-INTERVAL '26 hours') AS stillbounds_overdue_verifications,
     NOT EXISTS(SELECT 1 FROM operations_runs WHERE name='payments' AND completed_at > NOW()-INTERVAL '26 hours' AND failed=0) AS maintenance_unhealthy`);
-  // Aggregate counts only; old checkouts can be abandoned, not necessarily charged.
+  // Alert on overdue verification attempts; an old unpaid checkout alone is not an incident.
   console.log(JSON.stringify(metrics));
   if (Object.values(metrics).some(value => value === true || (typeof value === 'number' && value > 0))) process.exitCode = 1;
   const health = await fetch('https://moyoayaworan.com/api/operations/health', {

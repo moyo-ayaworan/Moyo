@@ -9,11 +9,11 @@ Scope: error monitoring, payment/receipt recovery, isolated load checks and rele
 - Daily payment maintenance checks unresolved shop and invoice payments, performs a bounded Stillbounds reconciliation pass using the existing fulfilment validation/locking, retries the receipt outbox and records completion. Partial provider failures return HTTP 503.
 - Next.js request errors and handled payment/download/Stillbounds server errors produce safe event logs. Hourly aggregate counters contain event names and counts, without customer records, raw error messages, request URLs or tokens. Counters expire after seven days when errors are recorded.
 - `/api/operations/health` requires a separate monitor secret. GET checks database connectivity; POST records the independent monitor's successful completion. Unauthorized callers receive 401.
-- The private `moyo-operations` repository runs an hourly monitor using a restricted read-only database role. It checks recent server errors, overdue receipt notifications, live payments needing review/dispute handling, old pending shop/Stillbounds checkouts, failed or missing maintenance completion, and authenticated application/database availability. Counts are aggregate only. Old pending checkouts may be abandoned; they require triage rather than an assumption that money was taken.
+- The private `moyo-operations` repository runs an hourly monitor using a restricted read-only database role. It checks recent server errors, overdue receipt notifications, live payments needing review/dispute handling, overdue verification attempts for pending shop/Stillbounds checkouts, failed or missing maintenance completion, and authenticated application/database availability. Counts are aggregate only. The check uses last verification-attempt time, so an abandoned checkout that maintenance has already checked does not become an alert solely because it is old.
 - A failed check sends an alert to the configured owner through SMTP. No customer emails are sent by the monitor. Alerts may repeat hourly while a problem remains. SMTP acceptance does not prove inbox placement.
 - A daily Vercel watchdog detects absence of a successful independent monitor run within 26 hours and alerts the owner. GitHub monitoring and Vercel watchdog scheduling are separate, but simultaneous failures of both remain possible.
 
-The private workflow pins `SOURCE_REVISION` to a reviewed full commit SHA. Keep that variable aligned with deployed source. Production credentials are never placed in the public repository or its workflows. The monitor role can SELECT only payment_orders, payment_notifications, stillbounds_license_orders, operations_runs and operations_failures. It cannot change customer records.
+The private workflow pins `SOURCE_REVISION` to a reviewed full commit SHA. Keep that variable aligned with deployed source. Production credentials are never placed in the public repository or its workflows. The monitor role can SELECT only payment_orders, payment_notifications, stillbounds_license_orders, operations_runs, operations_checks and operations_failures. It cannot change customer records.
 
 ## Load-check limits
 
@@ -42,4 +42,11 @@ This is a component/database concurrency baseline, not a production capacity pro
 | Distributed locks/transactions, saga pattern, eventual consistency, CAP theorem, leader election, network partitions, clock skew | Relevant design concepts, not a mandate for extra distributed infrastructure. Current financial state remains transactionally controlled in PostgreSQL. |
 | Backups, disaster recovery, chaos engineering | Additional backups explicitly declined. Failure-path regression checks and independent watchdogs added; no disaster-recovery drill or chaos program claimed. |
 
-Deployment, CI, alert acceptance and load-run evidence are recorded after the production verification pass.
+## Verified evidence (15 November 2026, Africa/Lagos)
+
+- GitHub run 43653960801 passed 161 regression tests, TypeScript and the isolated PostgreSQL load job. The load job performed 384 operations with a four-connection pool: 121 unique orders, forty retries producing one order, p50 33 ms, p95 100 ms and p99 110 ms. These are runner measurements, not internet or production latency.
+- Production health returned 401 without the monitor credential and 200 with it.
+- Authenticated production maintenance returned 200: seven payments checked, zero failures and zero queued receipts. No payment was created or charged by this check.
+- Private monitor run 43653996623 exercised an alert condition and Gmail SMTP accepted the owner-only alert. This does not certify inbox placement. The initial stale-checkout warning was refined to use verification timing rather than checkout age.
+- GitHub main protection requires both `verify` and `performance`, including administrator pushes. Vercel runs regression tests and TypeScript before each production build.
+- Backup role and secrets were removed after the owner declined all additional backups. No database/media archive was created or uploaded.
