@@ -1,4 +1,6 @@
 'use client';
+import ResumeCheckout from '@/components/ResumeCheckout';
+import { parseSavedCheckoutQuote, type SavedCheckoutQuote } from '@/lib/pricingSnapshot';
 import { RegionalCharge, useCheckoutPricing } from '@/components/RegionalPricing';
 import type { ProductSection } from '@/lib/productSections';
 import { getStorageItem, setStorageItem } from '@/lib/browserStorage';
@@ -9,8 +11,9 @@ export default function PaystackPurchase({productId,title,section,price}:{produc
   const { ready: pricingReady, currency, quote } = useCheckoutPricing(price || '');
   const request=useRef<{email:string;key:string}|null>(null),pending=useRef(false);
   const [email,setEmail]=useState(''),[error,setError]=useState(''),[loading,setLoading]=useState(false),[paymentPath,setPaymentPath]=useState('');
-  const startCheckout=async(event:React.FormEvent)=>{
-    event.preventDefault();if(pending.current)return;
+  const [resumeQuote,setResumeQuote]=useState<SavedCheckoutQuote|null>(null);
+  const startCheckout=async(resume?:SavedCheckoutQuote)=>{
+    if(pending.current)return;
     pending.current=true;setLoading(true);setError('');
     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),25000);
     try{
@@ -22,9 +25,14 @@ export default function PaystackPurchase({productId,title,section,price}:{produc
         request.current={email:normalizedEmail,key};
         setStorageItem('local',storageKey,key);
       }
-      const response=await fetch('/api/paystack/initialize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({productId,email:normalizedEmail,section,requestKey:request.current.key,displayCurrency:currency,expectedAmount:quote?.amountMinor}),signal:controller.signal});
+      const response=await fetch('/api/paystack/initialize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({productId,email:normalizedEmail,section,requestKey:request.current.key,displayCurrency:currency,expectedAmount:quote?.amountMinor,resumeReference:resume?.reference,resumeAmount:resume?.amountMinor}),signal:controller.signal});
       const data=await response.json().catch(()=>({}));
       if(typeof data.paymentPath==='string'&&data.paymentPath.startsWith(`${productShopPath(section)}/payment?reference=`))setPaymentPath(data.paymentPath);
+      if(response.ok&&data.confirmationRequired) {
+        const saved = parseSavedCheckoutQuote(data.resumeQuote);
+        if(!saved) throw Error('The saved checkout could not be verified. Please contact the studio.');
+        setResumeQuote(saved); pending.current=false; setLoading(false); return;
+      }
       if(response.ok&&data.paymentPath) {
         const path=`${productShopPath(section)}/payment?reference=`;
         if(typeof data.paymentPath!=='string'||!data.paymentPath.startsWith(path))throw Error('Invalid payment return address.');
@@ -39,10 +47,11 @@ export default function PaystackPurchase({productId,title,section,price}:{produc
       pending.current=false;setLoading(false);
     }finally{clearTimeout(timeout);}
   };
-  return <form onSubmit={startCheckout} className="space-y-4" aria-busy={loading}>
-    <div className="space-y-2"><label className="block text-xs text-foreground/75" htmlFor={`paystack-email-${productId}`}>Your email address</label><input id={`paystack-email-${productId}`} type="email" required inputMode="email" maxLength={254} autoComplete="email" autoCapitalize="none" spellCheck={false} disabled={loading} value={email} onChange={event=>setEmail(event.target.value)} placeholder="you@example.com" aria-describedby={`paystack-help-${productId}`} className="min-h-13 w-full border border-foreground/30 bg-transparent px-4 text-base text-foreground outline-none placeholder:text-foreground/35 focus:border-accent disabled:opacity-60"/><p id={`paystack-help-${productId}`} className="text-[11px] leading-relaxed text-foreground/55">Your receipt and {title} download link will be sent here.</p></div>
+  return <form onSubmit={event=>{event.preventDefault();void startCheckout();}} className="space-y-4" aria-busy={loading}>
+    <div className="space-y-2"><label className="block text-xs text-foreground/75" htmlFor={`paystack-email-${productId}`}>Your email address</label><input id={`paystack-email-${productId}`} type="email" required inputMode="email" maxLength={254} autoComplete="email" autoCapitalize="none" spellCheck={false} disabled={loading} value={email} onChange={event=>{setEmail(event.target.value);setResumeQuote(null);}} placeholder="you@example.com" aria-describedby={`paystack-help-${productId}`} className="min-h-13 w-full border border-foreground/30 bg-transparent px-4 text-base text-foreground outline-none placeholder:text-foreground/35 focus:border-accent disabled:opacity-60"/><p id={`paystack-help-${productId}`} className="text-[11px] leading-relaxed text-foreground/55">Your receipt and {title} download link will be sent here.</p></div>
     <p className="text-xs text-foreground/65">{price ? <>Paystack will charge <RegionalCharge value={price}/> in NGN. Your bank may apply conversion fees.</> : 'Paystack charges in NGN.'}</p>
-    <button type="submit" disabled={loading || !pricingReady} className="inline-flex min-h-13 w-full items-center justify-between gap-3 border border-accent bg-accent px-5 py-4 text-xs font-medium text-white transition-opacity hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent disabled:opacity-60">{loading?'Opening secure checkout…':'Continue to payment'}{loading?<LoaderCircle size={17} className="motion-safe:animate-spin" aria-hidden="true"/>:<ArrowUpRight size={17} aria-hidden="true"/>}</button>
+    {resumeQuote&&<ResumeCheckout quote={resumeQuote} busy={loading} onResume={()=>void startCheckout(resumeQuote)}/>}
+    {!resumeQuote&&<button type="submit" disabled={loading || !pricingReady} className="inline-flex min-h-13 w-full items-center justify-between gap-3 border border-accent bg-accent px-5 py-4 text-xs font-medium text-white transition-opacity hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent disabled:opacity-60">{loading?'Opening secure checkout…':'Continue to payment'}{loading?<LoaderCircle size={17} className="motion-safe:animate-spin" aria-hidden="true"/>:<ArrowUpRight size={17} aria-hidden="true"/>}</button>}
     {paymentPath&&<a href={paymentPath} className="block text-sm underline">Check original payment</a>}
     {error&&<p role="alert" className="border-l-2 border-red-400 pl-3 text-sm leading-relaxed text-red-400">{error}</p>}
   </form>;

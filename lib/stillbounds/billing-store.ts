@@ -1,3 +1,4 @@
+import type {PricingSnapshot} from '../pricingSnapshot.ts';
 import {Pool,type PoolClient} from 'pg';
 import {randomBytes,randomUUID} from 'node:crypto';
 import {DAY,activationMessage,publicKeyHash,verifyActivation} from './license-proof.ts';
@@ -6,8 +7,8 @@ export class BillingError extends Error { code:string;status:number;constructor(
 export type AccountRow={mode:BillingMode;user_id:string;trial_started_at:Date|null;trial_ends_at:Date|null;paid:boolean;blocked:boolean};
 export type DeviceRow={mode:BillingMode;user_id:string;device_id:string;activation_id:string;device_name:string;public_key:string;device_key:string;active:boolean;activated_at:Date;last_seen_at:Date};
 export type ChallengeRow={id:string;mode:BillingMode;user_id:string;device_id:string;device_name:string;public_key:string;device_key:string;nonce:string;expires_at:Date;consumed_at:Date|null};
-type OrderRow={reference:string;mode:BillingMode;user_id:string;email:string;amount:string;currency:string;status:string;provider_id:string|null;checkout_url?:string|null};
-const orderFromRow=(r:OrderRow):Order=>({reference:r.reference,mode:r.mode,userId:r.user_id,email:r.email,amount:Number(r.amount),currency:r.currency,status:r.status,providerId:r.provider_id??undefined,checkoutUrl:r.checkout_url??undefined});
+type OrderRow={reference:string;mode:BillingMode;user_id:string;email:string;amount:string;currency:string;status:string;provider_id:string|null;checkout_url?:string|null;pricing?:PricingSnapshot|null};
+const orderFromRow=(r:OrderRow):Order=>({reference:r.reference,mode:r.mode,userId:r.user_id,email:r.email,amount:Number(r.amount),currency:r.currency,status:r.status,providerId:r.provider_id??undefined,checkoutUrl:r.checkout_url??undefined,pricing:r.pricing??null});
 export class LicensingStore {
  private pool:Pool;private schema?:string;constructor(pool:Pool,schema?:string){this.pool=pool;this.schema=schema;if(schema&&!/^[a-z][a-z0-9_]{0,62}$/.test(schema))throw Error('Invalid database namespace.');}
  async transaction<T>(work:(client:PoolClient)=>Promise<T>){const c=await this.pool.connect();try{await c.query('BEGIN');if(this.schema)await c.query(`SET LOCAL search_path TO "${this.schema}"`);const result=await work(c);await c.query('COMMIT');return result;}catch(error){await c.query('ROLLBACK');throw error;}finally{c.release();}}
@@ -43,6 +44,7 @@ export class LicensingStore {
   });
  }
  async deactivate(mode:BillingMode,userId:string,activationId:string){return this.transaction(async c=>{await c.query('SELECT user_id FROM stillbounds_license_accounts WHERE mode=$1 AND user_id=$2 FOR UPDATE',[mode,userId]);const result=await c.query('UPDATE stillbounds_license_devices SET active=FALSE WHERE mode=$1 AND user_id=$2 AND activation_id=$3 AND active=TRUE RETURNING activation_id',[mode,userId,activationId]);if(!result.rowCount)throw new BillingError('DEVICE_NOT_FOUND',404,'This activation was not found on your account.');});}
+ async pendingOrder(mode:BillingMode,userId:string){return this.transaction(async c=>{const row=(await c.query<OrderRow>("SELECT * FROM stillbounds_license_orders WHERE mode=$1 AND user_id=$2 AND status='pending' ORDER BY created_at DESC LIMIT 1",[mode,userId])).rows[0];return row?orderFromRow(row):null;});}
  async createOrder(order:Order){return this.transaction(async c=>{
    await c.query('SELECT pg_advisory_xact_lock(hashtext($1))',['stillbounds-checkout:'+order.mode+':'+order.userId]);
    await c.query('INSERT INTO stillbounds_license_accounts(mode,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[order.mode,order.userId]);
@@ -50,7 +52,7 @@ export class LicensingStore {
    if(account.paid||account.blocked)throw new BillingError('PAYMENT_REVIEW',409,'Check your existing purchase before paying again.');
    const pending=(await c.query<OrderRow>("SELECT * FROM stillbounds_license_orders WHERE mode=$1 AND user_id=$2 AND status='pending' ORDER BY created_at DESC LIMIT 1",[order.mode,order.userId])).rows[0];
    if(pending){if(!pending.checkout_url)throw new BillingError('CHECKOUT_PENDING',409,'Checkout is being prepared. Please try again shortly.');return {...orderFromRow(pending),reused:true};}
-   await c.query('INSERT INTO stillbounds_license_orders(reference,mode,user_id,email,amount,currency) VALUES($1,$2,$3,$4,$5,$6)',[order.reference,order.mode,order.userId,order.email,order.amount,order.currency]);return order;
+   await c.query('INSERT INTO stillbounds_license_orders(reference,mode,user_id,email,amount,currency,pricing) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb)',[order.reference,order.mode,order.userId,order.email,order.amount,order.currency,JSON.stringify(order.pricing??null)]);return order;
   });}
  async saveCheckout(mode:BillingMode,reference:string,url:string){await this.transaction(c=>c.query("UPDATE stillbounds_license_orders SET checkout_url=$3 WHERE mode=$1 AND reference=$2 AND status='pending'",[mode,reference,url]));}
  async order(mode:BillingMode,reference:string,userId?:string){return this.transaction(async c=>{const r=(await c.query<OrderRow>('SELECT * FROM stillbounds_license_orders WHERE mode=$1 AND reference=$2'+(userId?' AND user_id=$3':''),userId?[mode,reference,userId]:[mode,reference])).rows[0];return r?orderFromRow(r):null;});}

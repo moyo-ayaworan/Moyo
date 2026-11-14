@@ -1,3 +1,4 @@
+import type { PricingSnapshot } from '../pricingSnapshot.ts';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export type PaymentMode = 'live' | 'test';
@@ -6,6 +7,7 @@ export type PaymentOrder = {
   email: string; amount_kobo: string | number; currency: string; status: string;
   shop_section?: 'photography' | 'art';
   metadata: Record<string, unknown>; provider_id?: string | null; title: string; delivery_url?: string;
+  pricing?: PricingSnapshot | null;
   retry?: boolean;
   checkout_url?: string | null; document_id?: number | null; paid_at?: Date | null;
 };

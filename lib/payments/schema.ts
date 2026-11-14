@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS payment_orders (
  provider_id TEXT, checkout_url TEXT, request_key UUID UNIQUE, paid_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS shop_section TEXT NOT NULL DEFAULT 'photography' CHECK(shop_section IN ('photography','art'));
+ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS pricing JSONB;
 CREATE UNIQUE INDEX IF NOT EXISTS payment_orders_provider ON payment_orders(mode, provider_id) WHERE provider_id IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS payment_orders_invoice_pending ON payment_orders(mode,document_id) WHERE kind='invoice' AND status='pending';
 CREATE TABLE IF NOT EXISTS payment_events (

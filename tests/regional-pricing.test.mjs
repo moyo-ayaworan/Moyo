@@ -82,14 +82,19 @@ test('account prices convert the server regional amount without doubling it agai
  const Price=compiled.exports.RegionalPrice;
  assert.match(renderToStaticMarkup(React.createElement(Price,{value:60000,adjusted:true})),/\$60/);
  assert.match(renderToStaticMarkup(React.createElement(Price,{value:30000})),/\$60/);
+ state.currency='EUR';state.rates.EUR=0.000678;
+ assert.match(renderToStaticMarkup(React.createElement(Price,{value:60000,adjusted:true})),/€60/);
+ assert.match(renderToStaticMarkup(React.createElement(Price,{value:30000})),/€60/);
 });
-test('only USD prices round up to $10 before the regional multiplier; NGN amounts stay unchanged',()=>{
- const rates={USD:0.000739};
+test('USD and EUR round up before the regional multiplier; NGN amounts stay unchanged',()=>{
+ const rates={USD:0.000739,EUR:0.000678};
+ assert.equal(pricing.checkoutQuote(3000000,2,'EUR',rates).roundedAmount,60);
+ assert.equal(pricing.checkoutQuote(3000000,1,'EUR',rates).roundedAmount,30);
  assert.equal(pricing.checkoutQuote(3000000,1,'USD',rates).dollars,30);
  assert.equal(pricing.checkoutQuote(3000000,2,'USD',rates).dollars,60);
  assert.equal(pricing.checkoutQuote(2000000,1,'USD',rates).dollars,20);
  assert.equal(pricing.checkoutQuote(2000000,2,'USD',rates).dollars,40);
- for(const currency of ['NGN','GBP','EUR'])assert.equal(pricing.checkoutQuote(3000000,2,currency,rates).amountMinor,6000000);
+ for(const currency of ['NGN','GBP'])assert.equal(pricing.checkoutQuote(3000000,2,currency,rates).amountMinor,6000000);
  assert.equal(pricing.checkoutQuote(3000000,1,'USD',{USD:0.001}).dollars,30);
  for(const rate of [0,-1,NaN,Infinity,undefined])assert.throws(()=>pricing.checkoutQuote(3000000,1,'USD',{USD:rate}));
 });

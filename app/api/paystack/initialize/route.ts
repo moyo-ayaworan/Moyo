@@ -1,3 +1,4 @@
+import { savedCheckoutQuote } from '@/lib/pricingSnapshot';
 import { isDisplayCurrency } from '@/lib/regionalPricing';
 import { isProductSection, productShopPath } from '@/lib/productSections';
 import { randomUUID } from 'node:crypto';
@@ -31,6 +32,12 @@ export async function POST(req: NextRequest) {
     const paymentPath = `${productShopPath(order.shop_section || 'photography')}/payment?reference=${encodeURIComponent(order.reference)}`;
     if (current.status === 'paid') {
       const response = NextResponse.json({ paymentPath }, { headers: privateHeaders });
+      setPurchaseCookie(response, order.reference);
+      return response;
+    }
+    if (order.retry && typeof body.expectedAmount === 'number' && body.expectedAmount !== Number(order.amount_kobo) &&
+      !(body.resumeReference === order.reference && body.resumeAmount === Number(order.amount_kobo))) {
+      const response = NextResponse.json({ confirmationRequired: true, resumeQuote: savedCheckoutQuote(order.reference, Number(order.amount_kobo)), paymentPath }, { headers: privateHeaders });
       setPurchaseCookie(response, order.reference);
       return response;
     }

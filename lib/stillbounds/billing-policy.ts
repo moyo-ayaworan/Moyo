@@ -1,10 +1,11 @@
+import type { PricingSnapshot } from '../pricingSnapshot.ts';
 import {createHmac,timingSafeEqual,createPublicKey,createPrivateKey} from 'node:crypto';
 export const STILLBOUNDS_PRICE_MINOR=3000000;
 export const STILLBOUNDS_CURRENCY='NGN';
 export const STILLBOUNDS_TRIAL_DAYS=30;
 export const STILLBOUNDS_DEVICE_LIMIT=2;
 export type BillingMode='test'|'live';
-export type Order={reference:string;mode:BillingMode;userId:string;email:string;amount:number;currency:string;status:string;providerId?:string;checkoutUrl?:string;reused?:boolean};
+export type Order={reference:string;mode:BillingMode;userId:string;email:string;amount:number;currency:string;status:string;providerId?:string;checkoutUrl?:string;pricing?:PricingSnapshot|null;reused?:boolean};
 export function paymentMatchesOrder(payment:unknown,order:Order){
  if(!payment||typeof payment!=='object')return false;const p=payment as Record<string,unknown>;
  const customer=p.customer as {email?:unknown}|undefined;

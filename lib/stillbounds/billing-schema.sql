@@ -35,3 +35,5 @@ CREATE TABLE IF NOT EXISTS stillbounds_license_events (
 
 ALTER TABLE stillbounds_license_orders ADD COLUMN IF NOT EXISTS checkout_url TEXT;
 ALTER TABLE stillbounds_license_events ADD COLUMN IF NOT EXISTS amount BIGINT;
+
+ALTER TABLE stillbounds_license_orders ADD COLUMN IF NOT EXISTS pricing JSONB;
