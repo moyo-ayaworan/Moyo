@@ -3939,12 +3939,12 @@ export default function AdminPage() {
               </form>
             </div>
 
-            <div className="space-y-4">
+            <div className="min-w-0 space-y-4">
               <h3 className="text-[10px] uppercase tracking-[0.28em] text-accent sm:tracking-[0.5em]">Catalog Categories</h3>
               <p className="text-xs leading-relaxed text-white/50">Move categories up or down to set the website order. Hidden categories stay available here.</p>
               {catalogCategories.map((category, categoryIndex) => (
-                <div key={category.id} className="bg-surface/20 border border-white/5 p-4 space-y-4">
-                  <div className="flex items-start justify-between gap-4">
+                <div key={category.id} className="min-w-0 max-w-full bg-surface/20 border border-white/5 p-3 space-y-4 sm:p-4">
+                  <div className="flex min-w-0 flex-col items-start justify-between gap-4 sm:flex-row">
                     <div className="min-w-0 flex-1">
                       <p className="text-white font-heading italic">{category.name}</p>
                       <p className="text-[10px] text-white/40 uppercase tracking-widest">
@@ -4032,9 +4032,9 @@ export default function AdminPage() {
                   </div>
 
                   {category.images?.length > 0 ? (
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    <div className="grid min-w-0 grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:grid-cols-3">
                       {category.images.map((image) => (
-                        <div key={image.id} className="relative group overflow-hidden border border-white/10 bg-black">
+                        <div key={image.id} className="relative group min-w-0 max-w-full overflow-hidden border border-white/10 bg-black">
                           <AdminPreviewImage
                             src={getCloudinaryPreviewUrl(image.image_url, { width: 360, height: 280 })}
                             srcSet={getImagePreviewSrcSet(image.image_url, [180, 360, 540])}
@@ -4044,7 +4044,7 @@ export default function AdminPage() {
                           <button
                             type="button"
                             onClick={() => deleteCatalogImage(image.id)}
-                            className="absolute right-2 top-2 bg-black/70 p-2 text-red-300 opacity-0 transition-opacity group-hover:opacity-100"
+                            className="absolute right-2 top-2 flex min-h-11 min-w-11 items-center justify-center bg-black/70 p-2 text-red-300 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
                             aria-label="Delete catalog image"
                           >
                             <FiTrash2 />
@@ -4065,10 +4065,10 @@ export default function AdminPage() {
                           {image.title && (
                             <p className="px-2 py-2 text-[10px] text-white/60 truncate">{image.title}</p>
                           )}
-                          <label className="block p-2 text-[10px] text-white/60">
+                          <label className="block min-w-0 p-2 text-xs text-white/60">
                             Move to category
-                            <select className={`${inputClass} mt-1`} value="" disabled={catalogOrganizing} onChange={event => moveCatalogImage(image, event.target.value)}>
-                              <option value="">Choose destination</option>
+                            <select className="mt-1 min-h-11 w-full min-w-0 max-w-full rounded-sm border border-white/10 bg-white/[0.05] px-2 py-2 text-base text-white outline-none focus:border-accent sm:text-sm" value="" disabled={catalogOrganizing} onChange={event => moveCatalogImage(image, event.target.value)}>
+                              <option value="">Select…</option>
                               {catalogCategories.filter(item => item.id !== category.id).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
                             </select>
                           </label>
