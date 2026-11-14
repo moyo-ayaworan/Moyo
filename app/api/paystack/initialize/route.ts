@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     let checkoutUrl: string;
     try { checkoutUrl = await initializeOrder(order, `${productShopPath(order.shop_section || 'photography')}/payment?reference=${encodeURIComponent(order.reference)}`); }
     catch (error) {
-      const failure = paymentFailure(error);
+      const failure = await paymentFailure(error);
       const response = NextResponse.json({ error: 'Checkout could not be resumed yet. Retry with the same email, or check the original payment. If this continues, contact the studio with the reference.', reference: order.reference, paymentPath }, { status: failure.status, headers: privateHeaders });
       setPurchaseCookie(response, order.reference);
       return response;

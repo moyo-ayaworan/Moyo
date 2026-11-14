@@ -23,9 +23,11 @@ export function requirePaymentOrigin(req: NextRequest) {
   const origin = req.headers.get('origin');
   if (origin !== paymentOrigin()) throw new PaymentError('Open checkout from the website.', 403);
 }
-export function paymentFailure(error: unknown) {
-  if (!(error instanceof PaymentError) || error.status >= 500)
-    void import('../operations').then(m => m.recordOperationalFailure('payment_error')).catch(() => {});
+export async function paymentFailure(error: unknown) {
+  if (!(error instanceof PaymentError) || error.status >= 500) {
+    try { const { recordOperationalFailure } = await import('../operations'); await recordOperationalFailure('payment_error'); }
+    catch { console.error(JSON.stringify({ event: 'payment_error' })); }
+  }
   // Never return provider payloads, database errors or secrets to the browser.
   return NextResponse.json({ error: error instanceof PaymentError ? error.message : 'Unable to process payment. Please retry or contact the studio.' }, { status: error instanceof PaymentError ? error.status : 503, headers: privateHeaders });
 }
