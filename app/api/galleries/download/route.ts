@@ -85,9 +85,13 @@ export async function GET(req: NextRequest) {
   try {
     fileResponse = await fetch(downloadUrl, { signal: AbortSignal.timeout(30_000) });
   } catch {
+    const { recordOperationalFailure } = await import('@/lib/operations');
+    await recordOperationalFailure('download_error');
     return NextResponse.json({ error: 'Unable to prepare this download. Please try again.' }, { status: 502 });
   }
   if (!fileResponse.ok || !fileResponse.body) {
+    const { recordOperationalFailure } = await import('@/lib/operations');
+    await recordOperationalFailure('download_error');
     return NextResponse.json({ error: 'Unable to prepare this download.' }, { status: 502 });
   }
 

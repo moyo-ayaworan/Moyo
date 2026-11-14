@@ -1,0 +1,37 @@
+name: Reliability operations
+on:
+  workflow_dispatch:
+    inputs:
+      alert_test:
+        type: boolean
+        default: false
+  schedule:
+    - cron: '45 * * * *'
+permissions:
+  contents: read
+concurrency:
+  group: reliability
+  cancel-in-progress: false
+jobs:
+  monitor:
+    if: github.event.repository.private
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: moyo-ayaworan/Moyo
+          ref: ${{ vars.SOURCE_REVISION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: node scripts/ops/monitor.mjs
+        env:
+          MONITOR_DATABASE_URL: ${{ secrets.MONITOR_DATABASE_URL }}
+          OPERATIONS_MONITOR_SECRET: ${{ secrets.OPERATIONS_MONITOR_SECRET }}
+          OPERATIONS_ALERT_TO: ${{ secrets.OPERATIONS_ALERT_TO }}
+          OPERATIONS_ALERT_TEST: ${{ github.event.inputs.alert_test == 'true' && '1' || '0' }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}

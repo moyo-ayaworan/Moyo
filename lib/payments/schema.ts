@@ -1,4 +1,12 @@
 export const paymentSchema = `
+CREATE TABLE IF NOT EXISTS operations_checks(reference TEXT PRIMARY KEY,checked_at TIMESTAMPTZ NOT NULL);
+CREATE TABLE IF NOT EXISTS operations_runs (
+ name TEXT PRIMARY KEY, completed_at TIMESTAMPTZ NOT NULL, failed INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS operations_failures (
+ event TEXT NOT NULL, bucket TIMESTAMPTZ NOT NULL, total INTEGER NOT NULL,
+ PRIMARY KEY(event,bucket)
+);
 ALTER TABLE digital_products ADD COLUMN IF NOT EXISTS section TEXT NOT NULL DEFAULT 'photography' CHECK(section IN ('photography','art'));
 CREATE INDEX IF NOT EXISTS digital_products_section_idx ON digital_products(section,is_active);
 CREATE TABLE IF NOT EXISTS payment_orders (

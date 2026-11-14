@@ -24,6 +24,8 @@ export function requirePaymentOrigin(req: NextRequest) {
   if (origin !== paymentOrigin()) throw new PaymentError('Open checkout from the website.', 403);
 }
 export function paymentFailure(error: unknown) {
+  if (!(error instanceof PaymentError) || error.status >= 500)
+    void import('../operations').then(m => m.recordOperationalFailure('payment_error')).catch(() => {});
   // Never return provider payloads, database errors or secrets to the browser.
   return NextResponse.json({ error: error instanceof PaymentError ? error.message : 'Unable to process payment. Please retry or contact the studio.' }, { status: error instanceof PaymentError ? error.status : 503, headers: privateHeaders });
 }

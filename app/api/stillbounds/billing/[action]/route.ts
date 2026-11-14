@@ -33,6 +33,6 @@ async function handle(request:NextRequest,context:{params:Promise<{action:string
   else if(action==='verify'){if(typeof body.reference!=='string')throw new BillingError('INVALID_REFERENCE',400,'Invalid payment reference.');result=await service.verify(user,body.reference,country);}
   else if(action==='deactivate'){service.requireEnabled();if(typeof body.activationId!=='string'||!/^[-a-f0-9]{36}$/.test(body.activationId))throw new BillingError('INVALID_DEVICE',400,'Choose a laptop to deactivate.');await service.store.deactivate(service.config.mode,user.id,body.activationId);result=await service.status(user,country);}
   return Response.json(result,{headers});
- }catch(error){if(error instanceof BillingError)return Response.json({error:error.message,code:error.code},{status:error.status,headers});return Response.json({error:'Activation is temporarily unavailable. Your existing books are safe.',code:'SERVICE_UNAVAILABLE'},{status:503,headers});}
+ }catch(error){if(!(error instanceof BillingError)||error.status>=500){const {recordOperationalFailure}=await import('@/lib/operations');await recordOperationalFailure('stillbounds_error');}if(error instanceof BillingError)return Response.json({error:error.message,code:error.code},{status:error.status,headers});return Response.json({error:'Activation is temporarily unavailable. Your existing books are safe.',code:'SERVICE_UNAVAILABLE'},{status:503,headers});}
 }
 export {handle as GET,handle as POST};
