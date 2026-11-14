@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     if (!isProductSection(section)) throw new PaymentError('Choose a valid product collection.', 400);
     const key = body.requestKey || randomUUID();
     if (typeof key !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(key)) throw new PaymentError('Invalid checkout request.', 400);
-    const order = await payments.createDigital(productId, email, mode, key, section);
+    const order = await payments.createDigital(productId, email, mode, key, section, req.headers.get('x-vercel-ip-country') || '');
     // Reconcile retries before attempting to initialize the same reference again.
     let current = order;
     if (order.retry) {

@@ -1,3 +1,4 @@
+import { regionalMultiplier } from '../regionalPricing.ts';
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { PaymentError, isPaymentEmail, paymentMatches, priceToKobo, type PaymentMode, type PaymentOrder } from './policy.ts';
@@ -9,7 +10,7 @@ export class PaymentStore {
   transact: Transaction;
   constructor(transact: Transaction) { this.transact = transact; }
   async order(reference: string) { return this.transact(async c => (await c.query<PaymentOrder>('SELECT * FROM payment_orders WHERE reference=$1', [reference])).rows[0] || null); }
-  async createDigital(productId: number, email: string, mode: PaymentMode, requestKey: string, section: 'photography' | 'art' = 'photography') {
+  async createDigital(productId: number, email: string, mode: PaymentMode, requestKey: string, section: 'photography' | 'art' = 'photography', country = '') {
     return this.transact(async c => {
       // Serialize retries of one browser action, including after a lost HTTP response.
       await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['payment:' + requestKey]);
@@ -21,9 +22,11 @@ export class PaymentStore {
       }
       const product = (await c.query('SELECT id,title,price,product_url,section FROM digital_products WHERE id=$1 AND section=$2 AND is_active=TRUE FOR SHARE', [productId, section])).rows[0];
       if (!product?.product_url) throw new PaymentError('This product is not available for checkout.', 404);
+      const amount = priceToKobo(product.price) * regionalMultiplier(country);
+      if (!Number.isSafeInteger(amount)) throw new PaymentError('This price is not available for checkout.', 400);
       const order = (await c.query<PaymentOrder>(`INSERT INTO payment_orders(reference,mode,kind,target_id,email,amount_kobo,currency,title,delivery_url,metadata,request_key,shop_section)
         VALUES($1,$2,'digital',$3,$4,$5,'NGN',$6,$7,$8::jsonb,$9,$10) RETURNING *`,
-      [`moyo-${productId}-${randomUUID()}`, mode, productId, email, priceToKobo(product.price), product.title, product.product_url, JSON.stringify({ product_id: productId, payment_kind: 'digital', product_section: section }), requestKey, section])).rows[0];
+      [`moyo-${productId}-${randomUUID()}`, mode, productId, email, amount, product.title, product.product_url, JSON.stringify({ product_id: productId, payment_kind: 'digital', product_section: section, pricing_multiplier: regionalMultiplier(country) }), requestKey, section])).rows[0];
       return order;
     });
   }

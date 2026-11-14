@@ -36,3 +36,34 @@ test('geolocation responses cannot be publicly cached and provider failure leave
  }).GET(req);
  assert.equal(success.body.rates.GBP,0.0005);assert.equal(success.body.currency,'GBP');
 });
+test('selling-price tiers double Europe and USA independently of display currency',()=>{
+ for(const country of ['US','GB','FR','DE','CH','NO','UA','RS'])assert.equal(pricing.regionalMultiplier(country),2);
+ for(const country of ['NG','GH','ZA','CA','AU','BR','IN','AE','','XX'])assert.equal(pricing.regionalMultiplier(country),1);
+ assert.equal(pricing.regionalAmount('₦20,000',2),40000);
+ assert.equal(pricing.regionalAmount(30000,2),60000);
+ assert.equal(pricing.regionalAmount(30000,1),30000);
+});
+test('digital checkout snapshots the server regional price and preserves existing orders',async()=>{
+ const {PaymentStore}=await import('../lib/payments/store.ts');
+ for(const [country,expected] of [['US',4000000],['DE',4000000],['NG',2000000],['CA',2000000]]){
+  let inserted;
+  const store=new PaymentStore(async work=>work({query:async(sql,args)=>{
+   if(sql.includes('FROM digital_products'))return {rows:[{id:1,title:'Pack',price:'20000',product_url:'private-file',section:'photography'}]};
+   if(sql.includes('INSERT INTO payment_orders')){inserted=args;return {rows:[{amount_kobo:args[4]}]};}
+   return {rows:[]};
+  }}));
+  const order=await store.createDigital(1,'buyer@example.test','test','test-request','photography',country);
+  assert.equal(order.amount_kobo,expected);assert.equal(JSON.parse(inserted[7]).pricing_multiplier,expected/2000000);
+ }
+});
+test('Stillbounds offer and actual Paystack initialization use the same regional amount',async()=>{
+ const {BillingService}=await import('../lib/stillbounds/billing-service.ts');
+ for(const [country,amount] of [['US',6000000],['FR',6000000],['NG',3000000],['AU',3000000]]){
+  let charged;
+  const service=new BillingService({enabled:true,checkoutEnabled:true,mode:'test',origin:'https://example.test',creatorUserId:''},{status:async()=>({account:null,devices:[]}),createOrder:async()=>null,saveCheckout:async()=>{},failOrder:async()=>{}},async(path,body)=>{charged=body;return {reference:body.reference,authorization_url:'https://checkout.paystack.com/test'};});
+  assert.equal(service.offer(country).price.amountMinor,amount);
+  assert.equal((await service.status({id:'buyer',email:'buyer@example.test',emailVerified:true},country)).price.amountMinor,amount);
+  await service.checkout({id:'buyer',email:'buyer@example.test',emailVerified:true},country);
+  assert.equal(charged.amount,amount);assert.equal(charged.currency,'NGN');
+ }
+});

@@ -11,9 +11,9 @@ async function handle(request:NextRequest,context:{params:Promise<{action:string
  try{
   const {action}=await context.params;
   if(!['offer','status','challenge','activate','checkout','verify','deactivate','webhook'].includes(action))return Response.json({error:'Not found.'},{status:404,headers});
-  const service=billingService();
+  const service=billingService(),country=request.headers.get('x-vercel-ip-country')||'';
   if(action==='webhook'){if(request.method!=='POST')return new Response(null,{status:405,headers});await service.webhook(await boundedBody(request),request.headers.get('x-paystack-signature')||'',request.headers.get('paystack-signature')||'');return Response.json({received:true},{headers});}
-  if(action==='offer'){if(request.method!=='GET')return new Response(null,{status:405,headers});return Response.json(service.offer(),{headers});}
+  if(action==='offer'){if(request.method!=='GET')return new Response(null,{status:405,headers});return Response.json(service.offer(country),{headers});}
   if(request.method!=='POST'&&!(request.method==='GET'&&action==='status'))return new Response(null,{status:405,headers});
   const authHeaders=new Headers(request.headers);const authorization=request.headers.get('authorization');
   if(authorization){if(!/^Bearer [A-Za-z0-9._~-]{16,4096}$/.test(authorization))throw new BillingError('SIGN_IN_REQUIRED',401,'Sign in to your Stillbounds account.');authHeaders.delete('cookie');}
@@ -25,12 +25,12 @@ async function handle(request:NextRequest,context:{params:Promise<{action:string
   const raw=request.method==='POST'?await boundedBody(request):'{}';let body:Record<string,unknown>;try{body=JSON.parse(raw||'{}');if(!body||typeof body!=='object'||Array.isArray(body))throw Error();}catch{throw new BillingError('INVALID_BODY',400,'Invalid request.');}
   const user={id:session.user.id,email:session.user.email,emailVerified:session.user.emailVerified};
   let result:unknown;
-  if(action==='status')result=await service.status(user);
-  else if(action==='checkout')result=await service.checkout(user);
+  if(action==='status')result=await service.status(user,country);
+  else if(action==='checkout')result=await service.checkout(user,country);
   else if(action==='challenge'){service.requireEnabled();result=await service.store.challenge(service.config.mode,user.id,validateDevice(body));}
-  else if(action==='activate'){if(typeof body.challengeId!=='string'||!/^[-a-f0-9]{36}$/.test(body.challengeId)||typeof body.signature!=='string'||!/^[A-Za-z0-9_-]{86}$/.test(body.signature))throw new BillingError('INVALID_DEVICE',400,'Invalid activation.');result=await service.activate(user,body.challengeId,body.signature);}
-  else if(action==='verify'){if(typeof body.reference!=='string')throw new BillingError('INVALID_REFERENCE',400,'Invalid payment reference.');result=await service.verify(user,body.reference);}
-  else if(action==='deactivate'){service.requireEnabled();if(typeof body.activationId!=='string'||!/^[-a-f0-9]{36}$/.test(body.activationId))throw new BillingError('INVALID_DEVICE',400,'Choose a laptop to deactivate.');await service.store.deactivate(service.config.mode,user.id,body.activationId);result=await service.status(user);}
+  else if(action==='activate'){if(typeof body.challengeId!=='string'||!/^[-a-f0-9]{36}$/.test(body.challengeId)||typeof body.signature!=='string'||!/^[A-Za-z0-9_-]{86}$/.test(body.signature))throw new BillingError('INVALID_DEVICE',400,'Invalid activation.');result=await service.activate(user,body.challengeId,body.signature,country);}
+  else if(action==='verify'){if(typeof body.reference!=='string')throw new BillingError('INVALID_REFERENCE',400,'Invalid payment reference.');result=await service.verify(user,body.reference,country);}
+  else if(action==='deactivate'){service.requireEnabled();if(typeof body.activationId!=='string'||!/^[-a-f0-9]{36}$/.test(body.activationId))throw new BillingError('INVALID_DEVICE',400,'Choose a laptop to deactivate.');await service.store.deactivate(service.config.mode,user.id,body.activationId);result=await service.status(user,country);}
   return Response.json(result,{headers});
  }catch(error){if(error instanceof BillingError)return Response.json({error:error.message,code:error.code},{status:error.status,headers});return Response.json({error:'Activation is temporarily unavailable. Your existing books are safe.',code:'SERVICE_UNAVAILABLE'},{status:503,headers});}
 }

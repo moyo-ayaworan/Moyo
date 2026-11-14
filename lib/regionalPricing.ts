@@ -40,3 +40,13 @@ export function displayPrice(value: string | number, currency: DisplayCurrency, 
   const code = converted ? currency : 'NGN';
   return { text: new Intl.NumberFormat('en-NG', { style: 'currency', currency: code, currencyDisplay: code === 'NGN' ? 'symbol' : 'code', maximumFractionDigits: code === 'JPY' ? 0 : 2 }).format(amount * (converted ? rate! : 1)), converted };
 }
+
+// Geographic selling-price tier, independent of the selected display currency.
+const premiumCountries = new Set('US AL AD AT BY BE BA BG HR CY CZ DK EE FI FR DE GR HU IS IE IT XK LV LI LT LU MT MD MC ME NL MK NO PL PT RO RU SM RS SK SI ES SE CH TR UA GB VA AX FO GG GI IM JE SJ'.split(' '));
+export function regionalMultiplier(country: unknown): 1 | 2 {
+  return typeof country === 'string' && premiumCountries.has(country) ? 2 : 1;
+}
+export function regionalAmount(value: string | number, multiplier: 1 | 2) {
+  const amount = nairaAmount(value);
+  return amount === null ? value : amount * multiplier;
+}

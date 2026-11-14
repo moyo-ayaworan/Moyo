@@ -53,7 +53,7 @@ export const termsSections: LegalSection[] = [
   [
     "Pricing, payments and refunds",
     [
-      "The planned launch offer is a 30-day free trial followed by a one-time ₦30,000 NGN software purchase, with up to two activated laptops per account. Launch checkout is not open yet. Joining the waiting list or creating a website account does not start the trial, create a payment obligation or authorise an automatic charge. The trial will start on first app activation after verified sign-in.",
+      "The planned launch offer is a 30-day free trial followed by a one-time software purchase of ₦30,000 NGN, or ₦60,000 NGN for Europe and USA,, with up to two activated laptops per account. Launch checkout is not open yet. Joining the waiting list or creating a website account does not start the trial, create a payment obligation or authorise an automatic charge. The trial will start on first app activation after verified sign-in.",
       "Before offering a paid product, we will disclose the price, applicable taxes, billing period, cancellation process and refund terms and ask you to accept the relevant purchase conditions. These terms do not exclude any refund or other remedy required by consumer law.",
     ],
   ],
