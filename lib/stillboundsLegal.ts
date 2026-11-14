@@ -1,5 +1,5 @@
 export type LegalSection = [heading: string, paragraphs: string[]];
-export const stillboundsLegalVersion = "2026-10-14-v2";
+export const stillboundsLegalVersion = "2026-11-12-v5";
 export const termsSections: LegalSection[] = [
   [
     "Who we are and what these terms cover",
@@ -18,7 +18,7 @@ export const termsSections: LegalSection[] = [
   [
     "Beta software and availability",
     [
-      "The beta is unfinished software. Features, file compatibility and system requirements can change, and errors or interruptions can occur. The advertised beta currently targets Apple Silicon Macs. Check the requirements supplied with your invitation before installing.",
+      "The beta is unfinished software. Features, file compatibility and system requirements can change, and errors or interruptions can occur. Separate beta builds target Intel and Apple Silicon Macs. Check the requirements supplied with your invitation before installing.",
       "Keep independent backups of photographs and projects. Test exports before relying on them for client delivery. We will communicate material changes or an end to the beta where reasonably practicable; urgent security or legal issues may require immediate action.",
     ],
   ],
@@ -53,7 +53,7 @@ export const termsSections: LegalSection[] = [
   [
     "Pricing, payments and refunds",
     [
-      "Pricing has not been announced. Joining the waiting list does not create a payment obligation or subscription. No future charge or automatic renewal is authorised by this request.",
+      "The planned launch offer is a 30-day free trial followed by a one-time ₦30,000 NGN software purchase, with up to two activated laptops per account. Launch checkout is not open yet. Joining the waiting list or creating a website account does not start the trial, create a payment obligation or authorise an automatic charge. The trial will start on first app activation after verified sign-in.",
       "Before offering a paid product, we will disclose the price, applicable taxes, billing period, cancellation process and refund terms and ask you to accept the relevant purchase conditions. These terms do not exclude any refund or other remedy required by consumer law.",
     ],
   ],
@@ -87,6 +87,21 @@ export const termsSections: LegalSection[] = [
   ],
 ];
 export const privacySections: LegalSection[] = [
+  ["Accounts, payments and laptop activation", [
+    "Registering uses your name and email address. The account service stores a salted password hash, verification/reset records and sign-in sessions; we do not store your password in readable form. Emails for account verification and password recovery are transactional, not marketing consent.",
+    "Activation stores your account ID, a hashed device identifier, a public device key, the laptop name, activation status and timestamps. The raw hardware identifier is processed on your Mac to derive the hash and is not sent by the activation flow. These records enforce the free trial and two-laptop allowance. A device identifier is pseudonymous account data, not anonymous data.",
+    "Payments use Paystack’s hosted checkout. We retain the order reference, account/email, amount, currency, provider transaction ID and verified payment/refund/dispute status. Card numbers and card security codes are not collected by the Stillbounds application or website checkout form. Paystack processes payment details under its own policies.",
+    "Registration and activation do not upload your photographs, face-analysis results or book files. Those remain local unless you explicitly choose a separate sharing or support action. A desktop session token, device private key and signed activation are stored using macOS-protected encryption. No API secret or database credential is included in the app’s licence interface.",
+    "Paid activations refresh periodically and can work offline for up to 90 days, with a seven-day outage grace period. Deactivating a laptop is enforced when it next checks access or its offline certificate expires. Sign-out clears the local session and activation; it does not delete your photographs or projects.",
+    "Account, payment and activation records are accessible only to the operator and authorised service administrators and the providers required to run them: Vercel hosting, the PostgreSQL database provider, account email delivery and Paystack. Contact ijabikenm@gmail.com for access, correction, export or deletion requests. Payment/dispute records and the minimal trial-abuse-prevention record may need to be retained where necessary for a legitimate purpose or legal obligation; local project files remain under your control.",
+  ]],
+  [
+    "Shared website and desktop accounts",
+    [
+      "Creating a Stillbounds account stores your name, email address, a password hash, email-verification status and account timestamps in this website’s database. Authentication also stores session tokens, expiry times, device-approval codes, and technical session information such as IP address and browser or app details. Verification and password-reset messages are sent through the website’s configured email provider. Account registration does not subscribe you to marketing emails or grant a paid subscription.",
+      "The website uses an essential HttpOnly session cookie. The Mac app stores its session using macOS Keychain-backed encryption. Device-approval codes expire after ten minutes; account sessions expire after thirty days unless renewed or revoked. Sign out on a Mac to remove its local account, or use Sign out other devices on the website to revoke other sessions. Account sign-in does not upload or synchronise your photographs or editable books. Account records remain until deletion is requested and handled by the operator; contact ijabikenm@gmail.com for deletion or correction. Security records and backups follow the retention limitations described below.",
+    ],
+  ],
   [
     "Private Moyo Studio book reviews",
     [
@@ -100,7 +115,7 @@ export const privacySections: LegalSection[] = [
   [
     "Scope and contact",
     [
-      "This notice covers the Stillbounds website at /mofolio, its legal pages, its beta-access list and the private Moyo Studio book-review service. Moyo Ayaworan, based in Nigeria, is responsible for this processing. Contact ijabikenm@gmail.com for privacy questions, withdrawal or requests concerning your data.",
+      "This notice covers the Stillbounds website at /stillbounds, its legal pages, its beta-access list and the private Moyo Studio book-review service. Moyo Ayaworan, based in Nigeria, is responsible for this processing. Contact ijabikenm@gmail.com for privacy questions, withdrawal or requests concerning your data.",
       "The photography, art, bookings, galleries and shop sections of this wider website have separate practices described in the general website Privacy Policy. This notice is not a claim that every desktop or future online feature has been audited: release-specific privacy information will be supplied before beta installation or activation of an online service.",
     ],
   ],
@@ -174,3 +189,13 @@ export const privacySections: LegalSection[] = [
     ],
   ],
 ];
+
+privacySections.push([
+  "Review books published through your account",
+  [
+    "When you deliberately publish a review from Stillbounds, compressed JPEG previews, the book title, version and spread identifiers are uploaded to your account's private review workspace. Original photo files, editable projects and local face-analysis records are not uploaded by this feature.",
+    "People with your private review link and its access code can view that fixed version and submit comments or an approval decision. Share the link only with your intended client. Reviews are limited to 10 active books and 50 MiB of previews per account during the beta, subject to overall hosting capacity.",
+    "You can inspect feedback, copy a client link and permanently delete a review in My review books. Deletion removes its previews and feedback and disables further client access. Expiry denies access immediately; expired data is removed during subsequent cleanup requests or the scheduled daily cleanup. Account deletion or other privacy requests can also be sent to the contact address above.",
+    "Review devices paired through older app versions can publish to the account that approved their connection until the device connection expires or is disconnected in the profile. These review connections are separate from normal browser sign-in. Screenshots or copies made by a client cannot be revoked.",
+  ],
+]);

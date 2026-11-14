@@ -1,6 +1,7 @@
 export const ENIYAN_ROUTES: Record<string, string> = {
   '/': 'Home',
   '/photography': 'Photography',
+  '/photography/shop': 'Photography digital shop',
   '/photography/portfolio': 'Photography portfolio',
   '/photography/bookings': 'Book photography',
   '/photography/client-gallery': 'Client gallery',

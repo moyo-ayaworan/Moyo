@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   if (
     !expected ||
     !supplied ||
-    supplied.length !== `Bearer ${expected}`.length ||
+    Buffer.byteLength(supplied) !== Buffer.byteLength(`Bearer ${expected}`) ||
     !timingSafeEqual(Buffer.from(supplied), Buffer.from(`Bearer ${expected}`))
   )
     return NextResponse.json(

@@ -1,8 +1,12 @@
+import { isImagePosition } from '@/lib/imagePosition';
+import { normalizeGalleryPresentation } from '@/lib/galleryPresentation';
+import { isImageUrl } from '@/lib/mediaUrl';
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, transaction } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
 import slugify from 'slugify';
 import { randomBytes } from 'node:crypto';
+import { signedGallerySoundtrack, signedGalleryPreview } from '@/lib/privateMedia';
 
 type GalleryRow = {
   id: number;
@@ -17,7 +21,12 @@ function galleryResponse(rows: GalleryRow[]) {
     return NextResponse.json({ error: 'Gallery not found' }, { status: 404 });
   }
 
-  return NextResponse.json({ gallery: rows[0] });
+  return NextResponse.json({ gallery: {
+    ...rows[0],
+    soundtrack_preview: signedGallerySoundtrack((rows[0] as { soundtrack_url?: string }).soundtrack_url || ''),
+    image_previews: ((rows[0] as { images?: string[] }).images || []).map((image) => signedGalleryPreview(image) || image),
+    finished_previews: ((rows[0] as { finished_images?: string[] }).finished_images || []).map((image) => signedGalleryPreview(image) || ''),
+  } });
 }
 
 export async function GET(req: NextRequest) {
@@ -25,7 +34,12 @@ export async function GET(req: NextRequest) {
   if (unauthorized) return unauthorized;
 
   const { rows } = await query('SELECT * FROM galleries ORDER BY created_at DESC');
-  return NextResponse.json({ galleries: rows });
+  return NextResponse.json({ galleries: rows.map((gallery) => ({
+    ...gallery,
+    soundtrack_preview: signedGallerySoundtrack(gallery.soundtrack_url || ''),
+    image_previews: (gallery.images || []).map((image: string) => signedGalleryPreview(image) || image),
+    finished_previews: (gallery.finished_images || []).map((image: string) => signedGalleryPreview(image) || ''),
+  })) }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
 export async function POST(req: NextRequest) {
@@ -204,6 +218,36 @@ export async function PUT(req: NextRequest) {
     );
     return galleryResponse(rows);
   }
+  if (action === 'heroPosition') {
+    if (!isImagePosition(payload?.position)) return NextResponse.json({ error: 'Image positions must be numbers between 0 and 100.' }, { status: 400 });
+    const { rows } = await query('UPDATE galleries SET hero_position=$1::jsonb WHERE id=$2 RETURNING *', [JSON.stringify({ x: payload.position.x, y: payload.position.y }), id]);
+    return galleryResponse(rows);
+  }
+  if (action === 'presentation') {
+    if (payload?.settings !== null && (!payload?.settings || typeof payload.settings !== 'object' || Array.isArray(payload.settings))) {
+      return NextResponse.json({ error: 'Valid gallery design settings are required.' }, { status: 400 });
+    }
+    const { rows: existing } = await query('SELECT images, finished_images FROM galleries WHERE id=$1', [id]);
+    if (!existing[0]) return NextResponse.json({ error: 'Gallery not found' }, { status: 404 });
+    const settings = payload.settings === null ? null : normalizeGalleryPresentation(payload.settings);
+    if (settings?.coverImage && (!isImageUrl(settings.coverImage) || ![...(existing[0].images || []), ...(existing[0].finished_images || [])].includes(settings.coverImage))) {
+      return NextResponse.json({ error: 'Choose a cover photograph from this gallery.' }, { status: 400 });
+    }
+    const { rows } = await query('UPDATE galleries SET presentation=$1::jsonb WHERE id=$2 RETURNING *', [settings ? JSON.stringify(settings) : null, id]);
+    return galleryResponse(rows);
+  }
+  if (action === 'soundtrack') {
+    const url = payload?.url;
+    const title = payload?.title;
+    if (typeof url !== 'string' || typeof title !== 'string' || title.length > 160 || (url !== '' && !signedGallerySoundtrack(url))) {
+      return NextResponse.json({ error: 'Choose a private audio upload and a title up to 160 characters.' }, { status: 400 });
+    }
+    const { rows } = await query(
+      'UPDATE galleries SET soundtrack_url=$1, soundtrack_title=$2 WHERE id=$3 RETURNING *',
+      [url, url ? title.trim() : '', id]
+    );
+    return galleryResponse(rows);
+  }
   if (action === 'design') {
     const design = ['editorial', 'classic', 'proofing'].includes(payload?.design)
       ? payload.design
@@ -253,7 +297,14 @@ export async function DELETE(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const id = searchParams.get('id');
-  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
-  await query('DELETE FROM galleries WHERE id=$1', [id]);
-  return NextResponse.json({ success: true });
+  if (!id || !/^[1-9]\d{0,8}$/.test(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
+  // Lock the parent before checking children: new documents cannot race this deletion.
+  return transaction(async client => {
+    const gallery = await client.query('SELECT id FROM galleries WHERE id=$1 FOR UPDATE', [id]);
+    if (!gallery.rows.length) return NextResponse.json({ error: 'Gallery not found' }, { status: 404 });
+    const documents = await client.query('SELECT id FROM gallery_documents WHERE gallery_id=$1 LIMIT 1', [id]);
+    if (documents.rows.length) return NextResponse.json({ error: 'This gallery has financial documents. Retain it to preserve the invoice and payment history.' }, { status: 409 });
+    await client.query('DELETE FROM galleries WHERE id=$1', [id]);
+    return NextResponse.json({ success: true });
+  });
 }

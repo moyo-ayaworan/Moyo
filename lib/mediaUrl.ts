@@ -18,6 +18,7 @@ export function isImageUrl(src: string) {
 }
 
 export function getCloudinaryPreviewUrl(src: string, options: ImagePreviewOptions = {}) {
+  if (src.includes('/s--')) return src;
   if (!src || isVideoUrl(src) || !src.includes('res.cloudinary.com') || !cloudinaryUploadPath.test(src)) {
     return src;
   }
@@ -40,6 +41,7 @@ export function getCloudinaryPreviewUrl(src: string, options: ImagePreviewOption
 }
 
 export function getImagePreviewSrcSet(src: string, widths: number[] = [360, 720, 1080]) {
+  if (src.includes('/s--')) return undefined;
   if (!src || isVideoUrl(src) || !isImageUrl(src) || !src.includes('res.cloudinary.com')) return undefined;
 
   return widths

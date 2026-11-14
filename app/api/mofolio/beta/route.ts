@@ -1,3 +1,4 @@
+import { readJsonRequest } from '@/lib/requestBody';
 import { NextResponse, type NextRequest } from 'next/server';
 import { query } from '@/lib/db';
 import { rateLimit } from '@/lib/rateLimit';
@@ -19,12 +20,9 @@ async function ensureList() {
 }
 export async function POST(request:Request) {
   try {
-    if(Number(request.headers.get('content-length') || 0)>1000) return NextResponse.json({error:'Request is too large.'},{status:413,headers});
-    const text = await request.text();
-    if(text.length > 1000) return NextResponse.json({error:'Request is too large.'},{status:413,headers});
-    let body:Record<string,unknown>;
-    try {body=JSON.parse(text);} catch {return NextResponse.json({error:'Invalid request.'},{status:400,headers});}
-    if(!body || typeof body !== 'object' || Array.isArray(body)) return NextResponse.json({error:'Invalid request.'},{status:400,headers});
+    const parsed = await readJsonRequest(request, 1000);
+    if (parsed.response) return parsed.response;
+    const body: Record<string, unknown> = parsed.body;
     const email = typeof body.email==='string' ? body.email.trim().toLowerCase() : '';
     if(email.length>254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return NextResponse.json({error:'Enter a valid email address.'},{status:400,headers});
     if(body.termsAccepted !== true) return NextResponse.json({error:'Please agree to the Stillbounds beta terms.'},{status:400,headers});
@@ -34,11 +32,11 @@ export async function POST(request:Request) {
     if(limited) return limited;
     await ensureList();
     const marketing = body.marketingConsent === true;
-    const {rows} = await query(`INSERT INTO mofolio_beta_requests
+    await query(`INSERT INTO mofolio_beta_requests
       (email, consent_version, terms_version, terms_accepted_at, privacy_version, marketing_opt_in, marketing_consent_version, marketing_consent_at)
       VALUES ($1, $2, $2, NOW(), $2, $3, CASE WHEN $3 THEN $2 ELSE NULL END, CASE WHEN $3 THEN NOW() ELSE NULL END)
       ON CONFLICT (email) DO NOTHING RETURNING email`,[email,stillboundsLegalVersion,marketing]);
-    return NextResponse.json({ok:true,alreadyRequested:rows.length === 0},{headers});
+    return NextResponse.json({ok:true},{headers});
   } catch {return NextResponse.json({error:'We could not save your request. Please try again later.'},{status:503,headers});}
 }
 export async function GET(request:NextRequest) {

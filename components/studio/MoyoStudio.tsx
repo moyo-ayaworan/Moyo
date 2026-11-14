@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useBrowserLocation } from "@/lib/useBrowserLocation";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import s from "./studio.module.css";
 type Device = {
   id: string;
@@ -36,21 +37,28 @@ async function api(path: string, method = "GET", data?: unknown) {
     throw Error(result.error || "Unable to connect to Moyo Studio.");
   return result;
 }
+function subscribeClock(notify: () => void) {
+  const timer = window.setInterval(notify, 30000);
+  return () => window.clearInterval(timer);
+}
+const clockSnapshot = () => Math.floor(Date.now() / 30000) * 30000;
+const serverClockSnapshot = () => 0;
 export default function MoyoStudio() {
   const [summary, setSummary] = useState<Summary>(),
     [code, setCode] = useState(""),
     [confirm, setConfirm] = useState(false),
     [message, setMessage] = useState(""),
     [error, setError] = useState(""),
-    [busy, setBusy] = useState(false),
-    [origin, setOrigin] = useState("");
+    [busy, setBusy] = useState(false);
+  const href = useBrowserLocation();
+  const origin = href ? new URL(href).origin : "";
+  const now = useSyncExternalStore(subscribeClock, clockSnapshot, serverClockSnapshot);
   const refresh = useCallback(async () => {
     setSummary(await api("/owner"));
   }, []);
   useEffect(() => {
-    setOrigin(window.location.origin);
-    refresh().catch((e) => setError(e.message));
-  }, [refresh]);
+    api("/owner").then(setSummary).catch((e) => setError(e.message));
+  }, []);
   async function perform(action: () => Promise<void>) {
     setBusy(true);
     setMessage("");
@@ -203,7 +211,7 @@ export default function MoyoStudio() {
                   Connected {new Date(d.created_at).toLocaleDateString()} ·{" "}
                   {d.revoked
                     ? "Revoked"
-                    : new Date(d.expires_at).getTime() < Date.now()
+                    : now > 0 && new Date(d.expires_at).getTime() < now
                       ? "Expired"
                       : `Expires ${new Date(d.expires_at).toLocaleDateString()}`}
                 </small>

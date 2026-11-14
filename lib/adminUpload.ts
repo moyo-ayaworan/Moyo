@@ -34,11 +34,11 @@ export function uploadWithProgress(url: string, body: FormData, headers: Record<
   });
 }
 
-export async function uploadAdminFile(file: File, adminKey: string, hash: string, onProgress: (percent: number) => void) {
+export async function uploadAdminFile(file: File, hash: string, onProgress: (percent: number) => void, privateAsset = false) {
   const signatureResponse = await fetch('/api/upload/signature', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-    body: JSON.stringify({ hash, filename: file.name, mimeType: file.type }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ hash, filename: file.name, mimeType: file.type, privateAsset }),
     signal: AbortSignal.timeout(15_000),
   });
   const signature = await signatureResponse.json();
@@ -50,12 +50,13 @@ export async function uploadAdminFile(file: File, adminKey: string, hash: string
     if (!signature.cloudName || !signature.apiKey || !signature.signature || signature.public_id !== uploadPublicId(hash, file.name, file.type)) {
       throw new Error('Upload authorization was incomplete. Please retry.');
     }
-    for (const key of ['folder', 'timestamp', 'public_id', 'overwrite', 'signature']) form.append(key, String(signature[key]));
+    for (const key of ['folder', 'timestamp', 'public_id', 'overwrite', 'type', 'signature']) if (signature[key] !== undefined) form.append(key, String(signature[key]));
     form.append('api_key', signature.apiKey);
     // A failed direct request may already have reached Cloudinary. Never start a second transport automatically.
     result = await uploadWithProgress(`https://api.cloudinary.com/v1_1/${signature.cloudName}/auto/upload`, form, {}, onProgress);
   } else {
-    result = await uploadWithProgress('/api/upload', form, { 'x-admin-key': adminKey }, onProgress, 120_000);
+    if (privateAsset) form.append('privateAsset', 'true');
+    result = await uploadWithProgress('/api/upload', form, {}, onProgress, 120_000);
   }
   const url = result.secure_url || result.urls?.[0] || result.url;
   if (!url) throw new Error('The upload returned no file URL. Please retry.');

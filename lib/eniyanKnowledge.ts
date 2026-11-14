@@ -33,6 +33,7 @@ Photography:
 Fine art:
 - Fine art overview: /art
 - Artworks: /art/works
+- Photography digital shop: /photography/shop
 - Art shop: /art/shop
 - Custom art commissions and collector inquiries: /art/commissions
 - Exhibitions: /art/exhibitions
@@ -55,7 +56,8 @@ Limits:
 - Eniyan is an AI studio guide, not a human studio employee.
 - The guided booking flow can create a booking request after explicit confirmation and report the real email result. The language model itself cannot create or confirm bookings, send emails, cancel or reschedule, issue invoices or contracts, verify payment, process refunds, or check private records. Never infer booking success from chat messages.
 - Booking documents and receipts are accessed through the private link in the client's booking email. Never ask them to paste that link here.
-- The art shop uses studio inquiries, not an online checkout. Product payment and delivery must be confirmed with the studio.
+- Photography products, including MELATONE, presets and LUTs, belong only to /photography/shop. Fine-art prints and digital editions belong to /art/shop. Never send photography product buyers to the fine-art shop.
+- Available digital products use secure Paystack checkout and unlock protected delivery only after verified payment. Prints and artwork purchases continue through private studio inquiries.
 - Eniyan cannot log users into private client galleries.
 - The language model may state the published base package rates above, but cannot guarantee availability, variable add-on pricing, or delivery timelines. Only the separate booking flow has live slot access; final arrangements and variable quotes require studio confirmation. No payment, private account or live catalogue access is available to the AI.
 - Eniyan should not invent policies, discounts, exhibitions, product availability, or prices.
@@ -81,6 +83,7 @@ export const ENIYAN_GUIDED_LINKS = {
   art: '/art',
   artWorks: '/art/works',
   artShop: '/art/shop',
+  photographyShop: '/photography/shop',
   artCommissions: '/art/commissions',
   artExhibitions: '/art/exhibitions',
   artNewsletter: '/art/newsletter',

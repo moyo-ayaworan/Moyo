@@ -7,6 +7,10 @@ import { motion } from 'framer-motion';
 import { useProfile } from '@/context/ProfileContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useTranslate } from '@/lib/translations';
+import { normalizeImagePosition, type ImagePosition } from '@/lib/imagePosition';
+import GalleryCover from '@/components/gallery/GalleryCover';
+import { normalizeGalleryPresentation, type GalleryPresentation } from '@/lib/galleryPresentation';
+import GallerySoundtrack from '@/components/GallerySoundtrack';
 import GalleryMedia from '@/components/GalleryMedia';
 import GlareHover from '@/components/GlareHover';
 import { Check, ChevronLeft, ChevronRight, Maximize2, X, Heart, ArrowDown, Mail, LockKeyhole } from 'lucide-react';
@@ -26,6 +30,10 @@ type ClientGallery = {
     is_locked: boolean;
     image_count: number;
     finished_count: number;
+    hero_position?: ImagePosition;
+    presentation?: GalleryPresentation | null;
+    soundtrack_url?: string;
+    soundtrack_title?: string;
     gallery_design: 'editorial' | 'classic' | 'proofing';
 };
 
@@ -44,6 +52,7 @@ export default function ClientGalleryPage() {
     const [reviewMessage, setReviewMessage] = useState('');
     const [reviewError, setReviewError] = useState('');
     const [approvalMessage, setApprovalMessage] = useState('');
+    const [hasEnteredCollection, setHasEnteredCollection] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
     const [activeImageIndex, setActiveImageIndex] = useState<number | null>(null);
@@ -52,6 +61,7 @@ export default function ClientGalleryPage() {
     const { t, translateText } = useTranslate(language);
     const selectedImageSet = useMemo(() => new Set(selectedImages), [selectedImages]);
     const hasReadUrlAccessCode = useRef(false);
+    const autoAccessRequest = useRef<AbortController | null>(null);
     const approvedSelectionKey = useMemo(
         () => [...(gallery?.approved_images || [])].sort().join('\n'),
         [gallery?.approved_images]
@@ -64,14 +74,18 @@ export default function ClientGalleryPage() {
     const lightboxImages = useMemo(() => lightboxCollection === 'finished' ? (gallery?.finished_images || []) : (gallery?.images || []), [gallery, lightboxCollection]);
     const activeImage = activeImageIndex !== null ? lightboxImages[activeImageIndex] : null;
     const visibleImages = (gallery?.images || []).map((image, index) => ({ image, index })).filter(({ image }) => !selectionOnly || selectedImageSet.has(image));
+    const presentation = gallery?.presentation ? normalizeGalleryPresentation(gallery.presentation) : null;
+    const heroPosition = normalizeImagePosition(gallery?.hero_position);
     const galleryDesign = gallery?.gallery_design || 'editorial';
+    const heroImage = gallery?.images[0] || gallery?.finished_images[0] || '';
 
     const getFinishedDownloadUrl = (image: string) =>
-        `/api/galleries/download?galleryId=${gallery?.id || ''}&accessCode=${encodeURIComponent(accessCode.trim())}&file=${encodeURIComponent(image)}`;
+        `/api/galleries/download?galleryId=${gallery?.id || ''}&index=${gallery?.finished_images.indexOf(image) ?? -1}`;
 
-    const openGallery = useCallback(async (code: string) => {
+    const openGallery = useCallback(async (code: string, response?: Response) => {
         setError('');
         setGallery(null);
+        setHasEnteredCollection(false);
         setActiveImageIndex(null);
         setSelectionOnly(false);
         setSelectedImages([]);
@@ -88,7 +102,7 @@ export default function ClientGalleryPage() {
 
         setIsLoading(true);
         try {
-            const res = await fetch('/api/galleries/access', {
+            const res = response ?? await fetch('/api/galleries/access', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ accessCode: code }),
@@ -125,19 +139,24 @@ export default function ClientGalleryPage() {
         const code = (params.get('code') || params.get('accessCode') || '').trim();
         if (!code) return;
 
-        setAccessCode(code);
         window.history.replaceState(null, '', window.location.pathname);
-        void openGallery(code);
-    }, [openGallery]);
+        const controller = new AbortController();
+        autoAccessRequest.current = controller;
+        fetch('/api/galleries/access', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accessCode: code }), signal: controller.signal })
+            .then(response => { if (controller.signal.aborted) return; setAccessCode(code); return openGallery(code, response); })
+            .catch(() => { if (!controller.signal.aborted) setError(t('clientGallery.openRetryError')); });
+    }, [openGallery, t]);
 
     const handleAccessSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         const code = accessCode.trim();
+        autoAccessRequest.current?.abort();
         await openGallery(code);
     };
 
     const resetGallery = () => {
         setGallery(null);
+        setHasEnteredCollection(false);
         setActiveImageIndex(null);
         setAccessCode('');
         setError('');
@@ -377,15 +396,18 @@ export default function ClientGalleryPage() {
                             </a>
                         </GlareHover>
                     </motion.div>
+                ) : presentation && !hasEnteredCollection ? (
+                    <GalleryCover settings={presentation} image={presentation.coverImage || gallery.images[0] || gallery.finished_images[0] || ''} clientName={gallery.client_name} onEnter={() => { setHasEnteredCollection(true); window.scrollTo({ top: 0, behavior: 'instant' }); }} />
                 ) : (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-12 md:space-y-16">
+                        {gallery.soundtrack_url && <GallerySoundtrack key={`${gallery.id}-${gallery.soundtrack_url}`} src={gallery.soundtrack_url} title={gallery.soundtrack_title || 'Gallery soundtrack'} />}
                         <section className={`collection-hero relative grid items-end overflow-hidden border border-white/10 bg-black ${galleryDesign === 'editorial' ? 'min-h-[420px] -mx-6 md:-mx-12' : 'mx-auto min-h-[320px] w-full max-w-7xl'}`}>
-                            {gallery.images[0] && (
-                                <div className="col-start-1 row-start-1 min-w-0 overflow-hidden">
+                            {heroImage && (
+                                <div className="col-start-1 row-start-1 min-w-0 overflow-hidden" style={{ '--header-position': `${heroPosition.x}% ${heroPosition.y}%` } as React.CSSProperties}>
                                     <GalleryMedia
-                                        src={gallery.images[0]}
+                                        src={heroImage}
                                         alt={`${gallery.client_name} ${t('clientGallery.galleryImageAlt')} 1`}
-                                        className={`${galleryDesign === 'editorial' ? 'h-[56svh] min-h-[420px] md:h-[68svh]' : 'h-[38svh] min-h-[320px] md:h-[48svh]'} w-full object-cover opacity-70`}
+                                        className={`${galleryDesign === 'editorial' ? 'h-[56svh] min-h-[420px] md:h-[68svh]' : 'h-[38svh] min-h-[320px] md:h-[48svh]'} w-full object-cover opacity-70 [object-position:var(--header-position)]`}
                                         previewWidth={1600}
                                         loading="eager"
                                         fetchPriority="high"
@@ -422,7 +444,7 @@ export default function ClientGalleryPage() {
 
                         {gallery.images.length > 0 ? (
                             <>
-                                <section className="flex flex-col gap-6 border-b border-white/15 pb-8 sm:flex-row sm:items-end sm:justify-between">
+                                <section id="gallery-photographs" tabIndex={-1} className="scroll-mt-24 flex flex-col gap-6 border-b border-white/15 pb-8 sm:flex-row sm:items-end sm:justify-between">
                                     <div className="space-y-3">
                                         <p className="text-[10px] uppercase tracking-[0.3em] text-accent">01 / The selection</p>
                                         <h2 className="font-heading text-3xl italic text-white">A story only you can tell.</h2>
@@ -525,17 +547,17 @@ export default function ClientGalleryPage() {
                                     {approvalMessage && <p role="status" className="text-accent text-xs leading-relaxed">{approvalMessage}</p>}
                                 </div>
                             </>
-                        ) : (
+                        ) : gallery.finished_images.length === 0 ? (
                             <GlareHover width="100%" height="auto" background="rgba(255,255,255,0.05)" borderRadius="2px" borderColor="rgba(255,255,255,0.1)" glareOpacity={0.16} className="max-w-xl mx-auto" contentClassName="text-center p-10 space-y-3">
                                 <h2 className="text-2xl font-heading text-white italic">{t('clientGallery.noImagesTitle')}</h2>
                                 <p className="text-white/40 text-sm leading-relaxed">
                                     {t('clientGallery.noImagesDescription')}
                                 </p>
                             </GlareHover>
-                        )}
+                        ) : null}
 
                         {gallery.finished_count > 0 && (
-                            <section id="finished-collection" className="scroll-mt-28">
+                            <section id="finished-collection" tabIndex={-1} className="scroll-mt-28">
                             <p className="mb-6 text-center text-[10px] uppercase tracking-[0.3em] text-accent">02 / Yours to keep</p>
                             <GlareHover width="100%" height="auto" background="rgba(255,255,255,0.03)" borderRadius="2px" borderColor="rgba(255,255,255,0.1)" glareOpacity={0.12} className="mx-auto w-full" contentClassName="p-5 text-center space-y-8 sm:p-8 md:p-10">
                                 <div className="space-y-2">
@@ -558,7 +580,7 @@ export default function ClientGalleryPage() {
                                                 {gallery.payment_url && <a href={gallery.payment_url} target="_blank" rel="noreferrer" className="w-full shrink-0 bg-white px-5 py-3 text-center text-[10px] font-bold uppercase tracking-[0.28em] text-black transition-colors hover:bg-accent sm:w-auto">{t('clientGallery.payOnline')}</a>}
                                             </div>
                                         )}
-                                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                        <div className={'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3'}>
                                             {gallery.finished_images.map((image, index) => (
                                                 <div
                                                     key={`${image}-${index}`}
@@ -645,6 +667,20 @@ export default function ClientGalleryPage() {
                                                         placeholder={t('clientGallery.reviewPlaceholder')}
                                                         className="w-full resize-none border border-white/10 bg-white/[0.04] px-4 py-4 text-sm leading-relaxed text-white outline-none transition-colors placeholder:text-white/25 focus:border-accent"
                                                     />
+                                                    <div className="flex flex-wrap items-center gap-2" aria-label="Add an emoji to your review">
+                                                        <span className="mr-1 text-xs text-white/50">Add a little expression</span>
+                                                        {['😍', '🥰', '✨', '❤️', '🙌', '😊', '🔥', '📸'].map((emoji) => (
+                                                            <button
+                                                                key={emoji}
+                                                                type="button"
+                                                                onClick={() => setReviewText((current) => `${current}${current && !current.endsWith(' ') ? ' ' : ''}${emoji}`.slice(0, 1000))}
+                                                                className="rounded border border-white/10 px-2 py-1 text-lg transition-colors hover:border-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                                                                aria-label={`Add ${emoji} to review`}
+                                                            >
+                                                                {emoji}
+                                                            </button>
+                                                        ))}
+                                                    </div>
                                                     {reviewError && (
                                                         <p className="text-center text-xs leading-relaxed text-red-300">
                                                             {reviewError}

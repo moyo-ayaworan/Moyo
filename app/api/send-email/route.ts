@@ -1,6 +1,8 @@
+import { readJsonRequest } from '@/lib/requestBody';
 
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
+import { rateLimit } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 
@@ -21,7 +23,12 @@ function escapeHtml(value: string) {
 
 export async function POST(req: Request) {
     try {
-        const body = await req.json();
+        const limited = await rateLimit(req, 'contact-email', 5, 3600);
+        if (limited) return limited;
+        if (Number(req.headers.get('content-length') || 0) > 10_000) return NextResponse.json({ error: 'Message is too long.' }, { status: 413 });
+        const jsonRequest = await readJsonRequest(req, 10000);
+        if (jsonRequest.response) return jsonRequest.response;
+        const body = jsonRequest.body;
         const name = normalizeString(body.name);
         const email = normalizeString(body.email).toLowerCase();
         const service = normalizeString(body.service);
@@ -30,7 +37,7 @@ export async function POST(req: Request) {
         const emailUser = process.env.EMAIL_USER;
         const emailPass = process.env.EMAIL_PASS;
 
-        if (!name || !email || !message) {
+        if (!name || !email || !message || name.length > 120 || email.length > 254 || service.length > 120 || type.length > 80 || message.length > 5000) {
             return NextResponse.json({ error: 'Name, email, and message are required.' }, { status: 400 });
         }
 
@@ -72,13 +79,13 @@ export async function POST(req: Request) {
             `,
         };
 
-        console.log('[send-email] sending inquiry', { to: mailOptions.to, subject: mailOptions.subject, replyTo: email });
-        const info = await transporter.sendMail(mailOptions);
-        console.log('[send-email] inquiry sent', { messageId: info.messageId, response: info.response });
+        console.log('[send-email] sending inquiry');
+        await transporter.sendMail(mailOptions);
+        console.log('[send-email] inquiry sent');
 
         return NextResponse.json({ message: 'Email sent successfully' }, { status: 200 });
-    } catch (error) {
-        console.error('[send-email] Error sending email:', error);
+    } catch {
+        console.error('[send-email] Email delivery failed.');
         return NextResponse.json({ error: 'Failed to send email' }, { status: 500 });
     }
 }

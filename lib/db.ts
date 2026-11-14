@@ -1,4 +1,6 @@
 import { Pool, type PoolClient } from 'pg';
+import { newsletterSchema } from './newsletter/schema';
+import { paymentSchema } from './payments/schema';
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -214,11 +216,29 @@ async function initializeTables(connection: PoolClient) {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS digital_orders (
+      id SERIAL PRIMARY KEY,
+      reference TEXT UNIQUE NOT NULL,
+      product_id INTEGER NOT NULL REFERENCES digital_products(id) ON DELETE RESTRICT,
+      customer_email TEXT NOT NULL,
+      amount_kobo BIGINT NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'NGN',
+      status TEXT NOT NULL DEFAULT 'pending',
+      access_token TEXT UNIQUE NOT NULL,
+      provider_reference TEXT DEFAULT '',
+      paid_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS digital_orders_reference_idx ON digital_orders(reference);
+    CREATE INDEX IF NOT EXISTS digital_orders_access_token_idx ON digital_orders(access_token);
+
     CREATE TABLE IF NOT EXISTS newsletter_subscribers (
       id SERIAL PRIMARY KEY,
       email TEXT NOT NULL,
       list_type TEXT NOT NULL,
-      status TEXT DEFAULT 'active',
+      status TEXT DEFAULT 'pending',
       unsubscribe_token TEXT UNIQUE NOT NULL,
       subscribed_at TIMESTAMPTZ DEFAULT NOW(),
       unsubscribed_at TIMESTAMPTZ,
@@ -259,6 +279,10 @@ async function initializeTables(connection: PoolClient) {
       ADD COLUMN IF NOT EXISTS review_text TEXT DEFAULT '',
       ADD COLUMN IF NOT EXISTS review_submitted_at TIMESTAMPTZ,
       ADD COLUMN IF NOT EXISTS review_featured BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS hero_position JSONB,
+      ADD COLUMN IF NOT EXISTS presentation JSONB,
+      ADD COLUMN IF NOT EXISTS soundtrack_url TEXT DEFAULT '',
+      ADD COLUMN IF NOT EXISTS soundtrack_title TEXT DEFAULT '',
       ADD COLUMN IF NOT EXISTS gallery_design TEXT DEFAULT 'editorial',
       ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT FALSE;
   `);
@@ -376,6 +400,9 @@ async function initializeTables(connection: PoolClient) {
     CREATE UNIQUE INDEX IF NOT EXISTS bookings_creation_key_idx ON bookings (creation_key);
   `);
 
+  await connection.query("ALTER TABLE digital_products ADD COLUMN IF NOT EXISTS storefront JSONB NOT NULL DEFAULT '{}'::jsonb");
+  await connection.query(paymentSchema);
+  await connection.query(newsletterSchema);
   await connection.query(`INSERT INTO content (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);
   await connection.query(`INSERT INTO contact (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);
 }
@@ -383,4 +410,16 @@ async function initializeTables(connection: PoolClient) {
 export async function query(text: string, params?: unknown[]) {
   await ensureTables();
   return pool.query(text, params);
+}
+
+export async function transaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
+  await ensureTables();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await work(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) { await client.query('ROLLBACK'); throw error; }
+  finally { client.release(); }
 }

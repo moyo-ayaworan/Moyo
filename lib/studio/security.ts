@@ -1,7 +1,7 @@
 import { type NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { studioQuery } from "./db";
-import { assertStudio, hash, OWNER } from "./protocol";
+import { assertStudio, hash } from "./protocol";
 export const privateHeaders = {
   "Cache-Control": "private, no-store",
   "Referrer-Policy": "no-referrer",
@@ -48,15 +48,15 @@ export async function device(request: Request) {
     ?.match(/^Bearer ([A-Za-z0-9_-]{43})$/)?.[1];
   assertStudio(token, "Connect your authorised Stillbounds device.", 401);
   const { rows } = await studioQuery(
-    "SELECT id FROM stillbounds_devices WHERE token_hash=$1 AND owner_id=$2 AND revoked=FALSE AND expires_at>NOW()",
-    [hash(token), OWNER],
+    "SELECT id,owner_id FROM stillbounds_devices WHERE token_hash=$1 AND revoked=FALSE AND expires_at>NOW()",
+    [hash(token)],
   );
   assertStudio(
     rows.length,
     "Device access expired or was revoked. Connect again.",
     401,
   );
-  return rows[0].id as string;
+  return { id: rows[0].id as string, ownerId: rows[0].owner_id as string };
 }
 export async function limited(
   request: Request,

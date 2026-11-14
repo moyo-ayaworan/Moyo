@@ -1,8 +1,10 @@
+import { readJsonRequest } from '@/lib/requestBody';
 import crypto from 'node:crypto';
 import nodemailer from 'nodemailer';
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
+import { rateLimit } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 const CONTACT_EMAIL = process.env.CONTACT_EMAIL || 'ijabikenm@gmail.com';
@@ -38,7 +40,11 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => null) as Record<string, unknown> | null;
+  const limited = await rateLimit(req, 'art-inquiry', 5, 3600);
+  if (limited) return limited;
+  const jsonRequest = await readJsonRequest(req, 30000);
+  if (jsonRequest.response) return jsonRequest.response;
+  const body = jsonRequest.body as Record<string, unknown> | null;
   if (!body) return NextResponse.json({ error: 'Inquiry details are required.' }, { status: 400 });
   const inquiryType = clean(body.inquiryType, 30);
   const name = clean(body.name, 120); const email = clean(body.email, 254).toLowerCase(); const phone = clean(body.phone, 40);

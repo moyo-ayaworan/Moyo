@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v2 as cloudinary } from 'cloudinary';
-import { uploadPublicId } from '@/lib/uploadIdentity';
+import { allowedPublicMedia, uploadPublicId } from '@/lib/uploadIdentity';
 import { requireAdmin } from '@/lib/auth';
 
 export const runtime = 'nodejs';
@@ -13,6 +13,9 @@ export async function POST(req: NextRequest) {
   if (unauthorized) return unauthorized;
 
   const body = await req.json().catch(() => null);
+  if (body?.privateAsset !== true && !allowedPublicMedia(String(body?.filename || ''), String(body?.mimeType || ''))) {
+    return NextResponse.json({ error: 'Public uploads must be images or videos.' }, { status: 400 });
+  }
   let publicId: string;
   try { publicId = uploadPublicId(String(body?.hash || ''), String(body?.filename || ''), String(body?.mimeType || '')); }
   catch { return NextResponse.json({ error: 'Invalid upload fingerprint.' }, { status: 400 }); }
@@ -31,6 +34,7 @@ export async function POST(req: NextRequest) {
     timestamp,
     public_id: publicId,
     overwrite: false,
+    ...(body?.privateAsset === true ? { type: 'authenticated' } : {}),
   };
   const signature = cloudinary.utils.api_sign_request(
     uploadParams,

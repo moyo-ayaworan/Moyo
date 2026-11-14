@@ -34,6 +34,14 @@ const documentPdf = {
   },
 };
 
+const securityRouteMocks = {
+  '@/lib/requestBody': { readJsonRequest: async req => ({ body: await req.json() }) },
+  '@/lib/payments/server': { verifyGallerySettlement: async () => true, paymentFailure: () => next.NextResponse.json({ error: 'Payment unavailable' }, { status: 503 }) },
+  '@/lib/rateLimit': { rateLimit: async () => null },
+  '@/lib/privateMedia': { signedGalleryPreview: () => 'https://example.test/signed-preview.jpg', signedGallerySoundtrack: (src) => src ? 'https://example.test/signed-track.mp3' : null },
+  '@/lib/galleryAccess': { createGalleryCookie: () => 'test-cookie', galleryCookieAge: 900, galleryCookieName: () => 'gallery-test' },
+};
+
 function load(file, mocks = {}, globals = {}) {
   const source = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -41,7 +49,7 @@ function load(file, mocks = {}, globals = {}) {
   const compiledModule = { exports: {} };
   vm.runInNewContext(source, {
     module: compiledModule, exports: compiledModule.exports,
-    require: (name) => name in mocks ? mocks[name] : (name === '@/lib/documentPayments' || name === './documentPayments') ? load('lib/documentPayments.ts') : (name === '@/lib/bookingRates' || name === './bookingRates') ? load('lib/bookingRates.ts') : requireDependency(name),
+    require: (name) => name in mocks ? mocks[name] : name in securityRouteMocks ? securityRouteMocks[name] : name === '@/lib/productStory' ? load('lib/productStory.ts', { './productSections': load('lib/productSections.ts') }) : name === '@/lib/privacy' ? load('lib/privacy.ts', { './eniyanNavigation': load('lib/eniyanNavigation.ts') }) : name === '@/lib/productSections' ? load('lib/productSections.ts') : name === './newsletter/schema' ? load('lib/newsletter/schema.ts') : name === './payments/schema' ? load('lib/payments/schema.ts') : name === '@/lib/paystack' ? load('lib/payments/policy.ts') : name === '@/lib/imagePosition' ? load('lib/imagePosition.ts') : name === '@/lib/galleryPresentation' ? load('lib/galleryPresentation.ts') : name === '@/lib/mediaUrl' ? load('lib/mediaUrl.ts') : (name === '@/lib/documentPayments' || name === './documentPayments') ? load('lib/documentPayments.ts') : (name === '@/lib/bookingRates' || name === './bookingRates') ? load('lib/bookingRates.ts') : requireDependency(name),
     process: { cwd: () => process.cwd(), env: { DATABASE_URL: 'postgres://localhost/test', ADMIN_KEY: 'test-key', SMTP_USER: 'test@example.test', SMTP_PASS: 'test' } },
     console: { error() {} }, URL, Date, Buffer, AbortSignal, ...globals,
   });
@@ -49,14 +57,14 @@ function load(file, mocks = {}, globals = {}) {
 }
 
 const next = { NextResponse: class {
-  constructor(body, options = {}) { this.body = body; this.status = options.status || 200; this.headers = options.headers || {}; }
+  constructor(body, options = {}) { this.body = body; this.status = options.status || 200; this.headers = options.headers || {}; this.cookies = { set() {} }; }
   static json(body, options = {}) { return new this(body, options); }
 } };
 const dates = load('lib/bookingDates.ts');
 const bookingRates = load('lib/bookingRates.ts');
 const bookingFinance = load('lib/bookingFinance.ts');
 const bookingRequest = load('lib/bookingRequest.ts', { '@/lib/bookingDates': dates });
-const request = (body) => ({ json: async () => body, nextUrl: new URL('https://example.test/api/bookings') });
+const request = (body) => ({ json: async () => body, headers: new Headers(), nextUrl: new URL('https://example.test/api/bookings') });
 
 test('booking dates reject rollover dates and preserve Lagos studio time', () => {
   assert.equal(dates.isCalendarDate('2026-02-30'), false);
@@ -520,10 +528,15 @@ test('Eniyan links use exact known routes, including punctuation and Markdown bo
 const invoiceBody = { galleryId: 1, documentType: 'invoice', clientEmail: 'client@example.test', currency: 'NGN', items: [{ description: 'Portrait session', quantity: 1, unitPrice: 100 }] };
 const payments = load('lib/documentPayments.ts');
 function documentRoute(query, sendMail = async () => ({ accepted: ['client@example.test'], messageId: 'test-id' })) {
+  let queue = Promise.resolve();
+  const transaction = work => {
+    const result = queue.then(() => work({ query: (sql, params) => sql.startsWith('SELECT 1 FROM payment_orders') ? Promise.resolve({ rows: [] }) : query(sql, params) }));
+    queue = result.catch(() => {}); return result;
+  };
   return load('app/api/galleries/documents/route.ts', {
     path: { default: requireDependency('node:path') },
     '@/lib/documentPdf': documentPdf,
-    'next/server': next, '@/lib/auth': { requireAdmin: () => null }, '@/lib/db': { query },
+    'next/server': next, '@/lib/auth': { requireAdmin: () => null }, '@/lib/db': { query, transaction },
     nodemailer: { default: { createTransport: () => ({ sendMail }) } },
   });
 }
@@ -747,17 +760,52 @@ test('rejected email recipients never mark an invoice as sent', async () => {
   assert.equal(markedSent, false);
 });
 
-test('gallery access returns transformed previews before payment is verified', async () => {
-  const original = 'https://res.cloudinary.com/demo/image/upload/v1/original.jpg';
+test('gallery access returns previews without exposing original file URLs', async () => {
   const route = load('app/api/galleries/access/route.ts', {
-    'next/server': next,
-    '@/lib/mediaUrl': load('lib/mediaUrl.ts'),
-    '@/lib/db': { query: async () => ({ rows: [{ id: 1, images: ['proof.jpg'], finished_images: [original], payment_verified: false }] }) },
+    'next/server': next, '@/lib/db': { query: async () => ({ rows: [{ id: 1, images: ['proof.jpg'], finished_images: ['original.jpg'], payment_verified: false }] }) },
   });
   const result = await route.POST(request({ accessCode: 'test' }));
   assert.equal(result.body.gallery.finished_count, 1);
-  assert.equal(result.body.gallery.finished_images.length, 1);
-  assert.equal(result.body.gallery.finished_images[0], 'https://res.cloudinary.com/demo/image/upload/f_auto,q_80,c_limit,w_1600/v1/original.jpg');
+  assert.deepEqual(Array.from(result.body.gallery.finished_images), ['https://example.test/signed-preview.jpg']);
+  assert.equal(result.body.gallery.finished_images.includes('original.jpg'), false);
+});
+
+test('catalogue import publishes only selected gallery previews and requires admin access', async () => {
+  const original = 'https://res.cloudinary.com/test/image/authenticated/v1/client-photo.jpg';
+  const preview = 'https://res.cloudinary.com/test/image/authenticated/s--signed--/c_limit,w_1200/client-photo.jpg';
+  let insertedUrls;
+  const route = load('app/api/photography-catalog/import-gallery/route.ts', {
+    'next/server': next,
+    '@/lib/auth': { requireAdmin: () => null },
+    '@/lib/mediaUrl': { isImageUrl: () => true },
+    '@/lib/privateMedia': {
+      parseAuthenticatedAsset: (url) => url === original ? { resourceType: 'image' } : null,
+      signedGalleryPreview: () => preview,
+    },
+    '@/lib/db': { query: async (sql, params) => {
+      if (sql.includes('FROM photography_categories')) return { rows: [{ id: 7, cover_image_url: '' }] };
+      if (sql.includes('FROM galleries')) return { rows: [{ images: [], finished_images: [original] }] };
+      if (sql.includes('INSERT INTO photography_category_images')) {
+        insertedUrls = params[1];
+        return { rows: [{ id: 3, category_id: 7, image_url: preview }] };
+      }
+      return { rows: [{ cover_image_url: preview }] };
+    } },
+  });
+  const result = await route.POST(request({ category_id: 7, gallery_id: 2, selections: [{ kind: 'finished', index: 0 }] }));
+  assert.equal(result.status, 200);
+  assert.deepEqual(Array.from(insertedUrls), [preview]);
+  assert.equal(result.body.images[0].image_url, preview);
+  assert.notEqual(result.body.images[0].image_url, original);
+
+  const denied = load('app/api/photography-catalog/import-gallery/route.ts', {
+    'next/server': next,
+    '@/lib/auth': { requireAdmin: () => next.NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) },
+    '@/lib/db': { query: () => { throw Error('must not query'); } },
+    '@/lib/mediaUrl': { isImageUrl: () => true },
+    '@/lib/privateMedia': { parseAuthenticatedAsset: () => null, signedGalleryPreview: () => null },
+  });
+  assert.equal((await denied.POST(request({ category_id: 7, gallery_id: 2, selections: [{ kind: 'finished', index: 0 }] }))).status, 401);
 });
 
 
@@ -795,10 +843,10 @@ test('upload progress reports bytes transferred and preserves provider errors wi
     },
   });
   const file = new File(['photo'], 'photo.jpg', { type: 'image/jpeg' });
-  assert.equal(await upload.uploadAdminFile(file, 'test', 'a'.repeat(64), (percent) => percentages.push(percent)), 'https://example.test/file.jpg');
+  assert.equal(await upload.uploadAdminFile(file, 'a'.repeat(64), (percent) => percentages.push(percent)), 'https://example.test/file.jpg');
   assert.deepEqual(percentages, [25, 75]);
   responseStatus = 400;
-  await assert.rejects(upload.uploadAdminFile(file, 'test', 'a'.repeat(64), () => {}), /File exceeds account limit/);
+  await assert.rejects(upload.uploadAdminFile(file, 'a'.repeat(64), () => {}), /File exceeds account limit/);
   assert.equal(requests.length, 2);
   assert.ok(requests.every((url) => url.startsWith('https://api.cloudinary.com/')));
 });
@@ -843,14 +891,14 @@ test('upload signature rejects invalid identities and signs a non-overwriting pu
 test('repeated artwork and product creation requests carry stable database deduplication keys', async () => {
   for (const [file, body] of [
     ['app/api/artworks/route.ts', { title: 'Portrait', category: 'Portraits', image: 'https://example.test/asset.jpg', price: 100 }],
-    ['app/api/digital-products/route.ts', { title: 'Print', image: 'https://example.test/asset.jpg', price: '100', productUrl: 'https://example.test/print.zip' }],
+    ['app/api/digital-products/route.ts', { title: 'Print', image: 'https://res.cloudinary.com/test/image/upload/asset.jpg', price: '100', productUrl: '' }],
   ]) {
     const keys = [];
     const route = load(file, {
       'next/server': next, '@/lib/auth': { requireAdmin: () => null },
       '@/lib/db': { query: async (sql, values) => {
         assert.ok(sql.includes('ON CONFLICT (creation_key)'));
-        keys.push(values.at(-1));
+        keys.push(values[file.includes('digital-products') ? 8 : values.length - 1]);
         return { rows: [{ id: 1 }] };
       } },
     });
@@ -861,10 +909,32 @@ test('repeated artwork and product creation requests carry stable database dedup
   }
 });
 
+test('product thumbnails can be replaced or removed without changing paid delivery files', async () => {
+  const writes = [];
+  const route = load('app/api/digital-products/route.ts', {
+    'next/server': next, '@/lib/auth': { requireAdmin: () => null },
+    '@/lib/db': { query: async (sql, values) => { writes.push({sql,values}); return {rows:[{id:7,image:values[0]}]}; } },
+  });
+  for (const image of ['https://res.cloudinary.com/test/image/upload/replacement.jpg', '']) {
+    assert.equal((await route.PUT(request({id:7,image}))).status,200);
+    const saved=writes.at(-1);
+    assert.equal(saved.values[0],image);
+    assert.ok(!saved.sql.includes('product_url'));
+    assert.ok(!saved.sql.includes('price ='));
+  }
+  assert.equal((await route.PUT(request({id:7,image:'javascript:alert(1)'}))).status,400);
+  assert.equal((await route.PUT(request({id:7,image:'https://res.cloudinary.com/test/image/authenticated/paid.jpg'}))).status,400);
+  assert.equal(writes.length,2);
+  assert.equal((await route.PUT(request({id:7,productUrl:''}))).status,200);
+  assert.ok(writes.at(-1).sql.includes('product_url'));
+  assert.equal(writes.at(-1).values[0],'');
+});
+
 test('a completed invoice form saves with blank optional discount and tax fields', async () => {
-  let inserted;
+  let inserted, relocked = false;
   const route = documentRoute(async (sql, params) => {
     if (sql.startsWith('SELECT')) return { rows: [{ client_name: 'Client' }] };
+    if (sql.startsWith('UPDATE galleries SET payment_verified=FALSE')) { relocked = true; return { rows: [] }; }
     inserted = params;
     return { rows: [{ id: 42, gallery_id: params[0], amount: params[4] }] };
   });
@@ -872,6 +942,7 @@ test('a completed invoice form saves with blank optional discount and tax fields
   assert.equal(result.status, 200);
   assert.equal(result.body.document.id, 42);
   assert.equal(inserted[4], 500000);
+  assert.equal(relocked, true);
 });
 
 test('invoice and contract retries use an atomic document key and reject changed details', async () => {
@@ -1055,4 +1126,135 @@ test('booking portal returns receipt status with private caching', async () => {
   assert.ok(documentSql.includes('paid_at::text'));
   assert.equal(response.body.documents[0].paid_at, '2026-09-13');
   assert.equal(response.headers['Cache-Control'], 'private, no-store');
+});
+
+
+test('gallery soundtracks save per gallery, reject invalid sources, and can be removed', async () => {
+  let saved;
+  const route = load('app/api/galleries/route.ts', {
+    'next/server': next,
+    '@/lib/auth': { requireAdmin: () => null },
+    '@/lib/privateMedia': {
+      signedGalleryPreview: () => null,
+      signedGallerySoundtrack: (src) => src === 'private-track.mp3' ? 'signed-track.mp3' : null,
+    },
+    '@/lib/db': { query: async (sql, params) => { saved = { sql, params }; return { rows: [{ id: params[2], soundtrack_url: params[0], soundtrack_title: params[1] }] }; } },
+  });
+  assert.equal((await route.PUT(request({ id: 7, action: 'soundtrack', payload: { url: 'https://untrusted.test/song.mp3', title: 'Song' } }))).status, 400);
+  assert.equal(saved, undefined);
+  const result = await route.PUT(request({ id: 7, action: 'soundtrack', payload: { url: 'private-track.mp3', title: ' My song ' } }));
+  assert.equal(result.body.gallery.soundtrack_preview, 'signed-track.mp3');
+  assert.deepEqual(Array.from(saved.params), ['private-track.mp3', 'My song', 7]);
+  await route.PUT(request({ id: 7, action: 'soundtrack', payload: { url: '', title: 'Old title' } }));
+  assert.deepEqual(Array.from(saved.params), ['', '', 7]);
+});
+
+test('gallery access exposes only signed audio playback URLs', async () => {
+  const route = load('app/api/galleries/access/route.ts', {
+    'next/server': next,
+    '@/lib/db': { query: async () => ({ rows: [{ id: 1, images: [], finished_images: [], soundtrack_url: 'private-track.mp3', soundtrack_title: 'Our song' }] }) },
+  });
+  const result = await route.POST(request({ accessCode: 'test' }));
+  assert.equal(result.body.gallery.soundtrack_url, 'https://example.test/signed-track.mp3');
+  assert.equal(result.body.gallery.soundtrack_title, 'Our song');
+});
+
+
+test('gallery design normalizes options and bounds crop positions', () => {
+  const { normalizeGalleryPresentation } = load('lib/galleryPresentation.ts');
+  const settings = normalizeGalleryPresentation({ palette: 'invalid', coverLayout: 'script', title: 'x'.repeat(200), focalX: -20, focalY: 150, spacing: 'spacious', corners: 'rounded' });
+  assert.equal(settings.coverLayout, 'split');
+  assert.equal(settings.title.length, 160);
+  assert.equal(settings.focalX, 0);
+  assert.equal(settings.focalY, 100);
+});
+
+test('gallery design only accepts covers from that gallery and supports restoring the original', async () => {
+  const updates = [];
+  const route = load('app/api/galleries/route.ts', {
+    'next/server': next,
+    '@/lib/auth': { requireAdmin: () => null },
+    '@/lib/db': { query: async (sql, params) => {
+      if (sql.startsWith('SELECT')) return { rows: [{ images: ['https://example.test/own.jpg'], finished_images: [] }] };
+      updates.push(params);
+      return { rows: [{ id: params[1], presentation: params[0] ? JSON.parse(params[0]) : null }] };
+    } },
+  });
+  assert.equal((await route.PUT(request({ id: 9, action: 'presentation', payload: { settings: { coverImage: 'https://example.test/other.jpg' } } }))).status, 400);
+  assert.equal(updates.length, 0);
+  assert.equal((await route.PUT(request({ id: 9, action: 'presentation', payload: { settings: { coverImage: 'https://example.test/own.jpg', palette: 'paper', spacing: 'spacious' } } }))).status, 200);
+  const saved = JSON.parse(updates[0][0]);
+  assert.equal(saved.coverImage, 'https://example.test/own.jpg');
+  assert.equal('palette' in saved, false);
+  assert.equal('gridLayout' in saved, false);
+  assert.equal(updates[0][1], 9);
+  await route.PUT(request({ id: 9, action: 'presentation', payload: { settings: null } }));
+  assert.equal(updates[1][0], null);
+});
+
+test('gallery access signs the selected cover and preserves saved presentation settings', async () => {
+  const route = load('app/api/galleries/access/route.ts', {
+    'next/server': next,
+    '@/lib/db': { query: async () => ({ rows: [{ id: 1, images: ['cover.jpg'], finished_images: [], presentation: { coverImage: 'cover.jpg', palette: 'forest', coverLayout: 'frame', spacing: 'compact' } }] }) },
+  });
+  const result = await route.POST(request({ accessCode: 'test' }));
+  assert.equal(result.body.gallery.presentation.coverImage, 'https://example.test/signed-preview.jpg');
+  assert.equal(result.body.gallery.presentation.coverLayout, 'frame');
+});
+
+
+test('header dragging follows the image overflow, clamps edges and keeps uncropped axes steady', () => {
+  const { dragImagePosition, isImagePosition } = load('lib/imagePosition.ts');
+  assert.equal(isImagePosition({ x: 50, y: 20 }), true);
+  assert.equal(isImagePosition({ x: 50, y: 101 }), false);
+  assert.equal(isImagePosition({ x: NaN, y: 50 }), false);
+  const moved = dragImagePosition({ x: 50, y: 50 }, { x: 20, y: 60 }, { x: 0, y: 200 });
+  assert.equal(moved.x, 50);
+  assert.equal(moved.y, 20);
+  assert.equal(dragImagePosition({ x: 50, y: 50 }, { x: -999, y: 999 }, { x: 100, y: 100 }).y, 0);
+});
+
+test('header position saves per gallery and is returned independently from the opening cover', async () => {
+  let updated;
+  const route = load('app/api/galleries/route.ts', {
+    'next/server': next, '@/lib/auth': { requireAdmin: () => null },
+    '@/lib/db': { query: async (sql, params) => { updated = { sql, params }; return { rows: [{ id: params[1], hero_position: JSON.parse(params[0]) }] }; } },
+  });
+  assert.equal((await route.PUT(request({ id: 5, action: 'heroPosition', payload: { position: { x: 0, y: -1 } } }))).status, 400);
+  assert.equal(updated, undefined);
+  assert.equal((await route.PUT(request({ id: 5, action: 'heroPosition', payload: { position: { x: 50, y: 15 } } }))).status, 200);
+  assert.equal(updated.params[1], 5);
+  const access = load('app/api/galleries/access/route.ts', { 'next/server': next, '@/lib/db': { query: async () => ({ rows: [{ id: 5, images: [], hero_position: JSON.parse(updated.params[0]) }] }) } });
+  const result = await access.POST(request({ accessCode: 'test' }));
+  assert.equal(result.body.gallery.hero_position.y, 15);
+  assert.equal(result.body.gallery.presentation, null);
+});
+
+test('category organization validates complete unique orders and authenticates before writing', async () => {
+  let writes = 0;
+  const mocks = {
+    'next/server': next,
+    '@/lib/auth': { requireAdmin: () => null },
+    '@/lib/db': { query: async (_sql, params) => {
+      writes++;
+      assert.deepEqual(Array.from(params[0]), [3, 1, 2]);
+      return { rows: [{ id: 3 }, { id: 1 }, { id: 2 }] };
+    } },
+  };
+  const route = load('app/api/photography-catalog/categories/route.ts', mocks);
+  for (const ids of [[], [1, 1], [0], ['1'], [1.5]]) {
+    assert.equal((await route.PATCH(request({ ids }))).status, 400);
+  }
+  assert.equal(writes, 0);
+  assert.equal((await route.PATCH(request({ ids: [3, 1, 2] }))).body.success, true);
+  assert.equal(writes, 1);
+  const stale = load('app/api/photography-catalog/categories/route.ts', {
+    ...mocks, '@/lib/db': { query: async () => ({ rows: [] }) },
+  });
+  assert.equal((await stale.PATCH(request({ ids: [3, 1, 2] }))).status, 409);
+  const denied = load('app/api/photography-catalog/categories/route.ts', {
+    ...mocks, '@/lib/auth': { requireAdmin: () => next.NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) },
+  });
+  assert.equal((await denied.PATCH(request({ ids: [3, 1, 2] }))).status, 401);
+  assert.equal(writes, 1);
 });

@@ -9,6 +9,11 @@ const eslintConfig = defineConfig([
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
+    ".vercel/**",
+    ".playwright-cli/**",
+    "output/**",
+    ".qwen/**",
+    ".retouch4me/**",
     ".node_modules-backup/**",
     "out/**",
     "build/**",

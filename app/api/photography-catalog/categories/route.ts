@@ -110,3 +110,30 @@ export async function DELETE(req: NextRequest) {
   await query('DELETE FROM photography_categories WHERE id=$1', [id]);
   return NextResponse.json({ success: true });
 }
+
+// Save the complete category order in one statement so partial reorders cannot occur.
+export async function PATCH(req: NextRequest) {
+  const unauthorized = requireAdmin(req);
+  if (unauthorized) return unauthorized;
+  const body = await req.json().catch(() => null);
+  const ids = body?.ids;
+  if (!Array.isArray(ids) || !ids.length || ids.length > 1000 ||
+      ids.some((id: unknown) => !Number.isSafeInteger(id) || Number(id) < 1) || new Set(ids).size !== ids.length) {
+    return NextResponse.json({ error: 'Provide each category once in the preferred order.' }, { status: 400 });
+  }
+  const { rows } = await query(`
+    WITH requested AS (
+      SELECT id, position - 1 AS display_order
+      FROM unnest($1::int[]) WITH ORDINALITY AS chosen(id, position)
+    ), valid AS (
+      SELECT 1 WHERE (SELECT COUNT(*) FROM photography_categories) = cardinality($1::int[])
+      AND NOT EXISTS (SELECT 1 FROM requested r LEFT JOIN photography_categories c ON c.id = r.id WHERE c.id IS NULL)
+    )
+    UPDATE photography_categories c SET display_order = r.display_order, updated_at = NOW()
+    FROM requested r, valid WHERE c.id = r.id RETURNING c.id, c.display_order
+  `, [ids]);
+  if (rows.length !== ids.length) {
+    return NextResponse.json({ error: 'Categories have changed. Refresh and try again.' }, { status: 409 });
+  }
+  return NextResponse.json({ success: true });
+}

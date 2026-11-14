@@ -1,9 +1,13 @@
+import { readJsonRequest } from '@/lib/requestBody';
+import { sanitizeNewsletterHtml } from '@/lib/newsletterHtml';
 import { NextRequest, NextResponse } from 'next/server';
-import nodemailer from 'nodemailer';
+import { sendNewsletterCampaign } from '@/lib/newsletter/server';
 import { requireAdmin } from '@/lib/auth';
 import { query } from '@/lib/db';
 
 type ListType = 'all' | 'photography' | 'art';
+
+export const maxDuration = 60;
 
 const validLists = new Set<ListType>(['all', 'photography', 'art']);
 
@@ -18,17 +22,6 @@ function escapeHtml(value: string) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
-}
-
-function sanitizeEditorHtml(value: string) {
-  return value
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[\s\S]*?<\/style>/gi, '')
-    .replace(/\s+on[a-z]+\s*=\s*"[^"]*"/gi, '')
-    .replace(/\s+on[a-z]+\s*=\s*'[^']*'/gi, '')
-    .replace(/\s+on[a-z]+\s*=\s*[^\s>]+/gi, '')
-    .replace(/\s+(href|src)\s*=\s*"javascript:[^"]*"/gi, '')
-    .replace(/\s+(href|src)\s*=\s*'javascript:[^']*'/gi, '');
 }
 
 function htmlToText(value: string) {
@@ -78,20 +71,6 @@ function wrapEmailHtml(contentHtml: string, previewText?: string) {
   ].join('');
 }
 
-function getEmailConfig() {
-  const user = process.env.SMTP_USER || process.env.EMAIL_SERVER_USER || process.env.EMAIL_USER || process.env.MAIL_USER;
-  const pass = process.env.SMTP_PASS || process.env.EMAIL_SERVER_PASSWORD || process.env.EMAIL_PASS || process.env.MAIL_PASS || process.env.SMTP_PASSWORD;
-  const host = process.env.SMTP_HOST || process.env.EMAIL_SERVER_HOST || process.env.EMAIL_HOST || process.env.MAIL_HOST;
-  const port = Number(process.env.SMTP_PORT || process.env.EMAIL_SERVER_PORT || process.env.EMAIL_PORT || process.env.MAIL_PORT || 587);
-  const secureValue = process.env.SMTP_SECURE || process.env.EMAIL_SECURE || process.env.MAIL_SECURE;
-  const secure = secureValue ? secureValue.toLowerCase() === 'true' : port === 465;
-  const from = process.env.SMTP_FROM || process.env.MAIL_FROM || process.env.EMAIL_FROM || user;
-
-  if (!user || !pass || !from) return null;
-
-  return { user, pass, host, port, secure, from };
-}
-
 async function getRecipients(listType: ListType) {
   const params = listType === 'all' ? [] : [listType];
   const where = listType === 'all' ? "status = 'active'" : "status = 'active' AND list_type = $1";
@@ -127,65 +106,25 @@ export async function POST(req: NextRequest) {
   const unauthorized = requireAdmin(req);
   if (unauthorized) return unauthorized;
 
-  const body = await req.json();
+  const parsed = await readJsonRequest(req, 100_000);
+  if (parsed.response) return parsed.response;
+  const body = parsed.body;
+  if (body.listType !== undefined && !validLists.has(body.listType)) return NextResponse.json({error:'Choose a valid newsletter list.'},{status:400});
   const listType = normalizeList(body.listType);
   const subject = typeof body.subject === 'string' ? body.subject.trim() : '';
   const previewText = typeof body.previewText === 'string' ? body.previewText.trim() : '';
   const bodyText = typeof body.body === 'string' ? body.body.trim() : '';
-  const bodyHtml = typeof body.bodyHtml === 'string' ? sanitizeEditorHtml(body.bodyHtml.trim()) : '';
+  const bodyHtml = typeof body.bodyHtml === 'string' ? sanitizeNewsletterHtml(body.bodyHtml.trim()) : '';
   const fallbackText = htmlToText(bodyHtml);
-  const emailConfig = getEmailConfig();
 
+  if (subject.length > 200 || previewText.length > 500) return NextResponse.json({ error: 'Subject or preview text is too long.' }, { status: 400 });
   if (!subject) return NextResponse.json({ error: 'Subject is required.' }, { status: 400 });
   if (!bodyText && !fallbackText) {
     return NextResponse.json({ error: 'Newsletter body is required.' }, { status: 400 });
   }
-  if (!emailConfig) {
-    return NextResponse.json({ error: 'SMTP credentials are not configured.' }, { status: 500 });
-  }
-
-  const recipients = await getRecipients(listType);
-  const emails = recipients.map((subscriber) => subscriber.email).filter(Boolean);
-
-  if (emails.length === 0) {
-    return NextResponse.json({ error: 'No active subscribers found for this list.' }, { status: 400 });
-  }
-
-  const transporter = nodemailer.createTransport(
-    emailConfig.host
-      ? {
-          host: emailConfig.host,
-          port: emailConfig.port,
-          secure: emailConfig.secure,
-          auth: {
-            user: emailConfig.user,
-            pass: emailConfig.pass,
-          },
-        }
-      : {
-          service: 'gmail',
-          auth: {
-            user: emailConfig.user,
-            pass: emailConfig.pass,
-          },
-        }
-  );
-
-  await transporter.sendMail({
-    from: emailConfig.from,
-    to: emailConfig.from,
-    bcc: emails,
-    subject,
-    text: bodyText || fallbackText,
-    html: bodyHtml ? wrapEmailHtml(bodyHtml, previewText) : textToEmailHtml(bodyText, previewText),
-  });
-
-  await query(
-    `UPDATE newsletter_subscribers
-     SET last_emailed_at = NOW()
-     WHERE status = 'active' ${listType === 'all' ? '' : 'AND list_type = $1'}`,
-    listType === 'all' ? [] : [listType]
-  );
-
-  return NextResponse.json({ message: 'Newsletter sent.', sentCount: emails.length });
+  try {
+    const result = await sendNewsletterCampaign({listType,subject,text:bodyText || fallbackText,html:bodyHtml ? wrapEmailHtml(bodyHtml,previewText) : textToEmailHtml(bodyText,previewText)});
+    if (!result.sentCount && !result.failedCount) return NextResponse.json({error:'No active subscribers found for this list.'},{status:400});
+    return NextResponse.json({...result,message:`Sent to ${result.sentCount} recipients.${result.failedCount ? ` ${result.failedCount} deliveries could not be confirmed.` : ''}`},{status:result.sentCount ? 200 : 502});
+  } catch { return NextResponse.json({error:'Newsletter delivery is unavailable.'},{status:503}); }
 }

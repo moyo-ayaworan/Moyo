@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { CalendarDays, CheckCircle2, Clock, CreditCard, Download, FileText, ImageIcon, Mail, RefreshCw } from 'lucide-react';
 import Navbar from '@/components/Navbar';
+import InvoicePayment from '@/components/InvoicePayment';
 import Footer from '@/components/Footer';
 import { getBookingFinance } from '@/lib/bookingFinance';
 import { getBookingPackage } from '@/lib/bookingRates';
@@ -85,6 +86,11 @@ function formatWhen(value: string) {
 
 export default function ClientBookingPortalPage() {
   const params = useParams<{ token: string }>();
+  return <BookingPortal key={params.token} token={params.token} />;
+}
+
+function BookingPortal({ token }: { token: string }) {
+  const params = { token };
   const [booking, setBooking] = useState<Booking | null>(null);
   const [documents, setDocuments] = useState<PortalDocument[]>([]);
   const [gallery, setGallery] = useState<PortalGallery | null>(null);
@@ -113,12 +119,11 @@ export default function ClientBookingPortalPage() {
     ];
   }, [booking?.status]);
 
-  const loadBooking = async () => {
-    setLoading(true);
-    setError('');
+  const loadBooking = async (response?: Response) => {
     try {
-      const res = await fetch(`/api/bookings/portal/${params.token}`);
+      const res = response ?? await fetch(`/api/bookings/portal/${params.token}`);
       const data = await res.json().catch(() => ({}));
+      setError('');
       if (!res.ok || !data.booking) {
         setError(typeof data.error === 'string' ? data.error : 'Booking not found.');
         setBooking(null);
@@ -137,7 +142,12 @@ export default function ClientBookingPortalPage() {
   };
 
   useEffect(() => {
-    if (params.token) void loadBooking();
+    if (!params.token) return;
+    const controller = new AbortController();
+    fetch(`/api/bookings/portal/${params.token}`, { signal: controller.signal, cache: 'no-store' })
+      .then(response => { if (!controller.signal.aborted) void loadBooking(response); })
+      .catch(() => { if (!controller.signal.aborted) { setError('Unable to load this booking right now.'); setLoading(false); } });
+    return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.token]);
 
@@ -156,7 +166,7 @@ export default function ClientBookingPortalPage() {
             </div>
             <button
               type="button"
-              onClick={loadBooking}
+              onClick={() => { setLoading(true); setError(''); void loadBooking(); }}
               className="inline-flex items-center gap-2 border border-white/10 px-4 py-3 text-[10px] uppercase tracking-[0.2em] text-white/60 transition-colors hover:border-accent hover:text-accent"
             >
               <RefreshCw size={14} />
@@ -188,13 +198,14 @@ export default function ClientBookingPortalPage() {
                       {paymentStatus}
                     </p>
                   </div>
-                  {gallery?.payment_url && !gallery.payment_verified && (!finance?.hasInvoice || finance.balance > 0) && (
+                  {!finance?.hasInvoice && gallery?.payment_url && !gallery.payment_verified && (!finance?.hasInvoice || finance.balance > 0) && (
                     <a href={gallery.payment_url} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 border border-accent/45 px-4 py-3 text-[10px] uppercase tracking-[0.18em] text-accent transition-colors hover:bg-accent hover:text-black">
                       <CreditCard size={14} />
                       Pay Booking
                     </a>
                   )}
                 </div>
+                {documents.filter(doc => doc.document_type === 'invoice').map(doc => <InvoicePayment key={doc.id} invoice={doc} token={params.token} />)}
                 {booking.client_notes && (
                   <div className="border-t border-white/10 pt-5">
                     <p className="text-[10px] uppercase tracking-[0.25em] text-white/35">Studio note</p>
@@ -249,7 +260,7 @@ export default function ClientBookingPortalPage() {
                       {documents.length > 0 ? documents.flatMap(document => [
                         { ...document, key: `${document.id}-invoice`, kind: document.document_type === 'invoice' ? 'invoice' : '', paymentId: '', label: document.document_type },
                         ...(document.billing_details?.agreementScope ? [{ ...document, key: `${document.id}-agreement`, kind: 'agreement', paymentId: '', label: 'Agreement', title: `Agreement for Moyo-${document.id}` }] : []),
-                        ...(document.payments?.map(payment => ({ ...document, key: `${document.id}-${payment.id}`, kind: 'receipt', paymentId: payment.id, label: `Receipt · ${payment.receivedAt} · ${document.currency} ${Number(payment.amount).toLocaleString()}`, title: `Payment receipt for Moyo-${document.id}` })) || []),
+                        ...(document.payments?.map(payment => ({ ...document, key: `${document.id}-${payment.id}`, kind: 'receipt', paymentId: payment.id, label: `${payment.amount < 0 ? 'Refund' : 'Receipt'} · ${payment.receivedAt} · ${document.currency} ${Number(payment.amount).toLocaleString()}`, title: `Payment receipt for Moyo-${document.id}` })) || []),
                         ...(!document.payments?.length && document.paid_at ? [{ ...document, key: `${document.id}-receipt`, kind: 'receipt', paymentId: 'legacy', label: 'Receipt · Paid' }] : []),
                       ]).map((document) => (
                         <a

@@ -10,6 +10,7 @@ const entries=new Map(), calls=[];
 let denied=true,limited=false,offline=false;
 const response=(value,options={})=>({status:options.status ?? 200,value,headers:options.headers});
 const context={exports:{},require(name){
+ if(name==='@/lib/requestBody')return {readJsonRequest:async request=>{try{return {body:await request.json()};}catch{return {response:response({error:'Invalid request.'},{status:400})};}}};
  if(name==='next/server')return {NextResponse:{json:response}};
  if(name==='@/lib/stillboundsLegal')return {stillboundsLegalVersion:'2026-10-13-v1'};
  if(name==='@/lib/auth')return {requireAdmin:()=>denied ? response({error:'Unauthorized'},{status:401}) : null};
@@ -38,13 +39,13 @@ assert.equal((await POST(request({email:'legacy@example.com',consent:true}))).st
 assert.equal((await POST(request({email:'test@example.com',termsAccepted:true,marketingConsent:'yes'}))).status,400);
 assert.equal(calls.length,0);
 const accepted=await POST(request({email:'  TEST@example.com ',termsAccepted:true}));
-assert.equal(accepted.status,200);assert.equal(accepted.value.alreadyRequested,false);
+assert.equal(accepted.status,200);assert.equal(accepted.value.ok,true);
 assert.equal(entries.get('test@example.com').marketing_opt_in,false);
 assert(calls.some(call=>call.sql.includes('marketing_opt_in BOOLEAN NOT NULL DEFAULT FALSE')));
 assert.equal((await POST(request({email:'marketing@example.com',termsAccepted:true,marketingConsent:true}))).status,200);
 assert.equal(entries.get('marketing@example.com').marketing_opt_in,true);
 const duplicate=await POST(request({email:'test@example.com',termsAccepted:true,marketingConsent:true}));
-assert.equal(duplicate.status,200);assert.equal(duplicate.value.alreadyRequested,true);
+assert.equal(duplicate.status,200);assert.equal(duplicate.value.ok,true);
 assert.equal(entries.get('test@example.com').marketing_opt_in,false);assert.equal(entries.size,2);
 const before=calls.length;await POST(request({email:'bot@example.com',termsAccepted:true,website:'spam'}));assert.equal(calls.length,before);
 limited=true;assert.equal((await POST(request({email:'limited@example.com',termsAccepted:true}))).status,429);limited=false;

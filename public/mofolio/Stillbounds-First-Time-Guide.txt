@@ -1,0 +1,244 @@
+STILLBOUNDS — FIRST-TIME GUIDE
+by Moyo Ayaworan
+
+START HERE — keep this guide open while you install and try your first book.
+This guide is included in the ZIP beside Stillbounds.app. In TextEdit, use Command+F to
+find a topic. A label such as File > Save means click File in the app menu, then Save.
+Cmd and the symbol ⌘ both mean the Command key; Shift is ⇧; Esc is Escape. A spread is
+two facing pages.
+
+INSTALL OR UPDATE ON YOUR MAC
+1. Check your Mac: click the Apple symbol at the top-left of the screen, then About This
+Mac. Choose the Apple Silicon download for an Apple M-series chip, or Intel for an Intel
+processor. Apple Silicon needs macOS 26.2 or later; Intel needs macOS 13.3 or later.
+2. Find the download: click Finder (the blue smiling-face icon in the Dock), then
+Downloads in the left sidebar. Wait until the ZIP has finished downloading before
+opening it. You only need the ZIP for your Mac edition.
+3. Unzip: double-click the Stillbounds ZIP. Finder extracts a folder containing
+Stillbounds.app and Stillbounds-First-Time-Guide.txt. Double-click the text file to read
+it in TextEdit. No separate guide download is needed.
+4. If updating: open your existing Stillbounds, save your book with Command+S, then
+choose Stillbounds > Quit Stillbounds in the top menu bar, or press Command+Q. Close the
+app before replacing it.
+5. Install: in Finder, drag Stillbounds.app from the extracted folder onto Applications
+in the left sidebar. Drag means hold the mouse or trackpad button on the app, move it
+onto Applications, then release. If Finder asks about an existing copy, choose Replace.
+Do not move your photo folders or .mofolio projects.
+6. Launch the installed copy: click Applications in Finder and double-click Stillbounds.
+If you cannot find Applications in the sidebar, choose Go > Applications from Finder's
+menu bar at the top of the screen. Launch from Applications rather than from the
+download folder.
+7. If Apple cannot check the app or the developer cannot be verified: for a copy
+downloaded from the official Stillbounds website, choose Done (or Cancel) on that
+warning, rather than Move to Bin / Move to Trash.
+8. Then click the Apple symbol > System Settings > Privacy & Security. Scroll down to
+Security, find the notice about Stillbounds, and click Open Anyway. Enter your Mac login
+password or use Touch ID if requested, then click Open in the confirmation. This is your
+Mac authentication, not your Stillbounds account password. macOS normally remembers this
+exception for later launches.
+9. The Open Anyway steps apply to an unverified-developer or unnotarized-app warning. If
+the message says the app is damaged or will damage your computer, or Open Anyway is
+unavailable, keep the exact message and contact the developer. Do not delete your
+photographs or projects. Apple's instructions: https://support.apple.com/en-us/102445
+10. Activate: follow Stillbounds' sign-in instructions to open the website in your
+browser. Register, verify your email, and approve the sign-in code shown by the app.
+Return to the Stillbounds window afterwards. First activation and periodic licence
+renewal need internet; local editing, saving, analysis and export work offline within
+the signed licence period.
+11. Keep it easy to find: while Stillbounds is open, Control-click its icon in the Dock,
+then choose Options > Keep in Dock. You can also reopen it from Finder > Applications.
+12. After installation: keep your guide somewhere easy to find. Once the copy in
+Applications opens successfully, the extracted download copy of Stillbounds.app and its
+ZIP are optional backups. Removing those download copies does not uninstall the separate
+copy in Applications. Never remove your original photo folders, saved .mofolio files, or
+matching .assets folders as part of this cleanup.
+
+Your first book: Add photos > Organise photos > Design pages > Review & export
+
+FIND YOUR WAY AROUND
+Home holds your books. Add photos imports your images; Organise photos lets you check
+folders, order, people and story suggestions. Design pages opens the spread editor.
+Review & export helps you check the book and produce local files.
+In the editor, the photo library is on the left, your spread is in the centre, and
+editing controls appear when you select a photo or text card. The bottom Story strip
+shows photographs; Spreads shows page designs. Both scroll sideways. Click a spread
+thumbnail to edit it.
+Use Preview to read the book. Its Overview, zoom, full-screen and arrow controls help
+you navigate. Choose Edit this spread to return to editing. Hover over tools for
+shortcut hints; File and Edit menus also show available shortcuts.
+
+YOUR FIRST PRACTICE BOOK — FOLLOW THESE STEPS
+1. Put a small set of edited JPEG, PNG or TIFF photographs in a folder you will keep in
+place. Stillbounds links to the original files; it does not replace your photo editor or
+develop RAW files.
+2. On Home, click Start with your photographs. Give the book a name, choose its purpose
+and size, then Continue. Add photo folders, or choose photographs individually. Click
+Continue after import.
+3. Choose Keep my folders to keep your folder order, or Organise for me for Smart mode.
+Click Create my book. Let the draft open; background analysis can continue while you
+edit. Review suggestions rather than treating them as confirmed facts.
+4. In Design pages, click a spread thumbnail in the bottom strip. Click a photograph on
+the large spread to reveal Crop, Colour, Frame, Swap and More. Use Layout & spacing or
+Shuffle layout to try another composition. Command+Z undoes a change.
+5. Save early: press Command+S. In the Mac save window, choose a folder you can find
+again, such as Documents, type a project name and click Save. The .mofolio file stores
+your design; linked originals must remain available. Use Command+Shift+S to save a
+separate project file.
+6. Check Review & export for issues to inspect. Open Preview, use the arrow controls to
+turn pages, and choose Edit this spread to return to editing. Escape closes Preview.
+7. Click Export book, choose JPEG, PNG or PDF and the required options, then Export
+locally. Select an output folder in the Mac chooser. Start with a lightweight proof.
+Exported pages or PDFs are delivery files; keep the .mofolio project and originals for
+future editing.
+8. To continue later, open Stillbounds and select your book on Home, or use Open project
+to select the saved .mofolio file. If photos are missing, use the relink instructions
+below rather than starting over.
+
+1. GET YOUR PHOTOS READY
+Start with a small set of edited photographs so you can learn the workflow comfortably.
+- Register and verify your email on the Stillbounds website, then approve your Mac’s
+  sign-in code. Your 30-day trial starts on first activation; there is no automatic
+  charge. Your name appears in the app after sign-in.
+- Use JPEG, PNG or TIFF files. RAW development happens in your photo editor before
+  import. Quick import prepares previews first; optional image-label analysis can run
+  separately.
+- Keep the photographs in a folder you can leave in place. Stillbounds preserves the
+  original files and links to their locations.
+- Your book can be a wedding or event album, a portrait book, or an art portfolio. You
+  can change its setup later.
+Remember: A saved book is not a backup of your photographs. Keep your own backup of the
+original photo folder.
+
+2. CREATE YOUR FIRST BOOK
+On Home, choose Start with your photographs. The creation flow takes you through
+purpose, photos and design.
+- Choose a book name, type and size first. Add several selected photo folders together
+  and arrange their order. Choose Keep my folders (Folder mode) or Organise for me
+  (Smart mode), then Create my book. Page settings chooses the length automatically;
+  expand it only to set a total or spreads per group. A spread is two facing pages.
+- Every creation mode opens an editable draft first, then automatically analyses faces,
+  expressions and person groups for all imported photos. Gemma photo categories and
+  descriptions are optional: choose Essentials, Photo categories, or Categories &
+  descriptions. Keep editing and saving while it runs. Suggestions are used
+  automatically. Open Photo assistant, then AI results to change a category or explore
+  people. Your corrections take priority; analysis never rearranges your pages. Photo
+  analysis stays local; no photo upload is required. Register and verify your email to
+  activate the app first.
+- Folder mode keeps each folder together and follows your folder order. Smart mode uses
+  available story signals to organise your selected photos. Faces, expressions and
+  people grouping run in either mode; optional Gemma categories and descriptions stay
+  off until enabled.
+Remember: Performance offers Auto, Quiet, Balanced and Performance modes. Quiet leaves
+more room for other apps. Pause analysis to keep editing; Resume reuses completed
+checkpoints. Intel photo AI checks compatible GPUs and falls back to CPU. Follow the
+progress message; Stop safely cancels processing, and completed analysis can be reused
+when you retry.
+
+3. CHECK THE AI SUGGESTIONS
+Treat the first draft as a starting point. Your knowledge of the photographs matters
+more than an automatic guess.
+- Open Story, then Story settings. Review the suggested category and section; use the
+  acceptance buttons or choose your own labels.
+- In People & expressions, inspect suggested groups before naming or confirming them.
+  You can split, merge or correct groups.
+- To analyse an existing book, open Photo assistant, then AI options, or Photo
+  suggestions in Organise photos settings. Choose whether to add Gemma, and photos
+  already on pages, selected book photos, or the entire library. Faces, expressions and
+  grouping remain enabled for the full library. Use Measure this Mac for a small local
+  benchmark; estimates use this device and update during processing. No estimate is
+  invented for an unmeasured Mac. Important photographs should stay in your selection
+  even when a suggestion is wrong. After activation, editing, import, AI, saving and
+  export work offline within your signed licence period. Registration, first activation
+  and periodic licence renewal need internet.
+Remember: Model descriptions and person matches can be wrong. Expression labels describe
+visible appearance; they do not establish how someone feels.
+
+4. REFINE THE PAGES
+Choose Design to work on the spread. Select a photograph or card to reveal its editing
+controls.
+- Use Layout to try a different composition. Move cards, adjust the crop, or choose fit
+  to show the whole photograph and fill to cover its frame.
+- Shift-click selects more than one card. Use Undo (Cmd+Z) and Redo (Cmd+Shift+Z) when
+  trying changes.
+- Open Cover, then Browse cover designs for eight editable front/back templates using
+  photos already in the book. Enter final spine, hinge, board-overhang and wrap
+  measurements from your print lab before applying a cover design.
+- Lock finished spreads or placements before automatic rearranging. Review crops, text,
+  safe margins and faces near the fold.
+Remember: Changing the interface between dark and light does not change your book's page
+colours or exports.
+
+5. SAVE AND PROTECT YOUR WORK
+Press Cmd+S or choose File > Save project. Keep a regular project save even though local
+recovery is automatic.
+- A linked .mofolio project saves edits and references your original photo files. Keep
+  those files in their original folders.
+- To move a book to another computer, open Book setup and choose Save portable copy with
+  photos. Keep the .mofolio file and its matching .assets folder together.
+- Use Version history for available earlier local edits. After an interruption, choose
+  Recover last session on Home and select the book and recovery version you need.
+Remember: Recovery keeps metadata on this Mac. Force quit or power loss can bypass the
+final save, and recovery does not replace an original-photo backup.
+
+6. REVIEW, PREVIEW AND EXPORT
+Choose Review to inspect warnings, then Preview to turn through the whole book before
+exporting.
+- Check page order, every crop, captions, missing sources and low-resolution warnings.
+  Return to the relevant spread to make corrections.
+- Choose Export book and select JPEG, PNG or PDF. Start with a lightweight proof before
+  making a full-resolution export.
+- To collect client feedback online, choose Share for review while signed in to your
+  Stillbounds account. Publish compressed review pages, then share the private client
+  link. On the website, open your profile and My review books to copy links, read and
+  resolve feedback, or delete a review. Reviews belong to the account used to publish
+  them; original photos and editable projects stay on your Mac. Publishing needs
+  internet.
+- For printing, confirm the printer's page size, bleed, resolution and colour
+  requirements. A screen preview or a clean warning list does not certify print
+  compliance.
+Remember: You can reopen this guide from Help > First-time guide in the editor, or
+First-time guide on Home. Save a text copy to keep beside your project.
+
+QUICK SHORTCUTS
+- Cmd+S: save the project.
+- Cmd+Shift+S: save the project as a new file.
+- Cmd+Z: undo the last edit.
+- Cmd+Shift+Z: redo an edit.
+- Cmd+I: import individual photographs into the current book.
+- Cmd+D: duplicate selected cards on the spread.
+- Delete or Backspace: remove selected cards from the spread; original photo files are
+  preserved.
+- Shift-click: add cards to a selection.
+- Arrow keys while a card frame has focus: nudge it; hold Shift for a larger move. In
+  crop editing, arrow keys adjust the focused photo's crop instead. Locked cards or
+  crops cannot be nudged.
+- Left/Right arrows outside editing fields: move between spreads. In Preview, turn to
+  the previous/next page.
+- Escape: close Preview or the current dialog, or clear the editor selection.
+- Tab / Shift+Tab: move keyboard focus forward / backward through controls. Enter or
+  Space activates a focused button.
+
+WHEN SOMETHING GOES WRONG
+A photograph is missing
+Open Book setup and use Use original photo folder, or select the photograph and choose
+Relink / replace source. If the original changed, inspect its dimensions and crop again
+before exporting.
+
+Analysis stops or a suggestion is wrong
+Retry Analyse photos locally, or organise the photographs manually. Completed
+suggestions are cached. Incorrect guesses do not need to be accepted to keep editing
+your book.
+
+Saving reports an error
+Keep the app open, check free space and access to the save location, and retry.
+Background recovery retries automatically. Closing after a failed save offers Keep
+editing or an explicit Close without saving.
+
+CHOOSING THE RIGHT MAC VERSION
+Use Apple Silicon for M-series Macs and Intel for Intel Macs. Both include offline photo
+suggestions, face detection, person-group suggestions and expression analysis. The Intel
+AI edition requires macOS 13.3 or later in the Ventura edition and targets 16 GB RAM or
+more. Its physical Intel speed and compatibility still need hardware verification.
+
+Source photographs stay local. Online client sharing is a separate, deliberate action
+that requires a configured connection; it is not needed for the offline workflow above.

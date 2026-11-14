@@ -106,7 +106,7 @@ async function sendReminder(booking: BookingReminder, kind: ReminderKind) {
 function authorize(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret && req.headers.get('authorization') === `Bearer ${cronSecret}`) return null;
-  return requireAdmin(req);
+  return requireAdmin(req, true);
 }
 
 export async function GET(req: NextRequest) {
@@ -116,7 +116,7 @@ export async function GET(req: NextRequest) {
   const { rows: tomorrowRows } = await query(
     `SELECT id, name, email, phone, service, booking_date::text, booking_time, scheduled_at::text
      FROM bookings
-     WHERE status IN ('pending', 'confirmed')
+     WHERE status IN ('pending', 'confirmed', 'contract-sent', 'invoiced')
        AND reminder_24h_sent_at IS NULL
        AND (scheduled_at AT TIME ZONE 'Africa/Lagos')::date = (NOW() AT TIME ZONE 'Africa/Lagos')::date + 1`
   );
@@ -124,7 +124,7 @@ export async function GET(req: NextRequest) {
   const { rows: todayRows } = await query(
     `SELECT id, name, email, phone, service, booking_date::text, booking_time, scheduled_at::text
      FROM bookings
-     WHERE status IN ('pending', 'confirmed')
+     WHERE status IN ('pending', 'confirmed', 'contract-sent', 'invoiced')
        AND reminder_day_sent_at IS NULL
        AND scheduled_at > NOW()
        AND (scheduled_at AT TIME ZONE 'Africa/Lagos')::date = (NOW() AT TIME ZONE 'Africa/Lagos')::date`

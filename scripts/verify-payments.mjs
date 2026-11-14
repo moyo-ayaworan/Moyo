@@ -1,0 +1,88 @@
+// Money-moving logic is exercised only against disposable fixtures in an isolated schema.
+import assert from 'node:assert/strict';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import pg from 'pg';
+import { PaymentStore } from '../lib/payments/store.ts';
+import { paymentSchema } from '../lib/payments/schema.ts';
+import { LicensingStore } from '../lib/stillbounds/billing-store.ts';
+try { process.loadEnvFile('.env.local'); } catch {}
+const url = new URL(process.env.DATABASE_URL); url.searchParams.set('sslmode', 'verify-full'); url.searchParams.delete('uselibpqcompat');
+const pool = new pg.Pool({ connectionString: url.href, ssl: { rejectUnauthorized: true }, max: 12, connectionTimeoutMillis: 15000 });
+const schema = 'payments_test_' + randomBytes(8).toString('hex'); let created = false;
+async function tx(work) { const c = await pool.connect(); try { await c.query('BEGIN'); await c.query(`SET LOCAL search_path TO "${schema}"`); const result = await work(c); await c.query('COMMIT'); return result; } catch (error) { await c.query('ROLLBACK'); throw error; } finally { c.release(); } }
+const store = new PaymentStore(tx);
+const paid = (o, id = Math.floor(Math.random() * 1e9) + 1) => ({ id, reference: o.reference, domain: o.mode, amount: Number(o.amount_kobo), currency: o.currency, customer: { email: o.email }, metadata: o.metadata, status: 'success', paid_at: new Date().toISOString() });
+const token = 'a'.repeat(36);
+try {
+  await pool.query(`CREATE SCHEMA "${schema}"`); created = true;
+  await tx(async c => {
+    await c.query(`CREATE TABLE galleries(id SERIAL PRIMARY KEY,payment_verified BOOLEAN DEFAULT FALSE);
+      CREATE TABLE gallery_documents(id SERIAL PRIMARY KEY,gallery_id INTEGER REFERENCES galleries(id),document_type TEXT DEFAULT 'invoice',title TEXT DEFAULT 'Fixture invoice',client_email TEXT DEFAULT 'buyer@example.test',amount NUMERIC DEFAULT 100000,currency TEXT DEFAULT 'NGN',billing_details JSONB DEFAULT '{"depositAmount":30000,"sessionDate":"2026-12-01"}',payments JSONB NOT NULL DEFAULT '[]',paid_at TIMESTAMPTZ,updated_at TIMESTAMPTZ DEFAULT NOW());
+      CREATE TABLE bookings(id SERIAL PRIMARY KEY,gallery_id INTEGER,manage_token TEXT,status TEXT DEFAULT 'invoiced');
+      CREATE TABLE art_inquiries(id SERIAL PRIMARY KEY,gallery_id INTEGER,manage_token TEXT,status TEXT DEFAULT 'quoted');
+      CREATE TABLE digital_products(id SERIAL PRIMARY KEY,title TEXT,price TEXT,product_url TEXT,is_active BOOLEAN DEFAULT TRUE);
+      CREATE TABLE digital_orders(reference TEXT,product_id INTEGER,customer_email TEXT,amount_kobo BIGINT,currency TEXT,status TEXT,provider_reference TEXT,paid_at TIMESTAMPTZ,created_at TIMESTAMPTZ DEFAULT NOW());`);
+    await c.query(paymentSchema);
+    await c.query(await readFile(new URL('../lib/stillbounds/billing-schema.sql', import.meta.url), 'utf8'));
+    await c.query("INSERT INTO digital_products(title,price,product_url) VALUES('Fixture','₦20,000','https://fixture.invalid/private.zip')");
+    await c.query('INSERT INTO galleries DEFAULT VALUES');
+    await c.query('INSERT INTO gallery_documents(gallery_id) VALUES(1)');
+    await c.query('INSERT INTO bookings(gallery_id,manage_token) VALUES(1,$1)', [token]);
+  });
+  await assert.rejects(store.createDigital(1, 'buyer@example.test', 'test', randomUUID(), 'art'));
+  const digital = await store.createDigital(1, 'buyer@example.test', 'test', randomUUID());
+  await assert.rejects(store.fulfill(digital.reference, { ...paid(digital), amount: 1 }));
+  await assert.rejects(store.fulfill(digital.reference, { ...paid(digital), customer: { email: 'attacker@example.test' } }));
+  const p = paid(digital);
+  await Promise.all(Array.from({ length: 12 }, () => store.fulfill(digital.reference, p)));
+  assert.equal((await store.order(digital.reference)).status, 'paid');
+  assert.equal(digital.shop_section, 'photography');
+  assert.equal(digital.metadata.product_section, 'photography');
+  assert.equal((await tx(c => c.query('SELECT COUNT(*)::int AS n FROM payment_events WHERE reference=$1', [digital.reference]))).rows[0].n, 1);
+  const second = await store.createDigital(1, 'other@example.test', 'test', randomUUID());
+  await assert.rejects(store.fulfill(second.reference, { ...paid(second), id: p.id }), e => e.code === '23505');
+  assert.equal((await store.order(second.reference)).status, 'pending');
+  await store.revoke(digital.reference, 'refund.processed', 'refund-1', 'test', 'NGN', 2000000);
+  await store.revoke(digital.reference, 'refund.processed', 'refund-1', 'test', 'NGN', 2000000);
+  assert.equal((await store.order(digital.reference)).status, 'refunded');
+  await assert.rejects(store.fulfill(digital.reference, p));
+  await assert.rejects(store.createInvoice(1, 'b'.repeat(36), 'balance', 'test'));
+  const deposit = await store.createInvoice(1, token, 'deposit', 'test'); assert.equal(Number(deposit.amount_kobo), 3000000);
+  await store.saveCheckout(deposit.reference, 'https://checkout.paystack.com/fixture');
+  const resumes = await Promise.all(Array.from({ length: 8 }, () => store.createInvoice(1, token, 'balance', 'test')));
+  assert(resumes.every(o => o.reference === deposit.reference));
+  const payment = paid(deposit);
+  await Promise.all(Array.from({ length: 12 }, () => store.fulfill(deposit.reference, payment)));
+  let doc = (await tx(c => c.query('SELECT * FROM gallery_documents WHERE id=1'))).rows[0];
+  assert.equal(doc.payments.length, 1); assert.equal(doc.payments[0].amount, 30000);
+  assert.equal((await tx(c => c.query('SELECT payment_verified FROM galleries WHERE id=1'))).rows[0].payment_verified, false);
+  const balance = await store.createInvoice(1, token, 'balance', 'test'); assert.equal(Number(balance.amount_kobo), 7000000);
+  await store.fulfill(balance.reference, paid(balance));
+  assert.equal((await tx(c => c.query('SELECT payment_verified FROM galleries WHERE id=1'))).rows[0].payment_verified, true);
+  await store.revoke(balance.reference, 'refund.processed', 'partial-1', 'test', 'NGN', 1000000);
+  await store.revoke(balance.reference, 'refund.processed', 'partial-1', 'test', 'NGN', 1000000);
+  doc = (await tx(c => c.query('SELECT * FROM gallery_documents WHERE id=1'))).rows[0];
+  assert.equal(doc.payments.length, 3); assert.equal(doc.payments[2].amount, -10000); assert.equal(doc.paid_at, null);
+  assert.equal((await tx(c => c.query('SELECT payment_verified FROM galleries WHERE id=1'))).rows[0].payment_verified, false);
+  await assert.rejects(store.createInvoice(1, token, 'balance', 'test'));
+  // Concurrent manual payment / an old payable link cannot over-credit an invoice.
+  await tx(async c => { await c.query('INSERT INTO galleries DEFAULT VALUES'); await c.query('INSERT INTO gallery_documents(gallery_id) VALUES(2)'); await c.query('INSERT INTO bookings(gallery_id,manage_token) VALUES(2,$1)', [token]); });
+  const stale = await store.createInvoice(2, token, 'balance', 'test');
+  await tx(c => c.query("UPDATE gallery_documents SET payments='[{\"amount\":100000}]',paid_at=NOW() WHERE id=2"));
+  assert.equal((await store.fulfill(stale.reference, paid(stale))).status, 'review');
+  assert.equal((await tx(c => c.query('SELECT payments FROM gallery_documents WHERE id=2'))).rows[0].payments.length, 1);
+  // Stillbounds: provider uniqueness, cumulative partial refunds, and no revival after a reversal.
+  const sb = new LicensingStore(pool, schema), user = 'fixture-' + randomUUID();
+  const sbOrder = { reference: 'sb-test-' + randomUUID(), mode: 'test', userId: user, email: 'buyer@example.test', amount: 3000000, currency: 'NGN', status: 'pending' };
+  await sb.createOrder(sbOrder); await sb.saveCheckout('test', sbOrder.reference, 'https://checkout.paystack.com/fixture');
+  assert.equal((await sb.createOrder({ ...sbOrder, reference: 'sb-test-' + randomUUID() })).reference, sbOrder.reference);
+  const sbPayment = { ...paid({ ...sbOrder, amount_kobo: 3000000, email: sbOrder.email }), metadata: { product: 'stillbounds-perpetual-v1', user_id: user } };
+  await Promise.all(Array.from({ length: 8 }, () => sb.fulfill('test', sbOrder.reference, sbPayment)));
+  await sb.revoke('test', sbOrder.reference, 'refunded', 'partial-a', 'refund.processed', 1000000);
+  assert.equal((await sb.status('test', user)).account.paid, true);
+  await sb.revoke('test', sbOrder.reference, 'refunded', 'partial-b', 'refund.processed', 2000000);
+  assert.equal((await sb.status('test', user)).account.paid, false);
+  await assert.rejects(sb.fulfill('test', sbOrder.reference, sbPayment));
+  console.log(JSON.stringify({ isolatedSchema: true, liveMoneyMoved: false, wrongBuyerRejected: true, wrongCollectionRejected: true, underpaymentRejected: true, duplicateCreditsPrevented: true, providerIdReuseRejected: true, invoiceOwnershipEnforced: true, concurrentInvoiceSessionsResumed: true, depositKeepsDownloadsLocked: true, fullBalanceUnlocksDownloads: true, refundsRelockDownloads: true, duplicateRefundsIgnored: true, overpaymentSentToReview: true, stillboundsPartialRefundsAccumulate: true, reversedPaymentsCannotRevive: true }, null, 2));
+} finally { if (created) await pool.query(`DROP SCHEMA "${schema}" CASCADE`); await pool.end(); }

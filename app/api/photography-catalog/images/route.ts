@@ -49,7 +49,8 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: 'Image id, category and image are required' }, { status: 400 });
   }
 
-  const { rows } = await query(
+  try {
+    const { rows } = await query(
     `UPDATE photography_category_images
      SET category_id=$1, image_url=$2, title=$3, alt_text=$4, display_order=$5, updated_at=NOW()
      WHERE id=$6
@@ -66,6 +67,15 @@ export async function PUT(req: NextRequest) {
 
   if (!rows[0]) return NextResponse.json({ error: 'Image not found' }, { status: 404 });
   return NextResponse.json({ image: rows[0] });
+  } catch (error) {
+    if ((error as { code?: string }).code === '23505') {
+      return NextResponse.json({ error: 'This photo is already in that category.' }, { status: 409 });
+    }
+    if ((error as { code?: string }).code === '23503') {
+      return NextResponse.json({ error: 'The destination category no longer exists. Refresh and try again.' }, { status: 404 });
+    }
+    throw error;
+  }
 }
 
 export async function DELETE(req: NextRequest) {

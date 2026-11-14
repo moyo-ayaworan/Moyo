@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server';
-import { ADMIN_COOKIE } from '@/lib/auth';
+import { NextRequest, NextResponse } from 'next/server';
+import { ADMIN_COOKIE, adminRequestOriginAllowed } from '@/lib/auth';
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  if (!adminRequestOriginAllowed(req)) return NextResponse.json({ error: 'Request origin rejected.' }, { status: 403 });
   const response = NextResponse.json({ success: true });
 
   response.cookies.set(ADMIN_COOKIE, '', {

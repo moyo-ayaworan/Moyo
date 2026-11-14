@@ -1,7 +1,10 @@
+import { readJsonRequest } from '@/lib/requestBody';
 import { NextResponse } from 'next/server';
 import { ENIYAN_GUIDED_LINKS, ENIYAN_KNOWLEDGE } from '@/lib/eniyanKnowledge';
 
 import { ENIYAN_ROUTES, ENIYAN_MESSAGE_LIMIT } from '@/lib/eniyanNavigation';
+import { containsPrivateDetails } from '@/lib/privacy';
+import { rateLimit } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 
@@ -83,12 +86,6 @@ function pagePrompt(page: PageContext | undefined) {
   return `Current public page: ${path || 'Unknown'}. Selected site language: ${LANGUAGE_NAMES[languageCode] || 'English'}.`;
 }
 
-function containsPrivateDetails(text: string) {
-  return /\b(?:password|passcode|access\s*code|api\s*key|card\s*(?:number|details)|cvv|otp)\s*(?::|=|is\b)\s*\S+/i.test(text)
-    || /\b(?:\d[ -]?){13,19}\b/.test(text)
-    || /\/client\/booking\/[^\s]+/i.test(text);
-}
-
 function buildFallbackReply(messages: unknown, page?: PageContext) {
   const normalized = normalizeMessages(messages);
   const latest = normalized.at(-1)?.parts?.[0]?.text?.toLowerCase() || '';
@@ -108,6 +105,9 @@ function buildFallbackReply(messages: unknown, page?: PageContext) {
   if (localized[language]) return localized[language];
   if (/\b(invoice|receipt|contract|refund|cancel|reschedule|paid|payment status)\b/.test(latest)) {
     return 'I cannot view or change bookings, documents, or payments. For your invoice, contract, or receipt, use the private booking link in your studio email. To cancel, reschedule, or query a payment, contact ijabikenm@gmail.com. Do not paste your private link or payment details here.';
+  }
+  if (!/\b(art|artwork|painting|commission)\b/.test(latest) && (/\b(melatone|luts?|presets?)\b/.test(latest + ' ' + prior) || (/\b(digital products?|digital tools?)\b/.test(latest) && ((typeof page?.path === 'string' && page.path.startsWith('/photography')) || /\b(photography|photo)\b/.test(latest + ' ' + prior))))) {
+    return `Photography presets, LUTs and MELATONE are in ${ENIYAN_GUIDED_LINKS.photographyShop}. That collection is separate from the fine-art shop. Prices and secure Paystack checkout are on the product page; paid downloads unlock only after verification.`;
   }
   if (/\b(gallery|galleries|download|selection|access code)\b/.test(latest)) {
     return `Open ${ENIYAN_GUIDED_LINKS.clientGallery} and enter your access details there, not in this chat. Preview your photographs and approve your favourites. Finished files are available once the studio has uploaded them and verified payment. Lost your access details? Contact ijabikenm@gmail.com.`;
@@ -144,12 +144,17 @@ function buildFallbackReply(messages: unknown, page?: PageContext) {
 }
 
 export async function POST(req: Request) {
+  const limited = await rateLimit(req, 'eniyan-chat', 30, 3600);
+  if (limited) return limited;
+  if (Number(req.headers.get('content-length') || 0) > 20_000) return NextResponse.json({ error: 'Message is too long.' }, { status: 413 });
   let body: { messages?: unknown; page?: PageContext } = {};
   const replyJson = (reply: string, mode: 'guided' | 'ai' = 'guided') => NextResponse.json({ reply, mode }, { headers: { 'Cache-Control': 'private, no-store' } });
   const fallback = () => replyJson(buildFallbackReply(body.messages, body.page));
   try {
     const apiKey = process.env.GEMINI_API_KEY;
-    const parsed = await req.json().catch(() => null);
+    const jsonRequest = await readJsonRequest(req, 20000);
+    if (jsonRequest.response) return jsonRequest.response;
+    const parsed = jsonRequest.body;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return NextResponse.json({ error: 'Send a valid chat request.' }, { status: 400 });
     }

@@ -1,8 +1,10 @@
+import { readJsonRequest } from '@/lib/requestBody';
 import { NextRequest, NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import { query } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
+import { rateLimit } from '@/lib/rateLimit';
 import { BOOKING_TIMES, isCalendarDate, parseBookingDate } from '@/lib/bookingDates';
 import { bookingDetailsError } from '@/lib/bookingRequest';
 import { calculateBookingEstimate, formatNaira } from '@/lib/bookingRates';
@@ -219,6 +221,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const limited = await rateLimit(req, 'booking-create', 5, 3600);
+  if (limited) return limited;
   let creationKey = '';
   let requestHash = '';
   let fromEniyan = false;
@@ -235,7 +239,9 @@ export async function POST(req: NextRequest) {
     return savedResponse(previous, Boolean(previous.confirmation_sent_at), true);
   };
   try {
-    const body = await req.json().catch(() => null);
+    const jsonRequest = await readJsonRequest(req, 30000);
+    if (jsonRequest.response) return jsonRequest.response;
+    const body = jsonRequest.body;
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return NextResponse.json({ error: 'A booking object is required.' }, { status: 400 });
     }

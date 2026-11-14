@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import EniyanBooking from '@/components/EniyanBooking';
 import BookingAccess from '@/components/BookingAccess';
@@ -254,13 +254,15 @@ export default function EniyanChat() {
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>([
+  const [storedMessages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
       role: 'assistant',
       content: copy.greeting,
     },
   ]);
+  const messages = useMemo(() => storedMessages.map(message => message.id === 'welcome'
+    ? { ...message, content: copy.greeting } : message), [storedMessages, copy.greeting]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -284,12 +286,7 @@ export default function EniyanChat() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: reducedMotion ? 'instant' : 'smooth' });
   }, [messages, isSending, reducedMotion]);
 
-  useEffect(() => {
-    setMessages((current) => {
-      if (current.length !== 1 || current[0]?.id !== 'welcome') return current;
-      return [{ ...current[0], content: copy.greeting }];
-    });
-  }, [copy.greeting]);
+
 
   async function sendMessage(text: string, retry = false) {
     const trimmed = text.trim();

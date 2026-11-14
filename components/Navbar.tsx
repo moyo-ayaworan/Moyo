@@ -73,10 +73,11 @@ export default function Navbar() {
     const photographyLinks = [
         { name: t('common.photography'), href: '/photography' },
         { name: translateText('Portfolio'), href: '/photography/portfolio' },
+        { name: translateText('Digital Shop'), href: '/photography/shop' },
         { name: t('common.bookings'), href: '/photography/bookings' },
         { name: t('common.clientGallery'), href: '/photography/client-gallery' },
         { name: t('common.about'), href: '/photography/about' },
-        { name: 'Stillbounds', href: '/mofolio' },
+        { name: 'Stillbounds', href: '/stillbounds' },
     ];
 
     const artLinks = [

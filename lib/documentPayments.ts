@@ -6,6 +6,7 @@ export type BillingDetails = {
   documentTheme?: 'dark' | 'light';
 };
 export type DocumentPayment = {
+  kind?: 'payment' | 'refund';
   id: string;
   amount: number;
   receivedAt: string;
@@ -46,6 +47,7 @@ export function normalizeBilling(input: { depositType?: unknown; depositValue?: 
   return { depositAmount, sessionDate, agreementScope, agreementTerms, documentTheme };
 }
 export function receiptLabel(doc: PaymentFields, receipt: Pick<DocumentPayment, 'totalPaid' | 'balance'>) {
+  if ('kind' in receipt && receipt.kind === 'refund') return 'Refund';
   return doc.billing_details?.depositAmount && receipt.totalPaid <= doc.billing_details.depositAmount ? 'Booking deposit' : receipt.balance > 0 ? 'Part payment' : 'Final payment';
 }
 export function paymentNarrative(doc: PaymentFields, currency: string, receipt?: DocumentPayment) {
@@ -54,7 +56,7 @@ export function paymentNarrative(doc: PaymentFields, currency: string, receipt?:
   const lines = [`Full session total: ${money(summary.total)}`];
   if (summary.deposit) lines.push(`Booking deposit required: ${money(summary.deposit)}`);
   if (receipt) {
-    lines.push(`This payment received: ${money(receipt.amount)}`, `Payment date: ${receipt.receivedAt}`, `Total received to this receipt: ${money(receipt.totalPaid)}`, `Remaining balance: ${money(receipt.balance)}`);
+    lines.push(`${receipt.kind === 'refund' ? 'Refund processed' : 'This payment received'}: ${money(Math.abs(receipt.amount))}`, `Payment date: ${receipt.receivedAt}`, `Total received to this receipt: ${money(receipt.totalPaid)}`, `Remaining balance: ${money(receipt.balance)}`);
     if (receipt.reference) lines.push(`Payment reference: ${receipt.reference}`);
   } else {
     lines.push(`Payments received: ${money(summary.paid)}`, `Remaining balance: ${money(summary.balance)}`);

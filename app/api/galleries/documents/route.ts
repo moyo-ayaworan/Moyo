@@ -5,7 +5,7 @@ import { createHash } from 'crypto';
 import { buildDocumentPdf } from '@/lib/documentPdf';
 import nodemailer from 'nodemailer';
 import { requireAdmin } from '@/lib/auth';
-import { query } from '@/lib/db';
+import { query, transaction } from '@/lib/db';
 import { normalizeBilling, paymentSummary, paymentNarrative, roundMoney, type PaymentFields, type DocumentPayment } from '@/lib/documentPayments';
 
 export const runtime = 'nodejs';
@@ -715,6 +715,7 @@ export async function POST(req: NextRequest) {
       [...values, creationKey || null, requestHash, JSON.stringify(billing)]
     );
     if (!rows[0]) return NextResponse.json({ error: 'This save key belongs to different document details. Nothing was changed.' }, { status: 409 });
+    if (documentType === 'invoice' && paymentSummary(rows[0]).balance > 0) await query('UPDATE galleries SET payment_verified=FALSE WHERE id=$1', [galleryId]);
     return NextResponse.json({ document: rows[0] }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error('[gallery documents] POST error', error);
@@ -734,7 +735,8 @@ export async function PUT(req: NextRequest) {
     if (!id) return NextResponse.json({ error: 'Missing document id.' }, { status: 400 });
 
     if (action === 'recordPayment') {
-      const doc = await getDocument(id);
+      return await transaction(async client => {
+      const doc = (await client.query<GalleryDocument>('SELECT * FROM gallery_documents WHERE id=$1 FOR UPDATE', [id])).rows[0];
       if (!doc) return NextResponse.json({ error: 'Document not found.' }, { status: 404 });
       if (doc.document_type !== 'invoice') return NextResponse.json({ error: 'Payments can only be recorded against invoices.' }, { status: 400 });
       const key = normalize(body.paymentKey);
@@ -749,35 +751,43 @@ export async function PUT(req: NextRequest) {
         if (prior.amount !== amount || prior.receivedAt !== receivedAt || prior.reference !== reference) return NextResponse.json({ error: 'This payment key already belongs to different details.' }, { status: 409 });
         return NextResponse.json({ document: doc });
       }
+      if (/^(inv-|moyo-|sb-)/.test(reference)) return NextResponse.json({ error: 'Paystack payments are recorded automatically. Use their checkout verification instead.' }, { status: 409 });
+      const active = (await client.query("SELECT 1 FROM payment_orders WHERE document_id=$1 AND status IN ('pending','review','disputed','refunded') LIMIT 1", [id])).rows[0];
+      if (active) return NextResponse.json({ error: 'An online payment is pending or needs review. Resolve it in Payments before recording a manual payment.' }, { status: 409 });
       const summary = paymentSummary(doc);
       if (amount > summary.balance) return NextResponse.json({ error: 'Payment exceeds the remaining invoice balance. Refresh the invoice before recording another payment.' }, { status: 409 });
       const totalPaid = roundMoney(summary.paid + amount);
       const balance = roundMoney(summary.total - totalPaid);
       const payment: DocumentPayment = { id: key, amount, receivedAt, reference, recordedAt: new Date().toISOString(), totalPaid, balance, bookingConfirmed: Boolean(doc.billing_details?.sessionDate && totalPaid >= (summary.deposit || summary.total)) };
-      const { rows } = await query(
+      const { rows } = await client.query(
         `UPDATE gallery_documents SET payments = payments || $2::jsonb,
          paid_at = CASE WHEN $4::numeric = 0 THEN NOW() ELSE paid_at END, updated_at = NOW()
          WHERE id = $1 AND payments = $3::jsonb AND paid_at IS NULL RETURNING *`,
         [id, JSON.stringify([payment]), JSON.stringify(doc.payments || []), balance]
       );
       if (!rows[0]) {
-        const latest = await getDocument(id);
+        const latest = (await client.query<GalleryDocument>('SELECT * FROM gallery_documents WHERE id=$1', [id])).rows[0];
         const saved = latest?.payments?.find(item => item.id === key);
         if (saved && saved.amount === amount && saved.receivedAt === receivedAt && saved.reference === reference) return NextResponse.json({ document: latest });
         return NextResponse.json({ error: 'The invoice changed during payment recording. Refresh and check its receipts before retrying.' }, { status: 409 });
       }
       return NextResponse.json({ document: rows[0] }, { headers: { 'Cache-Control': 'private, no-store' } });
+      });
     }
 
     if (action === 'markPaid') {
-      const doc = await getDocument(id);
+      return await transaction(async client => {
+      const doc = (await client.query<GalleryDocument>('SELECT * FROM gallery_documents WHERE id=$1 FOR UPDATE', [id])).rows[0];
+      const online = (await client.query('SELECT 1 FROM payment_orders WHERE document_id=$1 LIMIT 1', [id])).rows[0];
+      if (online) return NextResponse.json({ error: 'This invoice has an online payment. Verify or review it in Payments.' }, { status: 409 });
       if (!doc) return NextResponse.json({ error: 'Document not found.' }, { status: 404 });
       if (doc.payments?.length || doc.billing_details?.depositAmount) return NextResponse.json({ error: 'Use Record payment to record the remaining balance.' }, { status: 400 });
       if (doc.document_type !== 'invoice' || !Number.isFinite(Number(doc.amount)) || Number(doc.amount) <= 0) return NextResponse.json({ error: 'Only invoices with a positive total can be marked paid.' }, { status: 400 });
-      const { rows } = await query(
+      const { rows } = await client.query(
         `UPDATE gallery_documents SET paid_at = COALESCE(paid_at, NOW()), updated_at = NOW() WHERE id = $1 AND payments = '[]'::jsonb RETURNING *`, [id]
       );
       return NextResponse.json({ document: rows[0] });
+      });
     }
 
     if (action === 'send') {

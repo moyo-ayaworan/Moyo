@@ -4,7 +4,7 @@ import type { UploadApiResponse } from 'cloudinary';
 import fs from 'fs/promises';
 import path from 'path';
 import { createHash } from 'node:crypto';
-import { uploadPublicId } from '@/lib/uploadIdentity';
+import { allowedPublicMedia, uploadPublicId } from '@/lib/uploadIdentity';
 import { requireAdmin } from '@/lib/auth';
 
 export const runtime = 'nodejs';
@@ -35,7 +35,8 @@ async function saveLocalUpload(file: File, buffer: Buffer, hash: string) {
   return `/uploads/${filename}`;
 }
 
-async function uploadFile(file: File) {
+async function uploadFile(file: File, privateAsset: boolean) {
+  if (!privateAsset && !allowedPublicMedia(file.name, file.type)) throw new Error('Public uploads must be images or videos.');
   console.log('[upload] file meta', {
     name: file.name,
     type: file.type,
@@ -51,6 +52,7 @@ async function uploadFile(file: File) {
 
   if (!cloudinaryConfigured) {
     if (process.env.VERCEL) throw new Error('Configure Cloudinary before uploading files on the hosted site.');
+    if (privateAsset) throw new Error('Private uploads require Cloudinary to be configured.');
     const url = await saveLocalUpload(file, buffer, hash);
     console.log('[upload] saved local file', { url });
     return url;
@@ -66,7 +68,7 @@ async function uploadFile(file: File) {
     }, cloudinaryUploadTimeoutMs);
 
     const stream = cloudinary.uploader.upload_stream(
-      { folder: 'moyo-admin', resource_type: 'auto', public_id: uploadPublicId(hash, file.name, file.type), overwrite: false },
+      { folder: 'moyo-admin', resource_type: 'auto', public_id: uploadPublicId(hash, file.name, file.type), overwrite: false, ...(privateAsset ? { type: 'authenticated' } : {}) },
       (error, result) => {
         if (settled) return;
         settled = true;
@@ -109,6 +111,7 @@ export async function POST(req: NextRequest) {
       cloudinaryConfigured,
     });
     const formData = await req.formData();
+    const privateAsset = formData.get('privateAsset') === 'true';
     const files = [...formData.getAll('file'), ...formData.getAll('files')]
       .filter((value): value is File => value instanceof File && value.size > 0);
 
@@ -120,7 +123,7 @@ export async function POST(req: NextRequest) {
     if (files.length > 10) return NextResponse.json({ error: 'Upload no more than 10 files per server request.' }, { status: 400 });
     const results: PromiseSettledResult<string>[] = [];
     for (let index = 0; index < files.length; index += 2) {
-      results.push(...await Promise.allSettled(files.slice(index, index + 2).map(uploadFile)));
+      results.push(...await Promise.allSettled(files.slice(index, index + 2).map(file => uploadFile(file, privateAsset))));
     }
     const urls = results
       .filter((result): result is PromiseFulfilledResult<string> => result.status === 'fulfilled')

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -37,7 +37,7 @@ export default function NewsletterAdminPage() {
   const [adminKey, setAdminKey] = useState('');
   const [isAuthed, setIsAuthed] = useState(true);
   const [authChecking, setAuthChecking] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [listType, setListType] = useState<ListType>('all');
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
@@ -55,9 +55,8 @@ export default function NewsletterAdminPage() {
   const headers = useMemo(
     () => ({
       'Content-Type': 'application/json',
-      'x-admin-key': adminKey,
     }),
-    [adminKey]
+    []
   );
 
   const totals = useMemo(() => {
@@ -66,20 +65,27 @@ export default function NewsletterAdminPage() {
     return { photography, art, all: photography + art };
   }, [counts]);
 
-  const loadSubscribers = async (nextListType = listType, clearNotice = true) => {
-    setLoading(true);
-    if (clearNotice) setNotice(null);
+  const loadSubscribers = useCallback(async (nextListType: ListType, clearNotice = true, response?: Response, signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/newsletter/admin?listType=' + nextListType, { headers });
+      const res = response ?? await fetch('/api/newsletter/admin?listType=' + nextListType, { headers });
       const data = await res.json();
+      if (signal?.aborted) return;
+      if (clearNotice) setNotice(null);
       if (!res.ok) throw new Error(data.error || 'Unable to load subscribers.');
       setSubscribers(data.subscribers || []);
       setCounts(data.counts || []);
     } catch (error) {
+      if (signal?.aborted) return;
       setNotice({ text: error instanceof Error ? error.message : 'Unable to load subscribers.', type: 'error' });
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
+  }, [headers]);
+
+  const selectList = (next: ListType) => {
+    if (next === listType) return;
+    setLoading(true);
+    setListType(next);
   };
 
   const verifyAdminKey = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -103,7 +109,7 @@ export default function NewsletterAdminPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Invalid admin password.');
-      setAdminKey(submittedKey);
+      setAdminKey('');
       setIsAuthed(true);
       setNotice({ text: 'Newsletter admin unlocked.', type: 'success' });
     } catch (error) {
@@ -115,9 +121,13 @@ export default function NewsletterAdminPage() {
   };
 
   useEffect(() => {
-    if (isAuthed) loadSubscribers(listType);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthed, listType]);
+    if (!isAuthed) return;
+    const controller = new AbortController();
+    fetch('/api/newsletter/admin?listType=' + listType, { headers, signal: controller.signal })
+      .then(response => { if (!controller.signal.aborted) void loadSubscribers(listType, true, response, controller.signal); })
+      .catch(() => { if (!controller.signal.aborted) { setNotice({ text: 'Unable to load subscribers.', type: 'error' }); setLoading(false); } });
+    return () => controller.abort();
+  }, [isAuthed, listType, loadSubscribers, headers]);
 
   const syncEditorContent = () => {
     const editor = editorRef.current;
@@ -138,7 +148,11 @@ export default function NewsletterAdminPage() {
   const addEditorLink = () => {
     const url = window.prompt('Enter link URL');
     if (!url) return;
-    runEditorCommand('createLink', url);
+    try {
+      const parsed = new URL(url);
+      if (!['https:', 'http:', 'mailto:'].includes(parsed.protocol)) return;
+      runEditorCommand('createLink', parsed.href);
+    } catch { /* Ignore malformed links. */ }
   };
 
   const sendCampaign = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -223,7 +237,7 @@ export default function NewsletterAdminPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => loadSubscribers(listType)}
+                  onClick={() => { setLoading(true); void loadSubscribers(listType); }}
                   disabled={loading}
                   className="inline-flex items-center gap-2 border border-white/10 px-3 py-2 text-[10px] uppercase tracking-[0.25em] text-white/60 hover:text-white disabled:opacity-50"
                 >
@@ -232,15 +246,15 @@ export default function NewsletterAdminPage() {
               </div>
 
               <div className="mb-6 grid grid-cols-3 gap-3 text-center text-xs">
-                <button type="button" onClick={() => setListType('all')} className={audienceButtonClass(listType === 'all')}>
+                <button type="button" onClick={() => selectList('all')} className={audienceButtonClass(listType === 'all')}>
                   <span className="block text-xl text-white">{totals.all}</span>
                   All
                 </button>
-                <button type="button" onClick={() => setListType('photography')} className={audienceButtonClass(listType === 'photography')}>
+                <button type="button" onClick={() => selectList('photography')} className={audienceButtonClass(listType === 'photography')}>
                   <span className="block text-xl text-white">{totals.photography}</span>
                   Photo
                 </button>
-                <button type="button" onClick={() => setListType('art')} className={audienceButtonClass(listType === 'art')}>
+                <button type="button" onClick={() => selectList('art')} className={audienceButtonClass(listType === 'art')}>
                   <span className="block text-xl text-white">{totals.art}</span>
                   Art
                 </button>
@@ -273,7 +287,7 @@ export default function NewsletterAdminPage() {
 
               <div className="space-y-2">
                 <label className={label}>Sending to</label>
-                <select className={inputClass} value={listType} onChange={(event) => setListType(event.target.value as ListType)}>
+                <select className={inputClass} value={listType} onChange={(event) => selectList(event.target.value as ListType)}>
                   <option value="all">All subscribers ({totals.all})</option>
                   <option value="photography">Photography ({totals.photography})</option>
                   <option value="art">Fine art ({totals.art})</option>
@@ -328,6 +342,11 @@ export default function NewsletterAdminPage() {
                       role="textbox"
                       aria-multiline="true"
                       aria-label="Newsletter message"
+                      onPaste={event => {
+                        event.preventDefault();
+                        runEditorCommand('insertText', event.clipboardData.getData('text/plain'));
+                      }}
+                      onDrop={event => event.preventDefault()}
                       onInput={syncEditorContent}
                       onBlur={syncEditorContent}
                       className="min-h-[280px] px-4 py-4 text-sm leading-relaxed text-white outline-none [&_a]:text-accent [&_a]:underline [&_h2]:mb-4 [&_h2]:font-heading [&_h2]:text-3xl [&_h2]:font-normal [&_h2]:italic [&_li]:ml-5 [&_ol]:list-decimal [&_p]:mb-4 [&_ul]:list-disc"

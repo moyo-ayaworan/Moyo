@@ -1,4 +1,6 @@
+import { readJsonRequest } from '@/lib/requestBody';
 import { NextRequest, NextResponse } from 'next/server';
+import { rateLimit } from '@/lib/rateLimit';
 import { query } from '@/lib/db';
 
 function uniqueStrings(value: unknown) {
@@ -9,12 +11,17 @@ function uniqueStrings(value: unknown) {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => null);
+  const limited = await rateLimit(req, 'gallery-access', 20, 900);
+  if (limited) return limited;
+  if (Number(req.headers.get('content-length') || 0) > 100_000) return NextResponse.json({ error: 'Request too large.' }, { status: 413 });
+  const jsonRequest = await readJsonRequest(req, 100000);
+  if (jsonRequest.response) return jsonRequest.response;
+  const body = jsonRequest.body;
   const accessCode = String(body?.accessCode || '').trim();
   const galleryId = Number(body?.galleryId);
   const selectedImages = uniqueStrings(body?.images);
 
-  if (!accessCode || !Number.isFinite(galleryId)) {
+  if (!accessCode || accessCode.length > 128 || !Number.isSafeInteger(galleryId) || galleryId < 1 || galleryId > 2147483647) {
     return NextResponse.json({ error: 'Access code and gallery id are required.' }, { status: 400 });
   }
 

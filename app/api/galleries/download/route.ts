@@ -1,14 +1,27 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { verifyGallerySettlement, paymentFailure } from '@/lib/payments/server';
+import nodemailer from 'nodemailer';
+import { parseAuthenticatedAsset, temporaryOriginalUrl } from '@/lib/privateMedia';
+import { rateLimit } from '@/lib/rateLimit';
+import { hasGalleryCookie } from '@/lib/galleryAccess';
 
-function getDownloadUrl(req: NextRequest, url: string) {
-  const parsed = new URL(url, req.nextUrl.origin);
-
-  if (!['http:', 'https:'].includes(parsed.protocol)) {
-    throw new Error('Unsupported download protocol.');
-  }
-
-  return parsed;
+async function notifyDownload(clientName: string, galleryId: number, fileName: string) {
+  const user = process.env.SMTP_USER || process.env.EMAIL_SERVER_USER || process.env.EMAIL_USER || process.env.MAIL_USER;
+  const pass = process.env.SMTP_PASS || process.env.EMAIL_SERVER_PASSWORD || process.env.EMAIL_PASS || process.env.MAIL_PASS || process.env.SMTP_PASSWORD;
+  if (!user || !pass) return;
+  const host = process.env.SMTP_HOST || process.env.EMAIL_SERVER_HOST || process.env.EMAIL_HOST || process.env.MAIL_HOST;
+  const port = Number(process.env.SMTP_PORT || process.env.EMAIL_SERVER_PORT || process.env.EMAIL_PORT || process.env.MAIL_PORT || 587);
+  const from = process.env.SMTP_FROM || process.env.MAIL_FROM || process.env.EMAIL_FROM || user;
+  const to = process.env.CONTACT_EMAIL || 'ijabikenm@gmail.com';
+  const transporter = nodemailer.createTransport(host
+    ? { host, port, secure: (process.env.SMTP_SECURE || process.env.EMAIL_SECURE || process.env.MAIL_SECURE)?.toLowerCase() === 'true' || port === 465, auth: { user, pass }, connectionTimeout: 5000, greetingTimeout: 5000, socketTimeout: 10000 }
+    : { service: 'gmail', auth: { user, pass }, connectionTimeout: 5000, greetingTimeout: 5000, socketTimeout: 10000 });
+  await transporter.sendMail({
+    from, to,
+    subject: `Gallery download requested: ${clientName}`,
+    text: `${clientName} requested a finished image download from gallery #${galleryId}.\nFile: ${fileName}\nTime: ${new Date().toISOString()}`,
+  });
 }
 
 function getFileNameFromUrl(url: URL, fallback: string) {
@@ -22,21 +35,22 @@ function getFileNameFromUrl(url: URL, fallback: string) {
 }
 
 export async function GET(req: NextRequest) {
+  const limited = await rateLimit(req, 'gallery-download', 30, 900);
+  if (limited) return limited;
   const { searchParams } = new URL(req.url);
-  const accessCode = String(searchParams.get('accessCode') || '').trim();
   const galleryId = Number(searchParams.get('galleryId'));
-  const fileUrl = String(searchParams.get('file') || '').trim();
+  const imageIndex = Number(searchParams.get('index'));
 
-  if (!accessCode || !Number.isFinite(galleryId) || !fileUrl) {
+  if (!Number.isInteger(galleryId) || galleryId <= 0 || !searchParams.has('index') || !Number.isInteger(imageIndex) || imageIndex < 0) {
     return NextResponse.json({ error: 'Missing download details.' }, { status: 400 });
   }
 
   const { rows } = await query(
-    `SELECT finished_images, payment_verified, is_locked
+    `SELECT access_code, client_name, finished_images, payment_verified, is_locked
      FROM galleries
-     WHERE id = $1 AND UPPER(access_code) = UPPER($2)
+     WHERE id = $1
      LIMIT 1`,
-    [galleryId, accessCode]
+    [galleryId]
   );
 
   const gallery = rows[0];
@@ -44,21 +58,28 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid gallery access.' }, { status: 404 });
   }
 
+  if (!hasGalleryCookie(req, galleryId, gallery.access_code)) {
+    return NextResponse.json({ error: 'Invalid gallery access.' }, { status: 403 });
+  }
+
   if (gallery.is_locked) {
     return NextResponse.json({ error: 'This gallery is currently locked.' }, { status: 403 });
   }
 
-  const finishedImages = Array.isArray(gallery.finished_images) ? gallery.finished_images : [];
-  if (!gallery.payment_verified || !finishedImages.includes(fileUrl)) {
+  const finishedImages = (Array.isArray(gallery.finished_images) ? gallery.finished_images : [])
+    .filter((url: string) => parseAuthenticatedAsset(url)?.resourceType === 'image');
+  const fileUrl = finishedImages[imageIndex];
+  if (!gallery.payment_verified || !fileUrl) {
     return NextResponse.json({ error: 'This download is not available.' }, { status: 403 });
   }
 
-  let downloadUrl: URL;
   try {
-    downloadUrl = getDownloadUrl(req, fileUrl);
-  } catch {
-    return NextResponse.json({ error: 'This download URL is not supported.' }, { status: 400 });
-  }
+    if (!await verifyGallerySettlement(galleryId)) return NextResponse.json({ error: 'This gallery payment needs studio review.' }, { status: 403 });
+  } catch (error) { return paymentFailure(error); }
+
+  const originalUrl = temporaryOriginalUrl(fileUrl);
+  if (!originalUrl) return NextResponse.json({ error: 'This download is not available.' }, { status: 403 });
+  const downloadUrl = new URL(originalUrl);
 
   let fileResponse: Response;
   try {
@@ -70,7 +91,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unable to prepare this download.' }, { status: 502 });
   }
 
-  const fileName = getFileNameFromUrl(downloadUrl, `moyo-finished-work-${galleryId}.jpg`);
+  const fileName = getFileNameFromUrl(new URL(fileUrl), `moyo-finished-work-${galleryId}.jpg`);
+
+  // SMTP must not hold an already authorized file response open.
+  after(async () => {
+    try { await notifyDownload(gallery.client_name, galleryId, fileName); }
+    catch { console.error('[gallery-download] Notification delivery failed.'); }
+  });
 
   return new NextResponse(fileResponse.body, {
     headers: {

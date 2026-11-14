@@ -129,7 +129,7 @@ test("owner mutations require an authenticated admin and same-origin browser req
     ),
   );
 });
-test("desktop bearer tokens are separate from admin cookies and scoped to Moyo and live devices", async () => {
+test("desktop bearer tokens are separate from admin cookies and scoped to their owning workspace and live devices", async () => {
   await assert.rejects(
     security().device(
       new Request("https://site.example", {
@@ -141,19 +141,18 @@ test("desktop bearer tokens are separate from admin cookies and scoped to Moyo a
   let seen;
   const secure = security(async (sql, args) => {
     seen = { sql, args };
-    return { rows: [{ id: bookId }] };
+    return { rows: [{ id: bookId, owner_id: "moyo" }] };
   });
   const token = protocol.secret();
-  assert.equal(
-    await secure.device(
+  const identity = await secure.device(
       new Request("https://site.example", {
         headers: { authorization: "Bearer " + token },
       }),
-    ),
-    bookId,
-  );
+    );
+  assert.equal(identity.id, bookId);
+  assert.equal(identity.ownerId, 'moyo');
   assert.equal(seen.args[0], protocol.hash(token));
-  assert.equal(seen.args[1], "moyo");
+  assert.equal(seen.args.length, 1);
   assert.ok(
     seen.sql.includes("revoked=FALSE") && seen.sql.includes("expires_at>NOW()"),
   );
@@ -178,7 +177,7 @@ test("viewer sessions are version-specific and recheck published state, expiry a
   };
   const secure = security(async (sql, args) => {
     seen = { sql, args };
-    return { rows: [{ id: bookId }] };
+    return { rows: [{ id: bookId, owner_id: "moyo" }] };
   });
   assert.equal((await secure.viewer(request, bookId)).id, bookId);
   assert.equal(seen.args[0], bookId);

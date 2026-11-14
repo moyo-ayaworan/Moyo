@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import Image from "next/image";
+import ClientBookPreview from "./ClientBookPreview";
 import s from "./studio.module.css";
 type Review = {
   id: string;
@@ -99,8 +99,8 @@ export default function ClientReview({ id }: { id: string }) {
               ready to review.
             </h1>
             <p className={s.muted}>
-              Open the private link shared by Moyo, or enter its access code.
-              This review is visible only to people with access.
+              Open the private link shared by your photographer, or enter its
+              access code. This review is visible only to people with access.
             </p>
             <form
               onSubmit={(e) => {
@@ -144,41 +144,21 @@ export default function ClientReview({ id }: { id: string }) {
                 {new Date(review.expiresAt).toLocaleDateString()}.
               </p>
             </div>
-            {spread && (
-              <Image
-                key={spread.id}
-                src={base + "/media/" + index}
-                alt={`Book preview ${index + 1} of ${review.spreads.length}`}
-                width={spread.width}
-                height={spread.height}
-                unoptimized
-                className={s.preview}
-                onError={() =>
-                  setError(
-                    "This preview is unavailable. The review may have expired or been revoked.",
-                  )
-                }
-              />
-            )}
-            <nav className={s.navigation} aria-label="Book review pages">
-              <button
-                className={s.button}
-                disabled={index === 0 || busy}
-                onClick={() => setIndex((i) => i - 1)}
-              >
-                ← Previous
-              </button>
-              <span aria-live="polite">
-                {index + 1} / {review.spreads.length}
-              </span>
-              <button
-                className={s.button}
-                disabled={index >= review.spreads.length - 1 || busy}
-                onClick={() => setIndex((i) => i + 1)}
-              >
-                Next →
-              </button>
-            </nav>
+            <ClientBookPreview
+              base={base}
+              spreads={review.spreads}
+              index={index}
+              onNavigate={(next) => {
+                setIndex(next);
+                setError("");
+              }}
+              disabled={busy}
+              onError={() =>
+                setError(
+                  "This preview is unavailable. The review may have expired or been revoked.",
+                )
+              }
+            />
             <div className={s.feedback}>
               <section className={s.panel}>
                 <h2>Feedback on this page</h2>
@@ -198,7 +178,7 @@ export default function ClientReview({ id }: { id: string }) {
                   }}
                 >
                   <label className={s.label} htmlFor="comment">
-                    What would you like Moyo to adjust?
+                    What would you like your photographer to adjust?
                   </label>
                   <textarea
                     id="comment"
@@ -224,8 +204,10 @@ export default function ClientReview({ id }: { id: string }) {
                     <div className={s.comment} key={c.id}>
                       <p>{c.text}</p>
                       <small>
-                        {c.resolved ? "Resolved by Moyo" : "Sent to Moyo"} ·{" "}
-                        {new Date(c.createdAt).toLocaleDateString()}
+                        {c.resolved
+                          ? "Resolved by your photographer"
+                          : "Sent to your photographer"}{" "}
+                        · {new Date(c.createdAt).toLocaleDateString()}
                       </small>
                     </div>
                   ))}
@@ -243,8 +225,8 @@ export default function ClientReview({ id }: { id: string }) {
                 </p>
                 <p className={s.muted}>
                   Your decision applies to version {review.version} of this
-                  book. Approval confirms this preview; Moyo will arrange any
-                  print or delivery details separately.
+                  book. Approval confirms this preview; your photographer will
+                  arrange any print or delivery details separately.
                 </p>
                 <div className={s.actions}>
                   <button
@@ -263,7 +245,7 @@ export default function ClientReview({ id }: { id: string }) {
                           });
                           setReview(await api(""));
                           setMessage(
-                            "Version approved. Your decision has been saved for Moyo.",
+                            "Version approved. Your decision has been saved for your photographer.",
                           );
                         });
                     }}

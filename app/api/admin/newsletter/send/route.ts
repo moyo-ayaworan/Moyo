@@ -1,7 +1,9 @@
-import nodemailer from 'nodemailer';
+import { readJsonRequest } from '@/lib/requestBody';
+import { sendNewsletterCampaign } from '@/lib/newsletter/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth';
-import { query } from '@/lib/db';
+
+export const maxDuration = 60;
 
 const validLists = new Set(['all', 'photography', 'art']);
 
@@ -29,14 +31,9 @@ export async function POST(req: NextRequest) {
   const unauthorized = requireAdmin(req);
   if (unauthorized) return unauthorized;
 
-  const emailUser = process.env.EMAIL_USER;
-  const emailPass = process.env.EMAIL_PASS;
-
-  if (!emailUser || !emailPass) {
-    return NextResponse.json({ error: 'EMAIL_USER and EMAIL_PASS are not configured.' }, { status: 500 });
-  }
-
-  const body = await req.json();
+  const parsed = await readJsonRequest(req, 100_000);
+  if (parsed.response) return parsed.response;
+  const body = parsed.body;
   const listType = normalize(body.listType) || 'all';
   const subject = normalize(body.subject);
   const message = normalize(body.message);
@@ -46,30 +43,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Choose a valid newsletter list.' }, { status: 400 });
   }
 
-  if (!subject || !message) {
+  if (!subject || !message || subject.length > 200 || previewText.length > 500) {
     return NextResponse.json({ error: 'Subject and message are required.' }, { status: 400 });
   }
-
-  const subscribers = await query(
-    `SELECT email, list_type
-     FROM newsletter_subscribers
-     WHERE status = 'active'
-       AND ($1 = 'all' OR list_type = $1)
-     ORDER BY subscribed_at DESC`,
-    [listType]
-  );
-
-  if (subscribers.rows.length === 0) {
-    return NextResponse.json({ error: 'No active subscribers for this list.' }, { status: 400 });
-  }
-
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: emailUser,
-      pass: emailPass,
-    },
-  });
 
   const htmlBody = formatBody(message);
   const html = `
@@ -84,26 +60,9 @@ export async function POST(req: NextRequest) {
     </div>
   `;
 
-  for (const subscriber of subscribers.rows) {
-    await transporter.sendMail({
-      from: emailUser,
-      to: subscriber.email,
-      subject,
-      text: message,
-      html,
-    });
-  }
-
-  await query(
-    `UPDATE newsletter_subscribers
-     SET last_emailed_at = NOW()
-     WHERE status = 'active'
-       AND ($1 = 'all' OR list_type = $1)`,
-    [listType]
-  );
-
-  return NextResponse.json({
-    message: 'Newsletter sent.',
-    sent: subscribers.rows.length,
-  });
+  try {
+    const result = await sendNewsletterCampaign({listType,subject,text:message,html});
+    if (!result.sentCount && !result.failedCount) return NextResponse.json({error:'No active subscribers for this list.'},{status:400});
+    return NextResponse.json({...result,sent:result.sentCount,message:`Sent to ${result.sentCount} recipients.${result.failedCount ? ` ${result.failedCount} deliveries could not be confirmed.` : ''}`},{status:result.sentCount ? 200 : 502});
+  } catch { return NextResponse.json({error:'Newsletter delivery is unavailable.'},{status:503}); }
 }

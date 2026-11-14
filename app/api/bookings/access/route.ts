@@ -1,6 +1,8 @@
+import { readJsonRequest } from '@/lib/requestBody';
 import { NextRequest, NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import { query } from '@/lib/db';
+import { rateLimit } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 
@@ -22,7 +24,11 @@ function transportConfig() {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => null) as Record<string, unknown> | null;
+  const limited = await rateLimit(req, 'booking-recovery', 5, 3600);
+  if (limited) return limited;
+  const jsonRequest = await readJsonRequest(req, 2000);
+  if (jsonRequest.response) return jsonRequest.response;
+  const body = jsonRequest.body as Record<string, unknown> | null;
   const reference = clean(body?.reference).replace(/^#/, '');
   const email = clean(body?.email).toLowerCase();
 

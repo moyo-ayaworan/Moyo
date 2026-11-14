@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { publicTrackingPath } from '@/lib/privacy';
 import { getStorageItem, setStorageItem } from '@/lib/browserStorage';
 
 export default function SessionTracker() {
@@ -8,6 +9,8 @@ export default function SessionTracker() {
 
     useEffect(() => {
         const notifySession = async () => {
+            const path = publicTrackingPath(window.location.pathname);
+            if (!path) return;
             // Simple check to prevent duplicate notifications in the same session (SPA navigation)
             // Ideally use cookies/localStorage for stricter once-per-visit
             const sessionKey = 'session_notified_' + new Date().toDateString();
@@ -23,7 +26,7 @@ export default function SessionTracker() {
                     body: JSON.stringify({
                         userAgent: navigator.userAgent,
                         timestamp: Date.now(),
-                        path: window.location.pathname
+                        path
                     })
                 });
                 setStorageItem('session', sessionKey, 'true');

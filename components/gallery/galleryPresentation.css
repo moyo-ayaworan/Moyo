@@ -1,0 +1,39 @@
+.gallery-cover { background: var(--gallery-bg); color: var(--gallery-ink); height: min(760px, 82svh); min-height: 560px; display: grid; position: relative; isolation: isolate; overflow: hidden; border-radius: var(--gallery-radius); }
+.gallery-cover__image { min-width: 0; min-height: 0; overflow: hidden; }
+.gallery-cover__photo { width: 100%; height: 100%; object-fit: cover; object-position: var(--gallery-focal); }
+.gallery-cover__placeholder { height: 100%; min-height: 200px; display: grid; place-items: center; opacity: .4; font-family: var(--font-heading); }
+.gallery-cover__copy { display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; gap: 36px; padding: clamp(24px, 5vw, 76px); position: relative; min-width: 0; }
+.gallery-cover__studio, .gallery-cover__date { font-size: 10px; letter-spacing: .22em; text-transform: uppercase; line-height: 1.8; }
+.gallery-cover__studio { max-width: 32em; opacity: .7; overflow-wrap: anywhere; }
+.gallery-cover__date { opacity: .6; margin-bottom: 18px; }
+.gallery-cover h1 { font-family: var(--font-heading); font-size: clamp(36px, 5.5vw, 80px); line-height: 1.08; font-weight: 400; font-style: italic; overflow-wrap: anywhere; }
+.gallery-cover__enter { display: inline-flex; gap: 40px; justify-content: space-between; align-items: center; background: var(--gallery-ink); color: var(--gallery-bg); padding: 17px 23px; font-size: 10px; letter-spacing: .18em; text-transform: uppercase; min-height: 48px; cursor: pointer; }
+.gallery-cover__enter:focus-visible { outline: 2px solid var(--gallery-accent); outline-offset: 5px; }
+.gallery-cover__enter:hover { opacity: .85; }
+.gallery-cover--split { grid-template-columns: 1.2fr 1fr; }
+.gallery-cover--split .gallery-cover__image { padding: clamp(12px, 2vw, 30px); }
+.gallery-cover--split .gallery-cover__photo { border-radius: var(--gallery-radius); }
+.gallery-cover--center, .gallery-cover--left { color: #fff; }
+.gallery-cover--center .gallery-cover__image, .gallery-cover--left .gallery-cover__image { position: absolute; inset: 0; z-index: -2; }
+.gallery-cover--center::after, .gallery-cover--left::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, #0005, #0002 25%, #000b); z-index: -1; }
+.gallery-cover--center .gallery-cover__copy { text-align: center; align-items: center; }
+.gallery-cover--center .gallery-cover__heading { margin-top: auto; }
+.gallery-cover--left .gallery-cover__heading { margin-top: auto; max-width: 75%; }
+.gallery-cover--center .gallery-cover__enter, .gallery-cover--left .gallery-cover__enter { background: #fff; color: #111; }
+.gallery-cover--frame { grid-template-columns: 1fr 1fr; padding: clamp(16px, 3vw, 44px); gap: clamp(16px, 3vw, 44px); }
+.gallery-cover--frame .gallery-cover__copy { border: 1px solid color-mix(in srgb, var(--gallery-ink) 25%, transparent); padding: clamp(20px, 3vw, 44px); text-align: center; align-items: center; }
+.gallery-cover--frame .gallery-cover__image { order: 2; }
+.gallery-cover--frame .gallery-cover__photo { border-radius: var(--gallery-radius); }
+.gallery-cover--preview { min-height: 300px; height: 330px; pointer-events: none; }
+.gallery-cover--preview .gallery-cover__copy { padding: 22px; gap: 20px; }
+.gallery-cover--preview h1 { font-size: 30px; }
+.gallery-cover--preview .gallery-cover__studio, .gallery-cover--preview .gallery-cover__date { font-size: 7px; }
+.gallery-cover--preview .gallery-cover__enter { font-size: 7px; padding: 10px 12px; min-height: 32px; gap: 20px; }
+.gallery-cover--preview.gallery-cover--frame { padding: 16px; gap: 16px; }
+@media (max-width: 767px) { .gallery-cover { min-height: 580px; height: auto; } .gallery-cover--split, .gallery-cover--frame { grid-template-columns: 1fr; grid-template-rows: 300px auto; } .gallery-cover--split .gallery-cover__image { padding: 12px 12px 0; } .gallery-cover--frame .gallery-cover__image { order: 0; } .gallery-cover--frame .gallery-cover__copy { gap: 28px; } .gallery-cover h1 { font-size: clamp(32px, 9vw, 56px); } .gallery-cover--left .gallery-cover__heading { max-width: 100%; } }
+/* The narrow editor preview uses the same stacked cover as a phone. */
+.gallery-preview-phone .gallery-cover { grid-template-columns: 1fr; min-height: 420px; height: auto; }
+.gallery-preview-phone .gallery-cover--split, .gallery-preview-phone .gallery-cover--frame { grid-template-rows: 190px auto; }
+.gallery-preview-phone .gallery-cover--frame .gallery-cover__image { order: 0; }
+.gallery-preview-phone .gallery-cover__copy { min-height: 210px; }
+.gallery-preview-phone .gallery-cover h1 { font-size: 27px; }

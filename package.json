@@ -7,25 +7,28 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "migrate:private-media": "node scripts/migrate-private-media.mjs"
   },
   "dependencies": {
+    "better-auth": "^1.7.18",
     "cloudinary": "^2.9.0",
     "clsx": "^2.1.1",
     "framer-motion": "^12.34.4",
     "lucide-react": "^0.563.0",
-    "next": "^16.3.7",
+    "next": "^16.4.6",
     "next-themes": "^0.4.6",
-    "nodemailer": "^10.0.12",
+    "nodemailer": "^10.5.0",
     "pdfkit": "^0.20.2",
     "pg": "^8.20.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-icons": "^5.5.0",
+    "sanitize-html": "^2.18.2",
+    "sharp": "^0.35.5",
     "slugify": "^1.6.9",
     "tailwind-merge": "^3.4.0",
-    "three": "^0.184.0",
-    "sharp": "^0.35.5"
+    "three": "^0.184.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -35,10 +38,16 @@
     "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/sanitize-html": "^2.16.2",
     "@types/three": "^0.184.1",
     "eslint": "^9",
-    "eslint-config-next": "16.1.6",
+    "eslint-config-next": "^16.4.6",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^11.0.1"
+    }
   }
 }

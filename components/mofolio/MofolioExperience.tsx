@@ -7,11 +7,16 @@ import { ArrowDown, ArrowLeft, ArrowRight, GripVertical, Move, RotateCcw, Shuffl
 import styles from './mofolio.module.css';
 
 const photos = [
-  { src: '/mofolio/stock-couple.webp', alt: 'A wedding couple together in warm evening light' },
-  { src: '/mofolio/stock-bride.webp', alt: 'A bridal portrait with a bouquet in natural sunlight' },
-  { src: '/mofolio/stock-ceremony.webp', alt: 'Flowers beside woven chairs at an outdoor wedding' },
+  { src: '/mofolio/graduation-1.webp', alt: 'Graduation portrait in a green stole, photographed by Moyo Ayaworan' },
+  { src: '/mofolio/graduation-2.webp', alt: 'Seated graduation portrait by Moyo Ayaworan' },
+  { src: '/mofolio/graduation-3.webp', alt: 'Graduate seated on a green sofa, photographed by Moyo Ayaworan' },
 ];
-const bookPhotos = [...photos, { src: '/mofolio/stock-table.webp', alt: 'An outdoor wedding table with flowers and glassware' }];
+const bookPhotos = photos;
+const weddingPhotos = [
+  {src:'/mofolio/outdoor-wedding-1.webp',alt:'Outdoor wedding couple portrait by Moyo Ayaworan'},
+  {src:'/mofolio/outdoor-wedding-2.webp',alt:'A wedding couple beneath the trees, photographed by Moyo Ayaworan'},
+  {src:'/mofolio/outdoor-wedding-3.webp',alt:'Outdoor bridal portrait by Moyo Ayaworan'},
+];
 const compositions = [
   { name: 'The opening', caption: 'Let one photograph lead.', frames: [[12, 10, 30, 80], [56, 17, 17, 66], [76, 17, 17, 66]] },
   { name: 'In conversation', caption: 'Three moments, held together.', frames: [[8, 15, 25, 70], [37.5, 15, 25, 70], [67, 15, 25, 70]] },
@@ -106,8 +111,8 @@ export function AlbumAssembly() {
   const flat = reduced;
   return <div ref={target} className={styles.assemblyScene} data-still={reduced || undefined}>
     <div className={styles.assemblySticky}>
-      <div className={styles.assemblyHeading}><span className={styles.eyebrow}>Photographs → a story</span><span className={styles.scrollCue}><ArrowDown size={14} aria-hidden="true" /> Scroll to build the book</span></div>
-      <div className={styles.assemblyCanvas} role="img" aria-label="Wedding photographs fly into an album spread, then fold into a finished book as you scroll">
+      <div className={styles.assemblyHeading}><span className={styles.eyebrow}>The graduation edit · Photographs → a story</span><span className={styles.scrollCue}><ArrowDown size={14} aria-hidden="true" /> Scroll to build the book</span></div>
+      <div className={styles.assemblyCanvas} role="img" aria-label="Graduation photographs fly into an album spread, then fold into a finished book as you scroll">
         <motion.div className={styles.assemblyBook} style={flat ? {} : {rotate, rotateY, scale, x}} aria-hidden="true">
           {flat ? <><motion.div className={styles.assemblyPaper} style={reduced ? {} : {opacity: paperOpacity}} />{photos.map((photo,index) => <GatheringPhoto key={photo.src} index={index} progress={scrollYProgress} still={reduced} />)}<span className={styles.assemblyFold} /></> : <>
             <motion.div className={styles.assemblyFlight} style={{opacity:flyingOpacity}}>{photos.map((photo,index) => <GatheringPhoto key={photo.src} index={index} progress={scrollYProgress} still={false} />)}</motion.div>
@@ -117,7 +122,7 @@ export function AlbumAssembly() {
             </motion.div>
             <motion.div className={styles.assemblyLeft} style={{rotateY: closeAngle, opacity:boundOpacity}}>
               <div className={styles.assemblyFront}><motion.div className={styles.assemblyPaper} style={{opacity: paperOpacity}} /><div className={styles.assemblyArtwork}>{photos.map((photo,index) => <GatheringPhoto key={photo.src} index={index} progress={scrollYProgress} still={true} />)}</div></div>
-              <div className={styles.assemblyCover}><span>STILLBOUNDS / VOLUME 01</span><strong>A day<br />to remember.</strong><span>THE WEDDING EDIT</span></div>
+              <div className={styles.assemblyCover}><span>STILLBOUNDS / VOLUME 01</span><strong>A milestone<br />to remember.</strong><span>THE GRADUATION EDIT</span></div>
             </motion.div>
             <span className={styles.assemblyFold} />
           </>}
@@ -146,6 +151,7 @@ export function BetaInvitation({children}: {children: ReactNode}) {
 }
 
 function CropPlayground() {
+  const photos = weddingPhotos;
   const [width, setWidth] = useState(54);
   const [dragging, setDragging] = useState(false);
   const canvas = useRef<HTMLDivElement>(null);
@@ -172,7 +178,7 @@ function CropPlayground() {
           onPanStart={() => { cropStart.current = { x: cropX.get(), y: cropY.get() }; setDragging(true); }}
           onPan={(_, info) => { cropX.set(constrain(cropStart.current.x - info.offset.x / 3)); cropY.set(constrain(cropStart.current.y - info.offset.y / 3)); }}
           onPanEnd={() => setDragging(false)}>
-          <motion.img src={photos[0].src} alt="Crop demonstration: a couple at an outdoor wedding" draggable={false} style={{ objectPosition: position }} />
+          <motion.img src={photos[0].src} alt="Crop demonstration using an outdoor wedding photograph by Moyo Ayaworan" draggable={false} style={{ objectPosition: position }} />
           <span className={styles.cropGrid} aria-hidden="true" />
           <span className={styles.dragLabel}><Move size={13} aria-hidden="true" /> Drag the photograph</span>
         </motion.div>
@@ -185,32 +191,33 @@ function CropPlayground() {
 }
 
 export function CompositionPlayground() {
+  const photos = weddingPhotos;
   const [layout, setLayout] = useState(0);
   const reduced = useMofolioMotionReduction();
   const current = compositions[layout];
   const change = (direction: number) => setLayout(value => (value + direction + compositions.length) % compositions.length);
   return <section className={styles.playground} id="experience" aria-labelledby="playground-title">
-    <Reveal className={styles.playgroundHeading}><div><span className={styles.eyebrow}>One shoot. Endless possibilities.</span><h2 id="playground-title">Find the layout.<br /><em>Feel the difference.</em></h2></div><p>Try a new rhythm, then refine the details. You decide where the story goes.</p></Reveal>
+    <Reveal className={styles.playgroundHeading}><div><span className={styles.eyebrow}>The wedding edit · Endless possibilities.</span><h2 id="playground-title">Find the layout.<br /><em>Feel the difference.</em></h2></div><p>Try a new rhythm, then refine the details. You decide where the story goes.</p></Reveal>
     <div className={styles.compositionWorkspace} role="group" aria-label="Live composition playground" onKeyDown={event => { if (event.target instanceof HTMLButtonElement && ['ArrowLeft', 'ArrowRight'].includes(event.key)) { event.preventDefault(); change(event.key === 'ArrowLeft' ? -1 : 1); } }}>
       <div className={styles.workspaceToolbar}><span><span className={styles.dot} /> Composition study</span><button type="button" className={styles.primary} onClick={() => change(1)}><motion.span key={layout} className={styles.shuffleIcon} initial={false} animate={reduced ? {} : {rotate: [0, 180]}} transition={{duration: 0.5, ease}}><Shuffle size={15} aria-hidden="true" /></motion.span> Shuffle the spread</button></div>
       <div className={styles.liveSpread}>
-        {photos.map((photo, index) => { const frame = current.frames[index]; return <motion.div layout key={photo.src} className={styles.livePhoto} initial={false} style={{ left: `${frame[0]}%`, top: `${frame[1]}%`, width: `${frame[2]}%`, height: `${frame[3]}%` }} transition={{ layout: reduced ? {duration: 0} : {type: 'spring', stiffness: 150, damping: 19, delay: index * 0.085} }}><Image src={photo.src} alt={photo.alt} fill sizes="(max-width: 640px) 35vw, 30vw" draggable={false} /></motion.div>; })}
+        {photos.map((photo, index) => { const frame = current.frames[index]; return <motion.div layout key={photo.src} className={styles.livePhoto} initial={false} style={{ left: `${frame[0]}%`, top: `${frame[1]}%`, width: `${frame[2]}%`, height: `${frame[3]}%` }} transition={{ layout: reduced ? {duration: 0} : {type: 'spring', stiffness: 150, damping: 19, delay: index * 0.085} }}><Image unoptimized src={photo.src} alt={photo.alt} fill sizes="(max-width: 640px) 35vw, 30vw" draggable={false} /></motion.div>; })}
         <span className={styles.fold} aria-hidden="true" />
       </div>
       <div className={styles.workspaceBottom}><div aria-live="polite" aria-atomic="true"><strong>{current.name}</strong><span>{current.caption}</span></div><div className={styles.compositionDots}>{compositions.map((composition, index) => <button key={composition.name} type="button" onClick={() => setLayout(index)} aria-label={`Choose ${composition.name}`} aria-pressed={layout === index}>{String(index + 1).padStart(2, '0')}</button>)}</div></div>
     </div>
     <div className={styles.finishingRow}><Reveal><span className={styles.eyebrow}>Put your hand in the picture</span><h3>Make the frame fit<br /><em>the photograph.</em></h3><p>Composition is only the beginning. Move the crop, give an image more room, and keep adjusting until it feels right.</p><span className={styles.sampleLabel}>Interactive website studies · No files are uploaded or saved.</span></Reveal><CropPlayground /></div>
-    <p className={styles.photoCredit}>Demo photography by <a href="https://www.pexels.com/@jonathanborba/" target="_blank" rel="noreferrer">Jonathan Borba / Pexels</a>.</p>
+    <p className={styles.photoCredit}>Photography by Moyo Ayaworan.</p>
   </section>;
 }
 
 const spreads = [
   [{ photo: 0, frame: [10, 10, 31, 80] }, { photo: 1, frame: [60, 10, 31, 80] }],
-  [{ photo: 2, frame: [11, 13, 29, 74] }, { photo: 3, frame: [55, 23, 40, 54] }],
+  [{ photo: 2, frame: [11, 13, 29, 74] }, { photo: 1, frame: [55, 23, 40, 54] }],
   [{ photo: 0, frame: [8, 20, 34, 60] }, { photo: 1, frame: [57, 12, 18, 46] }, { photo: 2, frame: [76, 43, 18, 46] }],
 ];
-function PageFace({ index, side }: { index: number; side: 'left' | 'right' }) {
-  return <div className={styles.pageFaceImage}><div className={styles.readerArtwork} data-side={side}>{spreads[index].map(({ photo, frame }) => <div key={photo} className={styles.readerPhoto} style={{ left: `${frame[0]}%`, top: `${frame[1]}%`, width: `${frame[2]}%`, height: `${frame[3]}%` }}><Image src={bookPhotos[photo].src} alt="" fill sizes="(max-width: 640px) 35vw, 35vw" draggable={false} /></div>)}</div></div>;
+function PageFace({ index, side, images = bookPhotos }: { index: number; side: 'left' | 'right'; images?: typeof bookPhotos }) {
+  return <div className={styles.pageFaceImage}><div className={styles.readerArtwork} data-side={side}>{spreads[index].map(({ photo, frame }) => <div key={photo} className={styles.readerPhoto} style={{ left: `${frame[0]}%`, top: `${frame[1]}%`, width: `${frame[2]}%`, height: `${frame[3]}%` }}><Image unoptimized src={images[photo].src} alt="" fill sizes="(max-width: 640px) 35vw, 35vw" draggable={false} /></div>)}</div></div>;
 }
 
 export function BookReader() {
@@ -231,20 +238,20 @@ export function BookReader() {
     setPage(leaf.to); setLeaf(null); turning.current = false;
   }
   return <section className={styles.readerSection} aria-labelledby="reader-title">
-    <Reveal className={styles.readerHeading}><span className={styles.eyebrow}>See the whole story</span><h2 id="reader-title">There’s a feeling<br /><em>in the turn of a page.</em></h2><p>Step back from the tools. Move through a sample book, one spread at a time.</p></Reveal>
-    <div hidden aria-hidden="true">{bookPhotos.map(photo => <Image key={photo.src} src={photo.src} width={1200} height={1800} alt="" loading="eager" sizes="(max-width: 640px) 35vw, 35vw" />)}</div>
+    <Reveal className={styles.readerHeading}><span className={styles.eyebrow}>The wedding edit · See the whole story</span><h2 id="reader-title">There’s a feeling<br /><em>in the turn of a page.</em></h2><p>Step back from the tools. Move through a sample book, one spread at a time.</p></Reveal>
+    <div hidden aria-hidden="true">{weddingPhotos.map(photo => <Image unoptimized key={photo.src} src={photo.src} width={1200} height={1800} alt="" loading="eager" sizes="(max-width: 640px) 35vw, 35vw" />)}</div>
     <div className={styles.readerBook} role="group" aria-label={`Sample Stillbounds book, spread ${page + 1} of ${spreads.length}`}>
-      <div className={styles.readerHalfLeft}><PageFace index={leftPage} side="left" /></div>
-      <div className={styles.readerHalfRight}><PageFace index={rightPage} side="right" /></div>
+      <div className={styles.readerHalfLeft}><PageFace images={weddingPhotos} index={leftPage} side="left" /></div>
+      <div className={styles.readerHalfRight}><PageFace images={weddingPhotos} index={rightPage} side="right" /></div>
       {leaf && <motion.div key={`${leaf.from}-${leaf.to}`} className={styles.turningLeaf} data-direction={leaf.direction} initial={{ rotateY: 0 }} animate={{ rotateY: leaf.direction > 0 ? -180 : 180 }} transition={{ duration: reduced ? 0 : 0.8, ease }} onAnimationComplete={finishTurn}>
-        <div className={styles.leafFront}><PageFace index={leaf.from} side={leaf.direction > 0 ? 'right' : 'left'} /><span className={styles.leafShade} /></div>
-        <div className={styles.leafBack}><PageFace index={leaf.to} side={leaf.direction > 0 ? 'left' : 'right'} /><span className={styles.leafShade} /></div>
+        <div className={styles.leafFront}><PageFace images={weddingPhotos} index={leaf.from} side={leaf.direction > 0 ? 'right' : 'left'} /><span className={styles.leafShade} /></div>
+        <div className={styles.leafBack}><PageFace images={weddingPhotos} index={leaf.to} side={leaf.direction > 0 ? 'left' : 'right'} /><span className={styles.leafShade} /></div>
       </motion.div>}
       <span className={styles.fold} aria-hidden="true" />
       <button className={styles.pageHitLeft} type="button" aria-label="Turn to previous spread" disabled={page === 0 || !!leaf} onClick={() => turn(-1)} />
       <button className={styles.pageHitRight} type="button" aria-label="Turn to next spread" disabled={page === spreads.length - 1 || !!leaf} onClick={() => turn(1)} />
     </div>
     <div className={styles.readerControls}><button type="button" aria-label="Previous book spread" disabled={page === 0 || !!leaf} onClick={() => turn(-1)}><ArrowLeft size={18} aria-hidden="true" /></button><span aria-live="polite" aria-atomic="true">Spread {String(page + 1).padStart(2, '0')} <span>/ {String(spreads.length).padStart(2, '0')}</span></span><button type="button" aria-label="Next book spread" disabled={page === spreads.length - 1 || !!leaf} onClick={() => turn(1)}><ArrowRight size={18} aria-hidden="true" /></button></div>
-    <p className={styles.readerNotice}>Click a page edge or use the arrows. Website book study using stock photography.</p>
+    <p className={styles.readerNotice}>Click a page edge or use the arrows. Outdoor wedding book study · Photography by Moyo Ayaworan.</p>
   </section>;
 }

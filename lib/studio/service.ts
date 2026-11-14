@@ -37,13 +37,13 @@ async function cleanup() {
     `DELETE FROM stillbounds_limits WHERE since<NOW()-INTERVAL '1 day'`,
   );
 }
-async function reviewRecords(ids: string[], origin: string, owner = false) {
+async function reviewRecords(ids: string[], origin: string, owner = false, workspace = OWNER) {
   if (!ids.length) return [];
   const [versions, media, comments] = await Promise.all([
     studioQuery(
       `SELECT id,book_id,title,version,expires_at,state,watermark,decision,encrypted_code,spread_metadata
        FROM stillbounds_versions WHERE id=ANY($1::uuid[]) AND owner_id=$2`,
-      [ids, OWNER],
+      [ids, workspace],
     ),
     studioQuery(
       `SELECT m.version_id,m.index,m.width,m.height,v.spread_ids->>m.index AS id
@@ -68,6 +68,7 @@ async function reviewRecords(ids: string[], origin: string, owner = false) {
         version: v.version,
         expiresAt: new Date(v.expires_at).getTime(),
         revoked: v.state === "revoked",
+        state: v.state,
         watermark: v.watermark,
         decision: v.decision,
         spreads:
@@ -92,28 +93,29 @@ async function reviewRecords(ids: string[], origin: string, owner = false) {
           })),
         ...(owner
           ? {
-              url: `${origin}/mofolio/review/${id}${v.encrypted_code && v.state === "published" ? "#access=" + decryptCode(v.encrypted_code) : ""}`,
+              url: `${origin}/stillbounds/review/${id}${v.encrypted_code && v.state === "published" ? "#access=" + decryptCode(v.encrypted_code) : ""}`,
             }
           : {}),
       },
     ];
   });
 }
-export async function reviewRecord(id: string, origin: string, owner = false) {
-  const records = await reviewRecords([id], origin, owner);
+export async function reviewRecord(id: string, origin: string, owner = false, workspace = OWNER) {
+  const records = await reviewRecords([id], origin, owner, workspace);
   assertStudio(records.length, "Review not found.", 404);
   return records[0];
 }
-async function ownerVersion(id: string) {
+async function ownerVersion(id: string, workspace = OWNER) {
   const { rows } = await studioQuery(
     "SELECT * FROM stillbounds_versions WHERE id=$1 AND owner_id=$2 AND expires_at>NOW()",
-    [id, OWNER],
+    [id, workspace],
   );
   assertStudio(rows.length, "Review not found.", 404);
   return rows[0];
 }
 
-export async function studioRequest(request: NextRequest, path: string[]) {
+export async function studioRequest(request: NextRequest, path: string[], accountOwner?: string) {
+  let workspace = accountOwner ?? OWNER;
   const method = request.method,
     origin = studioOrigin(request);
   assertStudio(path.length > 0 && path.length <= 5, "Route not found.", 404);
@@ -131,7 +133,7 @@ export async function studioRequest(request: NextRequest, path: string[]) {
     return json({
       deviceCode: code,
       userCode,
-      verificationUrl: `${origin}/admin/stillbounds`,
+      verificationUrl: `${origin}/stillbounds/account?review_code=${userCode}`,
       expiresIn: 300,
       interval: 5,
     });
@@ -169,7 +171,7 @@ export async function studioRequest(request: NextRequest, path: string[]) {
       if (!pairing.approved) return json({ status: "pending" });
       await db.query(
         `INSERT INTO stillbounds_devices(id,owner_id,token_hash,label,expires_at) VALUES($1,$2,$3,'Stillbounds desktop',NOW()+INTERVAL '30 days')`,
-        [randomUUID(), OWNER, hash(token)],
+        [randomUUID(), pairing.owner_id ?? OWNER, hash(token)],
       );
       await db.query(
         "UPDATE stillbounds_pairings SET consumed=TRUE WHERE code_hash=$1",
@@ -184,11 +186,11 @@ export async function studioRequest(request: NextRequest, path: string[]) {
       await cleanup();
       const devices = await studioQuery(
         `SELECT id,label,created_at,expires_at,revoked FROM stillbounds_devices WHERE owner_id=$1 ORDER BY created_at DESC LIMIT 100`,
-        [OWNER],
+        [workspace],
       );
       const versions = await studioQuery(
         `SELECT id,title,version,state,decision,expires_at,created_at FROM stillbounds_versions WHERE owner_id=$1 ORDER BY created_at DESC LIMIT 100`,
-        [OWNER],
+        [workspace],
       );
       const usage = await studioQuery(
         `SELECT COALESCE(SUM(octet_length(jpeg)),0) AS bytes FROM stillbounds_media`,
@@ -227,18 +229,18 @@ export async function studioRequest(request: NextRequest, path: string[]) {
       assertStudio(uuid.test(path[2]), "Invalid device.");
       const { rows } = await studioQuery(
         "UPDATE stillbounds_devices SET revoked=TRUE WHERE id=$1 AND owner_id=$2 RETURNING id",
-        [path[2], OWNER],
+        [path[2], workspace],
       );
       assertStudio(rows.length, "Device not found.", 404);
       return json({ ok: true });
     }
     if (path[1] === "versions" && path.length === 3 && method === "GET") {
       assertStudio(uuid.test(path[2]), "Invalid review.");
-      return json(await reviewRecord(path[2], origin, true));
+      return json(await reviewRecord(path[2], origin, true, workspace));
     }
     if (path[1] === "versions" && path.length === 3 && method === "DELETE") {
       assertStudio(uuid.test(path[2]), "Invalid review.");
-      await revoke(path[2]);
+      await revoke(path[2], workspace);
       return json({ ok: true });
     }
     assertStudio(false, "Route not found.", 404);
@@ -282,7 +284,7 @@ export async function studioRequest(request: NextRequest, path: string[]) {
     }
     const version = await viewer(request, id);
     if (path.length === 2 && method === "GET")
-      return json(await reviewRecord(id, origin));
+      return json(await reviewRecord(id, origin, false, version.owner_id));
     if (path[2] === "media" && path.length === 4 && method === "GET") {
       assertStudio(/^\d{1,3}$/.test(path[3]), "Invalid spread.");
       const { rows } = await studioQuery(
@@ -356,17 +358,19 @@ export async function studioRequest(request: NextRequest, path: string[]) {
     assertStudio(false, "Route not found.", 404);
   }
   assertStudio(path[0] === "versions", "Route not found.", 404);
-  await device(request);
+  if (!accountOwner) workspace = (await device(request)).ownerId;
+  const personal = workspace.startsWith("account:");
   if (path.length === 1 && method === "GET") {
     await cleanup();
     const { rows } = await studioQuery(
-      `SELECT id FROM stillbounds_versions WHERE owner_id=$1 AND state!='draft' ORDER BY created_at DESC LIMIT 100`,
-      [OWNER],
+      `SELECT id FROM stillbounds_versions WHERE owner_id=$1 AND ($2::boolean OR state!='draft') ORDER BY created_at DESC LIMIT 100`,
+      [workspace, !!accountOwner],
     );
     const versions = await reviewRecords(
       rows.map((row) => row.id),
       origin,
       true,
+      workspace,
     );
     // The existing desktop transport caps responses at 2 MiB. Fail explicitly rather than return malformed/truncated data.
     assertStudio(
@@ -383,20 +387,20 @@ export async function studioRequest(request: NextRequest, path: string[]) {
     return studioTransaction(async (db) => {
       await db.query(
         "SELECT id FROM stillbounds_workspace WHERE id=$1 FOR UPDATE",
-        [OWNER],
+        [workspace],
       );
       const count = await db.query(
         `SELECT COUNT(*) AS count FROM stillbounds_versions WHERE owner_id=$1 AND state!='revoked'`,
-        [OWNER],
+        [workspace],
       );
       assertStudio(
-        Number(count.rows[0].count) < 100,
+        Number(count.rows[0].count) < (personal ? 10 : 100),
         "Revoke or let older reviews expire before creating more.",
         409,
       );
       const latest = await db.query(
         `INSERT INTO stillbounds_book_versions(owner_id,book_id,latest) VALUES($1,$2,1) ON CONFLICT(owner_id,book_id) DO UPDATE SET latest=stillbounds_book_versions.latest+1 RETURNING latest AS version`,
-        [OWNER, input.bookId],
+        [workspace, input.bookId],
       );
       const id = randomUUID();
       await db.query(
@@ -404,7 +408,7 @@ export async function studioRequest(request: NextRequest, path: string[]) {
        VALUES($1,$2,$3,$4,$5,$6::jsonb,$7,$8,NOW()+INTERVAL '1 day')`,
         [
           id,
-          OWNER,
+          workspace,
           input.bookId,
           input.title,
           latest.rows[0].version,
@@ -418,9 +422,13 @@ export async function studioRequest(request: NextRequest, path: string[]) {
   }
   const id = path[1];
   assertStudio(uuid.test(id || ""), "Invalid review.");
-  const version = await ownerVersion(id);
+  const version = await ownerVersion(id, workspace);
+  if (path.length === 2 && method === "GET") return json(await reviewRecord(id, origin, true, workspace));
   if (path.length === 2 && method === "DELETE") {
-    await revoke(id);
+    if (accountOwner) {
+      const removed = await studioQuery('DELETE FROM stillbounds_versions WHERE id=$1 AND owner_id=$2 RETURNING id', [id, workspace]);
+      assertStudio(removed.rows.length, 'Review not found.', 404);
+    } else await revoke(id, workspace);
     return json({ ok: true });
   }
   if (path[2] === "media" && path.length === 4 && method === "POST") {
@@ -437,6 +445,7 @@ export async function studioRequest(request: NextRequest, path: string[]) {
       request.headers.get("content-type")?.split(";")[0] === "image/jpeg",
       "Upload a flattened JPEG.",
     );
+    await limited(request, 'studio-media-'+workspace, 600, 3600);
     const data = await boundedBody(request, MAX_UPLOAD);
     let jpeg: Buffer, width: number, height: number;
     try {
@@ -463,13 +472,14 @@ export async function studioRequest(request: NextRequest, path: string[]) {
     await studioTransaction(async (db) => {
       await db.query(
         "SELECT id FROM stillbounds_workspace WHERE id=$1 FOR UPDATE",
-        [OWNER],
+        [workspace],
       );
       const current = await db.query(
         `SELECT id FROM stillbounds_versions WHERE id=$1 AND owner_id=$2 AND state='draft' AND expires_at>NOW() FOR UPDATE`,
-        [id, OWNER],
+        [id, workspace],
       );
       assertStudio(current.rows.length, "Draft unavailable.", 409);
+      await db.query("SELECT pg_advisory_xact_lock(178931, 53)");
       const total = await db.query(
         `SELECT COALESCE(SUM(octet_length(jpeg)),0) AS bytes,
         COALESCE(SUM(octet_length(jpeg)) FILTER(WHERE version_id=$1),0) AS version_bytes,
@@ -477,6 +487,10 @@ export async function studioRequest(request: NextRequest, path: string[]) {
         [id, Number(path[3])],
       );
       const usage = total.rows[0];
+      if (personal) {
+        const owned = await db.query(`SELECT COALESCE(SUM(octet_length(m.jpeg)),0) AS bytes FROM stillbounds_media m JOIN stillbounds_versions v ON v.id=m.version_id WHERE v.owner_id=$1`, [workspace]);
+        assertStudio(Number(owned.rows[0].bytes) - Number(usage.previous) + jpeg.length <= 50 * 1024 * 1024, 'Your 50 MiB review storage limit is reached. Delete older reviews to free space.', 413);
+      }
       assertStudio(
         Number(usage.bytes) - Number(usage.previous) + jpeg.length <=
           MAX_WORKSPACE &&
@@ -497,7 +511,7 @@ export async function studioRequest(request: NextRequest, path: string[]) {
     await studioTransaction(async (db) => {
       const { rows } = await db.query(
         `SELECT * FROM stillbounds_versions WHERE id=$1 AND owner_id=$2 AND expires_at>NOW() FOR UPDATE`,
-        [id, OWNER],
+        [id, workspace],
       );
       assertStudio(rows.length, "Draft unavailable.", 404);
       const current = rows[0];
@@ -524,7 +538,7 @@ export async function studioRequest(request: NextRequest, path: string[]) {
         [id, hash(code), encryptCode(code), JSON.stringify(manifest)],
       );
     });
-    return json(await reviewRecord(id, origin, true));
+    return json(await reviewRecord(id, origin, true, workspace));
   }
   if (
     path[2] === "comments" &&
@@ -542,11 +556,11 @@ export async function studioRequest(request: NextRequest, path: string[]) {
   }
   assertStudio(false, "Route not found.", 404);
 }
-async function revoke(id: string) {
+async function revoke(id: string, workspace = OWNER) {
   await studioTransaction(async (db) => {
     const { rows } = await db.query(
       `UPDATE stillbounds_versions SET state='revoked',encrypted_code=NULL,code_hash=NULL WHERE id=$1 AND owner_id=$2 RETURNING id`,
-      [id, OWNER],
+      [id, workspace],
     );
     assertStudio(rows.length, "Review not found.", 404);
     await db.query("DELETE FROM stillbounds_media WHERE version_id=$1", [id]);

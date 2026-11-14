@@ -6,6 +6,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { useTranslate } from '@/lib/translations';
 import GlareHover from '@/components/GlareHover';
 import { useSiteSettings } from '@/lib/useSiteSettings';
+import { productPath, formatProductPrice } from '@/lib/productStory';
 import SeoImage from '@/components/SeoImage';
 
 type DigitalProduct = {
@@ -24,7 +25,7 @@ export default function DigitalProducts() {
     const [products, setProducts] = useState<DigitalProduct[]>([]);
 
     useEffect(() => {
-        fetch('/api/digital-products')
+        fetch('/api/digital-products?section=photography')
             .then((res) => res.ok ? res.json() : Promise.reject())
             .then((data: { products?: DigitalProduct[] }) => {
                 const activeProducts = (data.products || []).filter((product) => product.is_active !== false);
@@ -78,10 +79,10 @@ export default function DigitalProducts() {
                                         alt={`${translateText(product.title)} - ${translateText(product.details)}`}
                                         fill
                                         sizes="(min-width: 768px) 33vw, (min-width: 640px) 50vw, 100vw"
-                                        className="object-cover grayscale transition-all duration-1000 group-hover:scale-105 group-hover:grayscale-0"
+                                        className="object-cover transition-transform duration-700 motion-safe:group-hover:scale-[1.03] motion-reduce:transition-none"
                                     />
                                     <a
-                                        href={`/art/shop#product-${product.id}`}
+                                        href={productPath('photography', product)}
                                         aria-label={`${translateText('View in shop')}: ${product.title}`}
                                         className="absolute inset-x-0 bottom-0 z-20 block bg-white py-5 text-center transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-accent"
                                     >
@@ -94,7 +95,7 @@ export default function DigitalProducts() {
                                         <h3 className="text-xl font-heading text-white transition-colors [overflow-wrap:anywhere] group-hover:text-accent">{translateText(product.title)}</h3>
                                         <span className="block font-body text-[10px] uppercase tracking-[0.18em] text-white/30 [overflow-wrap:anywhere] sm:tracking-widest">{translateText(product.details)}</span>
                                     </div>
-                                    <span className="shrink-0 font-body text-[10px] uppercase tracking-widest text-accent sm:pr-2">{product.price}</span>
+                                    <span className="shrink-0 font-body text-[10px] uppercase tracking-widest text-accent sm:pr-2">{formatProductPrice(product.price)}</span>
                                 </div>
                             </GlareHover>
                         </motion.div>

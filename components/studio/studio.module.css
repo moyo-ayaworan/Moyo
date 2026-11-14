@@ -268,3 +268,146 @@
 .panel p {
   margin: 16px 0;
 }
+
+/* Desktop reader page-turn geometry and motion, applied to private raster pages. */
+.bookReader {
+  min-width: 0;
+}
+.bookStage {
+  display: grid;
+  place-items: center;
+  padding: 12px 0 24px;
+}
+.book {
+  position: relative;
+  width: 100%;
+  max-height: 70svh;
+  max-width: min(100%, calc(70svh * 2));
+  background: #fff;
+  perspective: 1800px;
+  touch-action: pan-y;
+  cursor: grab;
+  box-shadow:
+    0 2px 0 #dedbd5,
+    0 4px 0 #f4f2ee,
+    0 6px 0 #d4d1cb,
+    0 18px 35px #0003,
+    0 40px 70px #0002;
+}
+.book:active {
+  cursor: grabbing;
+}
+.book:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 8px;
+}
+.restingSpread,
+.turnLayers {
+  position: absolute;
+  inset: 0;
+}
+.bookImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+}
+.turnLayers {
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+.stationaryPage,
+.turningPage {
+  position: absolute;
+  top: 0;
+  width: 50%;
+  height: 100%;
+}
+.stationaryPage {
+  z-index: 1;
+  overflow: hidden;
+  background: white;
+}
+.left {
+  left: 0;
+}
+.right {
+  right: 0;
+}
+.turningPage {
+  z-index: 2;
+  transform-style: preserve-3d;
+}
+.forward {
+  left: 50%;
+  transform-origin: left center;
+}
+.backward {
+  left: 0;
+  transform-origin: right center;
+}
+.leafFront,
+.leafBack {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: white;
+  backface-visibility: hidden;
+  box-shadow: 0 4px 16px #0002;
+}
+.leafBack {
+  transform: rotateY(180deg);
+}
+.pageContent {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.pageContent .bookImage {
+  position: absolute;
+  top: 0;
+  width: 200%;
+  max-width: none;
+}
+.pageLeft .bookImage {
+  left: 0;
+}
+.pageRight .bookImage {
+  left: -100%;
+}
+.leafShading {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    #00000016,
+    transparent 18%,
+    #ffffff16 70%,
+    #0000000c
+  );
+}
+.backward .leafShading {
+  transform: scaleX(-1);
+}
+.spine {
+  position: absolute;
+  inset: 0 auto 0 47%;
+  width: 6%;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    #00000006 25%,
+    #00000020 49%,
+    #ffffff20 51%,
+    #0000000b 70%,
+    transparent
+  );
+}
+@media (prefers-reduced-motion: reduce) {
+  .turnLayers {
+    display: none;
+  }
+}

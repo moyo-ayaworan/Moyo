@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS stillbounds_pairings (
  expires_at TIMESTAMPTZ NOT NULL, approved BOOLEAN NOT NULL DEFAULT FALSE,
  consumed BOOLEAN NOT NULL DEFAULT FALSE, last_poll TIMESTAMPTZ
 );
+ALTER TABLE stillbounds_pairings ADD COLUMN IF NOT EXISTS owner_id TEXT REFERENCES stillbounds_workspace(id);
 CREATE TABLE IF NOT EXISTS stillbounds_versions (
  id UUID PRIMARY KEY, owner_id TEXT NOT NULL REFERENCES stillbounds_workspace(id),
  book_id UUID NOT NULL, title TEXT NOT NULL, version INTEGER NOT NULL, spread_ids JSONB NOT NULL,

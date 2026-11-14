@@ -1,4 +1,7 @@
 'use client';
+import ProductStoryEditor from '@/components/admin/ProductStoryEditor';
+import ProductAssetsEditor from '@/components/admin/ProductAssetsEditor';
+import { emptyProductStory, readProductStory, productPath, type ProductStory } from '@/lib/productStory';
 import DocumentManager, { type ManagedDocument } from '@/components/admin/DocumentManager';
 import BillingOptions from '@/components/admin/BillingOptions';
 import { normalizeBilling } from '@/lib/documentPayments';
@@ -7,12 +10,18 @@ import { getBookingPackage } from '@/lib/bookingRates';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useBrowserLocation } from '@/lib/useBrowserLocation';
 import { usePathname } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import GalleryHeaderPositionEditor from '@/components/admin/GalleryHeaderPositionEditor';
+import type { ImagePosition } from '@/lib/imagePosition';
+import GalleryDesignEditor from '@/components/admin/GalleryDesignEditor';
+import type { GalleryPresentation } from '@/lib/galleryPresentation';
+import GallerySoundtrackEditor from '@/components/admin/GallerySoundtrackEditor';
 import GalleryMedia from '@/components/GalleryMedia';
 import { defaultSiteSettings, type SiteSettings } from '@/lib/siteSettings';
-import { getCloudinaryPreviewUrl, getImagePreviewSrcSet } from '@/lib/mediaUrl';
+import { getCloudinaryPreviewUrl, getImagePreviewSrcSet, isImageUrl } from '@/lib/mediaUrl';
 import { fileFingerprint, uploadAdminFile } from '@/lib/adminUpload';
 import { uploadPublicId } from '@/lib/uploadIdentity';
 import { createSeoImageFilename } from '@/lib/imageSeo';
@@ -88,6 +97,7 @@ const createEmptyArtworkEditForm = (): ArtworkEditForm => ({
 });
 
 type DigitalProduct = {
+  section: string;
   id: number;
   title: string;
   price: string;
@@ -96,16 +106,24 @@ type DigitalProduct = {
   product_url: string;
   display_order: number;
   is_active: boolean;
+  storefront?: ProductStory;
 };
 
 type Gallery = {
+  hero_position?: ImagePosition | null;
+  presentation?: GalleryPresentation | null;
+  soundtrack_url?: string;
+  soundtrack_title?: string;
+  soundtrack_preview?: string;
   id: number;
   slug: string;
   access_code: string;
   client_name: string;
   images: string[];
+  image_previews?: string[];
   approved_images: string[];
   finished_images: string[];
+  finished_previews?: string[];
   payment_verified: boolean;
   payment_url: string;
   review_rating: number | null;
@@ -758,12 +776,16 @@ export default function AdminPage() {
   const [editingBookings, setEditingBookings] = useState<Record<number, BookingEditForm>>({});
   const [emailingBookings, setEmailingBookings] = useState<Record<number, boolean>>({});
   const [editingArtworkId, setEditingArtworkId] = useState<number | null>(null);
+  const [productAssetUploading, setProductAssetUploading] = useState<Record<string, boolean>>({});
+  const [storyUploading, setStoryUploading] = useState<Record<string, boolean>>({});
   const [digitalProductForm, setDigitalProductForm] = useState({
+    storefront: emptyProductStory(),
     title: '',
     price: '',
     details: '',
     image: '',
     productUrl: '',
+    section: 'photography',
     displayOrder: '',
     isActive: true,
   });
@@ -773,6 +795,8 @@ export default function AdminPage() {
     details: string;
     image: string;
     productUrl: string;
+    section: string;
+    storefront: ProductStory;
     displayOrder: string;
     isActive: boolean;
   }>>({});
@@ -800,6 +824,21 @@ export default function AdminPage() {
   const [digitalProductFile, setDigitalProductFile] = useState<File | null>(null);
   const [digitalProductAssetFile, setDigitalProductAssetFile] = useState<File | null>(null);
   const [catalogImageFiles, setCatalogImageFiles] = useState<File[]>([]);
+  const browserHref = useBrowserLocation();
+  const initialGalleryId = browserHref ? new URL(browserHref).searchParams.get('gallery') || '' : '';
+  const [catalogSourceOverride, setCatalogSourceGalleryId] = useState<string | null>(null);
+  const catalogSourceGalleryId = catalogSourceOverride ?? (activeRouteSection === 'catalog' && /^[1-9]\d*$/.test(initialGalleryId) ? initialGalleryId : '');
+  const [catalogSelection, setCatalogSelection] = useState<{ sourceId: string; values: string[] }>({ sourceId: '', values: [] });
+  const catalogSourceSelection = catalogSelection.sourceId === catalogSourceGalleryId ? catalogSelection.values : [];
+  const setCatalogSourceSelection = (next: React.SetStateAction<string[]>) => setCatalogSelection(current => ({
+    sourceId: catalogSourceGalleryId,
+    values: typeof next === 'function' ? next(current.sourceId === catalogSourceGalleryId ? current.values : []) : next,
+  }));
+  const [catalogImporting, setCatalogImporting] = useState(false);
+  const [catalogOrganizing, setCatalogOrganizing] = useState(false);
+  const [catalogCategoryDrafts, setCatalogCategoryDrafts] = useState<Record<number, { name: string; description: string }>>({});
+
+
   const [galleryUploads, setGalleryUploads] = useState<Record<string, File[]>>({});
   const [finishedGalleryUploads, setFinishedGalleryUploads] = useState<Record<string, File[]>>({});
   const [galleryPaymentUrls, setGalleryPaymentUrls] = useState<Record<string, string>>({});
@@ -890,18 +929,17 @@ export default function AdminPage() {
   const headers = useMemo(
     () => ({
       'Content-Type': 'application/json',
-      'x-admin-key': adminKey || '',
     }),
-    [adminKey]
+    []
   );
 
   const fetchAll = useCallback(async () => {
     if (!isAuthed) return;
     // Invoices must not depend on the shop, catalogue, or any unrelated endpoint.
     if (activeRouteSection === 'invoices') {
-      setInvoiceLoading(true); setInvoiceLoadError('');
       try {
         const data = await loadInvoiceWorkspace<Gallery, GalleryDocument>(headers);
+        setInvoiceLoadError('');
         setGalleries(data.galleries);
         setGalleryDocuments(data.documents.reduce<Record<number, GalleryDocument[]>>((acc, doc) => {
           (acc[doc.gallery_id] ||= []).push(doc); return acc;
@@ -962,6 +1000,8 @@ export default function AdminPage() {
           details: string;
           image: string;
           productUrl: string;
+          section: string;
+          storefront: ProductStory;
           displayOrder: string;
           isActive: boolean;
         }>, product: DigitalProduct) => {
@@ -971,6 +1011,8 @@ export default function AdminPage() {
             details: product.details || '',
             image: product.image || '',
             productUrl: product.product_url || '',
+            storefront: readProductStory(product.storefront),
+            section: product.section || 'photography',
             displayOrder: String(product.display_order || 0),
             isActive: product.is_active,
           };
@@ -1010,7 +1052,11 @@ export default function AdminPage() {
   }, [headers, isAuthed, activeRouteSection]);
 
   useEffect(() => {
-    fetchAll();
+    const controller = new AbortController();
+    fetch('/api/admin/verify', { cache: 'no-store', signal: controller.signal })
+      .then(response => { if (response.ok) void fetchAll(); else setIsAuthed(false); })
+      .catch(() => { if (!controller.signal.aborted) setMessage({ text: 'Unable to check your admin session.', type: 'error' }); });
+    return () => controller.abort();
   }, [fetchAll]);
 
   const verifyAdminKey = async (keyToVerify: string) => {
@@ -1038,7 +1084,7 @@ export default function AdminPage() {
         setAuthError('Invalid admin password');
         return false;
       }
-      setAdminKey(submittedKey);
+      setAdminKey('');
       setIsAuthed(true);
       setMessage({ text: 'Admin unlocked', type: 'success' });
       return true;
@@ -1082,13 +1128,13 @@ export default function AdminPage() {
           const seoNamedFile = renameFileForSeo(file, getUploadFilenameParts(target), index);
           const prepared = await prepareUploadFile(seoNamedFile, { preserveOriginal });
           const hash = await fileFingerprint(prepared.file);
-          const cacheKey = uploadPublicId(hash, prepared.file.name, prepared.file.type);
+          const cacheKey = `${preserveOriginal ? 'private' : 'public'}:${uploadPublicId(hash, prepared.file.name, prepared.file.type)}`;
           let transfer = uploadedAssets.current.get(cacheKey);
           if (!transfer) {
-            transfer = uploadAdminFile(prepared.file, adminKey, hash, (percent) => {
+            transfer = uploadAdminFile(prepared.file, hash, (percent) => {
               fractions[index] = percent;
               report(percent === 100 ? 'processing' : 'uploading');
-            });
+            }, preserveOriginal);
             uploadedAssets.current.set(cacheKey, transfer);
             transfer.catch(() => uploadedAssets.current.delete(cacheKey));
           }
@@ -1456,6 +1502,7 @@ export default function AdminPage() {
     e.preventDefault();
     setMessage(null);
     if (!isAuthed) return setMessage({ text: 'Sign in to the admin first', type: 'error' });
+    if (isUploading('digital-product-image') || isUploading('digital-product-file') || storyUploading.new) return setMessage({text:'Wait for the product image upload to finish.',type:'error'});
 
     let imageUrl = digitalProductForm.image;
     if (digitalProductFile && !imageUrl) {
@@ -1464,7 +1511,6 @@ export default function AdminPage() {
       imageUrl = url;
     }
 
-    if (!imageUrl) return setMessage({ text: 'Upload an image or paste an image URL', type: 'error' });
 
     const res = await fetch('/api/digital-products', {
       method: 'POST',
@@ -1487,11 +1533,13 @@ export default function AdminPage() {
         details: data.product.details || '',
         image: data.product.image || '',
         productUrl: data.product.product_url || '',
+        storefront: readProductStory(data.product.storefront),
+        section: data.product.section || 'photography',
         displayOrder: String(data.product.display_order || 0),
         isActive: data.product.is_active,
       },
     }));
-    setDigitalProductForm({ title: '', price: '', details: '', image: '', productUrl: '', displayOrder: '', isActive: true });
+    setDigitalProductForm({ storefront: emptyProductStory(), section: 'photography', title: '', price: '', details: '', image: '', productUrl: '', displayOrder: '', isActive: true });
     setDigitalProductFile(null);
     setDigitalProductAssetFile(null);
     setDigitalProductPreview(null);
@@ -1504,9 +1552,12 @@ export default function AdminPage() {
     details: string;
     image: string;
     productUrl: string;
+    section: string;
+    storefront: ProductStory;
     displayOrder: string | number;
     isActive: boolean;
   }>) => {
+    if (storyUploading[String(id)] || productAssetUploading[String(id)]) return setMessage({text:'Wait for the product image upload to finish.',type:'error'});
     const current = editingDigitalProducts[id];
     if (!current && !updates) return;
 
@@ -1536,6 +1587,8 @@ export default function AdminPage() {
         details: data.product.details || '',
         image: data.product.image || '',
         productUrl: data.product.product_url || '',
+        storefront: readProductStory(data.product.storefront),
+        section: data.product.section || 'photography',
         displayOrder: String(data.product.display_order || 0),
         isActive: data.product.is_active,
       },
@@ -1544,6 +1597,7 @@ export default function AdminPage() {
   };
 
   const deleteDigitalProduct = async (id: number) => {
+    if (storyUploading[String(id)] || productAssetUploading[String(id)]) return;
     const res = await fetch(`/api/digital-products?id=${id}`, { method: 'DELETE', headers });
     if (res.ok) {
       setDigitalProducts((prev) => prev.filter((product) => product.id !== id));
@@ -1553,6 +1607,8 @@ export default function AdminPage() {
         return next;
       });
       setMessage({ text: 'Digital product deleted', type: 'success' });
+    } else {
+      setMessage({text:'Could not delete this product. If it has paid orders, use Hidden to remove it from the shop while retaining purchase records.',type:'error'});
     }
   };
 
@@ -1899,7 +1955,8 @@ export default function AdminPage() {
     const data = await res.json();
     if (!res.ok) return setMessage({ text: data.error || 'Failed to create category', type: 'error' });
 
-    setCatalogCategories((prev) => [data.category, ...prev]);
+    setCatalogCategories((prev) => [data.category, ...prev].sort((a, b) => a.display_order - b.display_order || b.id - a.id));
+    setCatalogImageForm((prev) => ({ ...prev, category_id: String(data.category.id) }));
     setCatalogCategoryForm({ name: '', slug: '', description: '', cover_image_url: '', display_order: '' });
     setMessage({ text: 'Photography category created', type: 'success' });
   };
@@ -1936,6 +1993,62 @@ export default function AdminPage() {
     return data.category as PhotographyCatalogCategory;
   };
 
+  const saveCatalogCategoryDetails = async (category: PhotographyCatalogCategory) => {
+    const draft = catalogCategoryDrafts[category.id];
+    if (!draft?.name.trim()) return setMessage({ text: 'Enter a category name.', type: 'error' });
+    setCatalogOrganizing(true);
+    try {
+      const res = await fetch('/api/photography-catalog/categories', {
+        method: 'PUT', headers, body: JSON.stringify({ ...category, ...draft }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not save category.');
+      setCatalogCategories(current => current.map(item => item.id === category.id ? { ...item, ...data.category } : item));
+      setCatalogCategoryDrafts(current => { const next = { ...current }; delete next[category.id]; return next; });
+      setMessage({ text: 'Category details saved.', type: 'success' });
+    } catch (error) {
+      setMessage({ text: error instanceof Error ? error.message : 'Could not save category.', type: 'error' });
+    } finally { setCatalogOrganizing(false); }
+  };
+
+  const moveCatalogCategory = async (index: number, direction: number) => {
+    const next = [...catalogCategories];
+    const target = index + direction;
+    if (target < 0 || target >= next.length) return;
+    [next[index], next[target]] = [next[target], next[index]];
+    setCatalogOrganizing(true);
+    try {
+      const res = await fetch('/api/photography-catalog/categories', {
+        method: 'PATCH', headers, body: JSON.stringify({ ids: next.map(category => category.id) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not reorder categories.');
+      setCatalogCategories(next.map((category, display_order) => ({ ...category, display_order })));
+      setMessage({ text: 'Category order saved.', type: 'success' });
+    } catch (error) {
+      setMessage({ text: error instanceof Error ? error.message : 'Could not reorder categories.', type: 'error' });
+    } finally { setCatalogOrganizing(false); }
+  };
+
+  const moveCatalogImage = async (image: PhotographyCatalogImage, destination: string) => {
+    if (!destination || Number(destination) === image.category_id) return;
+    setCatalogOrganizing(true);
+    try {
+      const res = await fetch('/api/photography-catalog/images', {
+        method: 'PUT', headers, body: JSON.stringify({ ...image, category_id: Number(destination) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not move photo.');
+      setCatalogCategories(current => current.map(category => ({ ...category,
+        images: category.id === image.category_id ? category.images.filter(item => item.id !== image.id)
+          : category.id === Number(destination) ? [...category.images, data.image].sort((a, b) => a.display_order - b.display_order || b.id - a.id) : category.images,
+      })));
+      setMessage({ text: 'Photo moved to the selected category.', type: 'success' });
+    } catch (error) {
+      setMessage({ text: error instanceof Error ? error.message : 'Could not move photo.', type: 'error' });
+    } finally { setCatalogOrganizing(false); }
+  };
+
   const toggleCatalogCategory = async (category: PhotographyCatalogCategory) => {
     const res = await fetch('/api/photography-catalog/categories', {
       method: 'PUT',
@@ -1964,6 +2077,44 @@ export default function AdminPage() {
   const createCatalogImage = (e: React.FormEvent) => {
     e.preventDefault();
     return runUploadAction('catalog-image', () => createCatalogImageInternal(e));
+  };
+
+  const importGalleryImagesToCatalog = async () => {
+    if (!catalogImageForm.category_id || !catalogSourceGalleryId || !catalogSourceSelection.length) {
+      return setMessage({ text: 'Choose a catalogue category, a client gallery, and at least one image.', type: 'error' });
+    }
+    setCatalogImporting(true);
+    try {
+      const res = await fetch('/api/photography-catalog/import-gallery', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          category_id: Number(catalogImageForm.category_id),
+          gallery_id: Number(catalogSourceGalleryId),
+          selections: catalogSourceSelection.map((selection) => {
+            const [kind, index] = selection.split(':');
+            return { kind, index: Number(index) };
+          }),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not add the selected images.');
+      const added = data.images as PhotographyCatalogImage[];
+      setCatalogCategories((previous) => previous.map((category) => category.id === Number(catalogImageForm.category_id)
+        ? { ...category, cover_image_url: data.cover_image_url, images: [...category.images, ...added] }
+        : category));
+      setCatalogSourceSelection([]);
+      setMessage({
+        text: added.length
+          ? `${added.length} image${added.length === 1 ? '' : 's'} added to the catalogue${data.skipped ? `; ${data.skipped} already there` : ''}.`
+          : 'Those images are already in this catalogue category.',
+        type: 'success',
+      });
+    } catch (error) {
+      setMessage({ text: error instanceof Error ? error.message : 'Could not add the selected images.', type: 'error' });
+    } finally {
+      setCatalogImporting(false);
+    }
   };
 
   const createCatalogImageInternal = async (e: React.FormEvent) => {
@@ -2513,6 +2664,16 @@ export default function AdminPage() {
     return `${orders.length} orders`;
   };
 
+  const catalogSourceGallery = galleries.find((gallery) => gallery.id === Number(catalogSourceGalleryId));
+  const catalogSourceImages = catalogSourceGallery ? [
+    ...catalogSourceGallery.images.map((url, index) => ({
+      key: `uploaded:${index}`, preview: catalogSourceGallery.image_previews?.[index] || url, label: `Upload ${index + 1}`,
+    })),
+    ...catalogSourceGallery.finished_images.map((url, index) => ({
+      key: `finished:${index}`, preview: catalogSourceGallery.finished_previews?.[index] || url, label: `Finished ${index + 1}`,
+    })),
+  ].filter((image) => isImageUrl(image.preview)) : [];
+
   return (
     <>
       {!isAuthed && (
@@ -2586,6 +2747,7 @@ export default function AdminPage() {
             <span className="px-3 py-2 border border-white/10 bg-white/5 uppercase tracking-[0.16em] sm:tracking-[0.25em]">
               API protected
             </span>
+            <Link href="/admin/payments" className="px-3 py-2 border border-accent/30 text-accent uppercase tracking-[0.16em]">Payments</Link>
             <Link
               href="/admin/newsletter"
               className="px-3 py-2 border border-accent/30 bg-accent/10 text-accent uppercase tracking-[0.16em] hover:border-accent hover:bg-accent hover:text-black transition-colors sm:tracking-[0.25em]"
@@ -2618,7 +2780,7 @@ export default function AdminPage() {
                 setIsAuthed(false);
                 setAuthError(null);
                 setMessage(null);
-                window.location.href = '/admin/login';
+                window.location.assign(new URL('/admin/login', window.location.origin).href);
               }}
               className="text-[10px] uppercase tracking-[0.2em] px-3 py-2 border border-white/10 text-white/60 hover:text-white sm:tracking-[0.3em]"
             >
@@ -2704,7 +2866,7 @@ export default function AdminPage() {
         )}
 
         <div className="space-y-4">
-          {shouldShowSection('invoices') && (invoiceLoading ? <p role="status">Loading clients and documents…</p> : invoiceLoadError ? <div role="alert" className="space-y-3 rounded border border-red-400/40 p-4 text-red-200"><p>{invoiceLoadError}</p><button type="button" onClick={() => void fetchAll()} className="rounded border px-4 py-2">Retry loading invoices</button></div> : (
+          {shouldShowSection('invoices') && (invoiceLoading ? <p role="status">Loading clients and documents…</p> : invoiceLoadError ? <div role="alert" className="space-y-3 rounded border border-red-400/40 p-4 text-red-200"><p>{invoiceLoadError}</p><button type="button" onClick={() => { setInvoiceLoading(true); setInvoiceLoadError(''); void fetchAll(); }} className="rounded border px-4 py-2">Retry loading invoices</button></div> : (
             <DocumentManager galleries={galleries} documents={Object.values(galleryDocuments).flat()} actions={documentActionIds} onSend={sendGalleryDocument} onDownload={downloadGalleryDocument} onDelete={deleteGalleryDocument} headers={headers} onUpdated={updateSavedDocument} onNew={() => {
               const selected = galleries.find(gal => String(gal.id) === invoiceGalleryId);
               if (selected) updateGalleryDocumentForm(selected.id, { documentType: 'invoice', title: 'Photography Invoice' });
@@ -3283,6 +3445,7 @@ export default function AdminPage() {
             <div className={sectionCard}>
               <h2 className="text-2xl font-heading text-white italic">Digital Products</h2>
               <form className="space-y-4" onSubmit={createDigitalProduct}>
+                <label className="block space-y-2"><span className={label}>Product collection</span><select className={inputClass} value={digitalProductForm.section} onChange={e => setDigitalProductForm({ ...digitalProductForm, section: e.target.value })}><option value="photography">Photography</option><option value="art">Fine Art</option></select></label>
                 <div className="space-y-2">
                   <label className={label}>Title</label>
                   <input
@@ -3322,8 +3485,9 @@ export default function AdminPage() {
                     onChange={(e) => setDigitalProductForm({ ...digitalProductForm, details: e.target.value })}
                   />
                 </div>
+                <ProductStoryEditor value={digitalProductForm.storefront} onChange={update => setDigitalProductForm(current => ({...current,storefront:update(current.storefront)}))} onBusyChange={busy => setStoryUploading(current=>({...current,new:busy}))}/>
                 <div className="space-y-2">
-                  <label className={label}>Purchase / Download URL</label>
+                  <label className={label}>Protected Delivery File</label>
                   <label className="relative flex w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-sm border-2 border-dashed border-white/10 bg-white/[0.04] p-6 text-center transition-colors hover:border-accent/50">
                     <input
                       type="file"
@@ -3343,10 +3507,12 @@ export default function AdminPage() {
                   </label>
                   <input
                     className={inputClass}
-                    placeholder="uploaded file URL, checkout, Gumroad, Dropbox..."
+                    placeholder="uploaded file URL or secure HTTPS file URL"
                     value={digitalProductForm.productUrl}
                     onChange={(e) => setDigitalProductForm({ ...digitalProductForm, productUrl: e.target.value })}
                   />
+                  {(digitalProductForm.productUrl || digitalProductAssetFile) && <button type="button" disabled={isUploading('digital-product-file')} className="min-h-11 border border-white/20 px-3 py-2 text-xs text-white/70" onClick={() => {setDigitalProductForm(current => ({...current,productUrl:''}));setDigitalProductAssetFile(null);}}>Remove delivery file</button>}
+                  <p className="text-xs leading-relaxed text-white/30">This file stays private and is delivered through the site only after Paystack confirms payment.</p>
                 </div>
                 <div className="space-y-2">
                   <label className={label}>Product Image</label>
@@ -3354,7 +3520,7 @@ export default function AdminPage() {
                     <input
                       type="file"
                       accept="image/*"
-                      disabled={isUploading('digital-product-image')}
+                      disabled={isUploading('digital-product-image') || isUploading('digital-product-file') || storyUploading.new}
                       onChange={(e) => handleDigitalProductFileChange(e.target.files?.[0] || null)}
                       className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
                     />
@@ -3376,6 +3542,7 @@ export default function AdminPage() {
                       if (!digitalProductFile) setDigitalProductPreview(e.target.value || null);
                     }}
                   />
+                  {(digitalProductForm.image || digitalProductFile) && <button type="button" disabled={isUploading('digital-product-image')} className="min-h-11 border border-white/20 px-3 py-2 text-xs text-white/70" onClick={() => {setDigitalProductForm(current => ({...current,image:''}));setDigitalProductFile(null);setDigitalProductPreview(null);}}>Remove thumbnail</button>}
                   {digitalProductPreview && (
                     <div className="overflow-hidden border border-white/10 bg-white/[0.04]">
                       <AdminPreviewImage src={digitalProductPreview} alt="Digital product preview" className="h-48 w-full object-cover" />
@@ -3395,7 +3562,7 @@ export default function AdminPage() {
                 </label>
                 <button
                   type="submit"
-                  disabled={isUploading('digital-product-image')}
+                  disabled={isUploading('digital-product-image') || isUploading('digital-product-file') || storyUploading.new}
                   className="flex w-full items-center justify-center gap-4 bg-accent px-5 py-4 text-[10px] font-medium uppercase tracking-[0.22em] text-black transition-all hover:bg-white disabled:opacity-50 sm:px-8 sm:tracking-[0.4em]"
                 >
                   {isUploading('digital-product-image') ? getUploadProgressLabel('digital-product-image', 'Uploading') : 'Save Digital Product'}
@@ -3412,15 +3579,18 @@ export default function AdminPage() {
                   details: product.details || '',
                   image: product.image || '',
                   productUrl: product.product_url || '',
+                  storefront: readProductStory(product.storefront),
+            section: product.section || 'photography',
                   displayOrder: String(product.display_order || 0),
                   isActive: product.is_active,
                 };
 
                 return (
                   <div key={product.id} className="space-y-4 border border-white/5 bg-surface/20 p-4">
+                    <label className="block space-y-2"><span className={label}>Product collection</span><select className={inputClass} value={draft.section} onChange={e => setEditingDigitalProducts(prev => ({ ...prev, [product.id]: { ...draft, section: e.target.value } }))}><option value="photography">Photography</option><option value="art">Fine Art</option></select></label>
                     <div className="grid gap-4 sm:grid-cols-[112px_1fr]">
                       <div className="h-32 overflow-hidden bg-neutral-950 sm:h-28">
-                        <AdminPreviewImage src={draft.image || product.image} alt={draft.title || product.title} className="h-full w-full object-cover" />
+                        <AdminPreviewImage src={draft.image || '/image-placeholder.svg'} alt={draft.title || product.title} className="h-full w-full object-cover" />
                       </div>
                       <div className="grid gap-3">
                         <input
@@ -3469,35 +3639,21 @@ export default function AdminPage() {
                         }))
                       }
                     />
-                    <input
-                      className={inputClass}
-                      placeholder="Image URL"
-                      value={draft.image}
-                      onChange={(e) =>
-                        setEditingDigitalProducts((prev) => ({
-                          ...prev,
-                          [product.id]: { ...draft, image: e.target.value },
-                        }))
-                      }
-                    />
-                    <input
-                      className={inputClass}
-                      placeholder="Purchase / Download URL"
-                      value={draft.productUrl}
-                      onChange={(e) =>
-                        setEditingDigitalProducts((prev) => ({
-                          ...prev,
-                          [product.id]: { ...draft, productUrl: e.target.value },
-                        }))
-                      }
-                    />
+                    <ProductAssetsEditor image={draft.image} productUrl={draft.productUrl}
+                      onChange={update => setEditingDigitalProducts(current => {
+                        const existing = current[product.id] || draft;
+                        return {...current, [product.id]: {...existing, ...update({image: existing.image, productUrl: existing.productUrl})}};
+                      })}
+                      onBusyChange={busy => setProductAssetUploading(current => ({...current, [String(product.id)]: busy}))}/>
+                    <ProductStoryEditor value={draft.storefront} onChange={update=>setEditingDigitalProducts(current=>({...current,[product.id]:{...(current[product.id]||draft),storefront:update((current[product.id]||draft).storefront)}}))} onBusyChange={busy=>setStoryUploading(current=>({...current,[String(product.id)]:busy}))}/>
+                    <a className="inline-flex min-h-11 items-center text-xs text-white/65 underline underline-offset-4" href={productPath(product.section==='art'?'art':'photography',product)} target="_blank" rel="noopener noreferrer">View saved product page ↗</a>
                     <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.2em]">
                       <button
                         type="button"
-                        onClick={() => updateDigitalProduct(product.id)}
+                        disabled={storyUploading[String(product.id)] || productAssetUploading[String(product.id)]} onClick={() => updateDigitalProduct(product.id)}
                         className="border border-accent/50 px-3 py-2 text-accent transition-colors hover:bg-accent hover:text-black"
                       >
-                        Update
+                        Update product
                       </button>
                       <button
                         type="button"
@@ -3510,7 +3666,7 @@ export default function AdminPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => deleteDigitalProduct(product.id)}
+                        disabled={storyUploading[String(product.id)] || productAssetUploading[String(product.id)]} onClick={() => deleteDigitalProduct(product.id)}
                         className="ml-auto inline-flex items-center gap-2 border border-red-500/40 px-3 py-2 text-red-300 transition-colors hover:bg-red-500 hover:text-white"
                       >
                         <FiTrash2 aria-hidden="true" />
@@ -3540,12 +3696,13 @@ export default function AdminPage() {
           <section className="grid gap-8 xl:grid-cols-[0.78fr_1.22fr] xl:items-start">
             <div className={sectionCard}>
               <h2 className="text-2xl font-heading text-white italic">Photography Catalog</h2>
+              <p className="text-sm leading-relaxed text-white/50">Create categories that fit your work: Female Portraits, Maternity, Weddings, or any name you choose. Rename and arrange them here to control how they appear in your portfolio.</p>
               <form className="space-y-4" onSubmit={createCatalogCategory}>
                 <div className="space-y-2">
                   <label className={label}>Category Name</label>
                   <input
                     className={inputClass}
-                    placeholder="Wedding, Portrait, Editorial..."
+                    placeholder="Female Portraits, Maternity, Family…"
                     value={catalogCategoryForm.name}
                     onChange={(e) => setCatalogCategoryForm({ ...catalogCategoryForm, name: e.target.value })}
                     required
@@ -3602,6 +3759,7 @@ export default function AdminPage() {
                   <label className={label}>Category</label>
                   <select
                     className={inputClass}
+                    disabled={catalogImporting}
                     value={catalogImageForm.category_id}
                     onChange={(e) => setCatalogImageForm({ ...catalogImageForm, category_id: e.target.value })}
                     required
@@ -3613,6 +3771,73 @@ export default function AdminPage() {
                       </option>
                     ))}
                   </select>
+                </div>
+                <div className="space-y-4 border border-accent/25 bg-accent/[0.04] p-4">
+                  <div>
+                    <p className="text-xs font-semibold text-accent">Publish client gallery photos</p>
+                    <p className="mt-1 text-xs leading-relaxed text-white/50">Reuse client photos in your portfolio and photography categories without uploading them again. Choose a destination above, then select only the photos you have permission to publish. Visitors will see display previews.</p>
+                  </div>
+                  <select
+                    className={inputClass}
+                    value={catalogSourceGalleryId}
+                    onChange={(event) => {
+                      setCatalogSourceGalleryId(event.target.value);
+                      setCatalogSourceSelection([]);
+                    }}
+                    disabled={catalogImporting}
+                    aria-label="Choose client gallery to import from"
+                  >
+                    <option value="">Choose client gallery</option>
+                    {galleries.filter((gallery) => gallery.images.length || gallery.finished_images.length).map((gallery) => (
+                      <option key={gallery.id} value={gallery.id}>{gallery.client_name} · Project {gallery.id}</option>
+                    ))}
+                  </select>
+                  {!galleries.some((gallery) => gallery.images.length || gallery.finished_images.length) && (
+                    <p className="text-xs text-white/50">Add photos to a <Link href="/admin/galleries" className="text-accent underline">client gallery</Link> to start reusing them here.</p>
+                  )}
+                  {catalogSourceImages.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-3 text-xs">
+                      <button type="button" disabled={catalogImporting} className="text-accent underline disabled:opacity-40"
+                        onClick={() => setCatalogSourceSelection(catalogSourceImages.slice(0, 100).map((image) => image.key))}>
+                        Select {catalogSourceImages.length > 100 ? 'first 100' : 'all'}
+                      </button>
+                      <button type="button" disabled={catalogImporting || !catalogSourceSelection.length} className="text-white/60 underline disabled:opacity-40"
+                        onClick={() => setCatalogSourceSelection([])}>Clear selection</button>
+                      <span role="status" className="text-white/50">{catalogSourceSelection.length} selected · up to 100 per batch</span>
+                    </div>
+                  )}
+                  {catalogSourceGalleryId && (
+                    catalogSourceImages.length ? (
+                      <div className="grid max-h-80 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3">
+                        {catalogSourceImages.map((image) => {
+                          const selected = catalogSourceSelection.includes(image.key);
+                          return (
+                            <button
+                              key={image.key}
+                              type="button"
+                              onClick={() => setCatalogSourceSelection((current) => current.includes(image.key)
+                                ? current.filter((key) => key !== image.key)
+                                : current.length < 100 ? [...current, image.key] : current)}
+                              disabled={catalogImporting}
+                              aria-pressed={selected}
+                              className={`overflow-hidden border text-left transition-colors ${selected ? 'border-accent bg-accent/15' : 'border-white/15 hover:border-white/50'}`}
+                            >
+                              <AdminPreviewImage src={getCloudinaryPreviewUrl(image.preview, { width: 360 })} alt={image.label} className="h-24 w-full object-cover" />
+                              <span className="block px-2 py-2 text-[10px] text-white/75">{selected ? '✓ ' : ''}{image.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : <p className="text-xs text-white/50">This gallery has no usable images yet.</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={importGalleryImagesToCatalog}
+                    disabled={catalogImporting || !catalogImageForm.category_id || !catalogSourceSelection.length}
+                    className="w-full border border-accent/50 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-accent transition-colors hover:bg-accent hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {catalogImporting ? 'Adding images…' : `Add ${catalogSourceSelection.length || ''} selected image${catalogSourceSelection.length === 1 ? '' : 's'} to catalogue`}
+                  </button>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -3716,7 +3941,8 @@ export default function AdminPage() {
 
             <div className="space-y-4">
               <h3 className="text-[10px] uppercase tracking-[0.28em] text-accent sm:tracking-[0.5em]">Catalog Categories</h3>
-              {catalogCategories.map((category) => (
+              <p className="text-xs leading-relaxed text-white/50">Move categories up or down to set the website order. Hidden categories stay available here.</p>
+              {catalogCategories.map((category, categoryIndex) => (
                 <div key={category.id} className="bg-surface/20 border border-white/5 p-4 space-y-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
@@ -3765,6 +3991,24 @@ export default function AdminPage() {
                         <FiTrash2 />
                       </button>
                     </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" disabled={catalogOrganizing || categoryIndex === 0} onClick={() => moveCatalogCategory(categoryIndex, -1)} aria-label={`Move ${category.name} up`} className="min-h-11 border border-white/20 px-3 text-xs text-white/70 disabled:opacity-30">↑ Move up</button>
+                    <button type="button" disabled={catalogOrganizing || categoryIndex === catalogCategories.length - 1} onClick={() => moveCatalogCategory(categoryIndex, 1)} aria-label={`Move ${category.name} down`} className="min-h-11 border border-white/20 px-3 text-xs text-white/70 disabled:opacity-30">↓ Move down</button>
+                    <span className="self-center text-xs text-white/40">Position {categoryIndex + 1}</span>
+                  </div>
+                  <div className="space-y-3">
+                    <label className="block space-y-2">
+                      <span className={label}>Category name</span>
+                      <input className={inputClass} value={catalogCategoryDrafts[category.id]?.name ?? category.name}
+                        onChange={event => setCatalogCategoryDrafts(current => ({ ...current, [category.id]: { ...(current[category.id] || { name: category.name, description: category.description || '' }), name: event.target.value } }))} />
+                    </label>
+                    <label className="block space-y-2">
+                      <span className={label}>Description</span>
+                      <textarea className={inputClass} value={catalogCategoryDrafts[category.id]?.description ?? category.description ?? ''}
+                        onChange={event => setCatalogCategoryDrafts(current => ({ ...current, [category.id]: { ...(current[category.id] || { name: category.name, description: category.description || '' }), description: event.target.value } }))} />
+                    </label>
+                    <button type="button" disabled={catalogOrganizing || !catalogCategoryDrafts[category.id]?.name.trim()} onClick={() => saveCatalogCategoryDetails(category)} className="min-h-11 border border-accent/40 px-4 text-xs text-accent disabled:opacity-30">Save category details</button>
                   </div>
                   <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
                     <input
@@ -3821,6 +4065,13 @@ export default function AdminPage() {
                           {image.title && (
                             <p className="px-2 py-2 text-[10px] text-white/60 truncate">{image.title}</p>
                           )}
+                          <label className="block p-2 text-[10px] text-white/60">
+                            Move to category
+                            <select className={`${inputClass} mt-1`} value="" disabled={catalogOrganizing} onChange={event => moveCatalogImage(image, event.target.value)}>
+                              <option value="">Choose destination</option>
+                              {catalogCategories.filter(item => item.id !== category.id).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+                            </select>
+                          </label>
                         </div>
                       ))}
                     </div>
@@ -3968,6 +4219,11 @@ export default function AdminPage() {
                     </button>
                   </div>
                   <div className="flex flex-wrap gap-2 text-[10px] text-white/60">
+                    {(gal.images.length > 0 || gal.finished_images?.length > 0) && (
+                      <Link href={`/admin/catalog?gallery=${gal.id}`} className="inline-flex min-h-11 items-center border border-accent/40 px-3 py-2 text-accent hover:bg-accent/10">
+                        Use photos on website / portfolio
+                      </Link>
+                    )}
                     <span>Uploads: {gal.images.length}</span>
                     <span>Selected for retouching: {gal.approved_images.length}</span>
                     <span>Finished: {gal.finished_images?.length || 0}</span>
@@ -3995,14 +4251,8 @@ export default function AdminPage() {
                       ] as const).map((design) => {
                         const active = (gal.gallery_design || 'editorial') === design.id;
                         return (
-                          <button
-                            key={design.id}
-                            type="button"
-                            disabled={isUpdatingGallery}
-                            onClick={() => updateGallery(gal.id.toString(), 'design', { design: design.id })}
-                            aria-pressed={active}
-                            className={`min-h-20 p-3 text-left transition-colors disabled:opacity-50 ${active ? 'border border-accent bg-accent/10 text-accent' : 'border border-white/10 text-white/55 hover:border-white/35 hover:text-white'}`}
-                          >
+                          <button key={design.id} type="button" disabled={isUpdatingGallery} onClick={() => updateGallery(gal.id.toString(), 'design', { design: design.id })} aria-pressed={active}
+                            className={`min-h-20 p-3 text-left transition-colors disabled:opacity-50 ${active ? 'border border-accent bg-accent/10 text-accent' : 'border border-white/10 text-white/55 hover:border-white/35 hover:text-white'}`}>
                             <span className="block text-[10px] font-semibold uppercase tracking-[0.18em]">{active ? '✓ ' : ''}{design.name}</span>
                             <span className="mt-2 block text-[10px] leading-relaxed opacity-65">{design.note}</span>
                           </button>
@@ -4010,6 +4260,22 @@ export default function AdminPage() {
                       })}
                     </div>
                   </div>
+                  <GalleryHeaderPositionEditor key={`${gal.id}-${gal.images[0] || ''}`} image={gal.image_previews?.[0] || gal.images[0] || ''} value={gal.hero_position} disabled={isUpdatingGallery} onSave={async (position) => Boolean(await updateGallery(gal.id.toString(), 'heroPosition', { position }))} />
+                  <GalleryDesignEditor
+                    value={gal.presentation}
+                    images={[...gal.images, ...(gal.finished_images || [])]}
+                    previews={[...(gal.image_previews || gal.images), ...(gal.finished_previews || gal.finished_images || [])]}
+                    clientName={gal.client_name}
+                    disabled={isUpdatingGallery}
+                    onSave={async (settings) => Boolean(await updateGallery(gal.id.toString(), 'presentation', { settings }))}
+                  />
+                  <GallerySoundtrackEditor
+                    url={gal.soundtrack_url || ''}
+                    title={gal.soundtrack_title || ''}
+                    preview={gal.soundtrack_preview || ''}
+                    disabled={isUpdatingGallery}
+                    onSave={async (url, title) => Boolean(await updateGallery(gal.id.toString(), 'soundtrack', { url, title }))}
+                  />
                   {gal.review_submitted_at && (
                     <div className="space-y-3 border border-accent/25 bg-accent/[0.04] p-3">
                       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -4091,7 +4357,7 @@ export default function AdminPage() {
                           <div key={`${img}-${index}`} className="space-y-1">
                             <div className="relative">
                               <GalleryMedia
-                                src={img}
+                                src={gal.image_previews?.[index] || img}
                                 alt={`${gal.client_name} gallery upload ${index + 1}`}
                                 className="h-20 w-full border border-white/10 object-cover"
                                 sizes="(min-width: 1280px) 96px, (min-width: 640px) 33vw, 50vw"
@@ -4213,7 +4479,7 @@ export default function AdminPage() {
                           <div key={img} className="space-y-1">
                             <div className="relative">
                               <GalleryMedia
-                                src={img}
+                                src={gal.finished_previews?.[index] || img}
                                 alt={`${gal.client_name} finished work ${index + 1}`}
                                 className="h-20 w-full object-cover border border-white/10"
                                 sizes="(min-width: 1280px) 96px, (min-width: 640px) 33vw, 50vw"

@@ -1,20 +1,26 @@
-import { randomBytes } from 'crypto';
+import { readJsonRequest } from '@/lib/requestBody';
+import { requestNewsletterConfirmation, newsletterLists } from '@/lib/newsletter/server';
+import { isPaymentEmail } from '@/lib/payments/policy';
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { rateLimit } from '@/lib/rateLimit';
 
-const validLists = new Set(['photography', 'art']);
+const validLists = newsletterLists;
 
 function normalizeEmail(email: unknown) {
   return typeof email === 'string' ? email.trim().toLowerCase() : '';
 }
 
 function isValidEmail(email: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  return isPaymentEmail(email);
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const limited = await rateLimit(req, 'newsletter-subscribe', 10, 3600);
+    if (limited) return limited;
+    const jsonRequest = await readJsonRequest(req, 2000);
+    if (jsonRequest.response) return jsonRequest.response;
+    const body = jsonRequest.body;
     const email = normalizeEmail(body.email);
     const listType = typeof body.listType === 'string' ? body.listType : body.profileType;
 
@@ -26,19 +32,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid newsletter list.' }, { status: 400 });
     }
 
-    const unsubscribeToken = randomBytes(32).toString('hex');
-    await query(
-      `INSERT INTO newsletter_subscribers (email, list_type, status, unsubscribe_token, subscribed_at, unsubscribed_at)
-       VALUES ($1, $2, 'active', $3, NOW(), NULL)
-       ON CONFLICT (email, list_type)
-       DO UPDATE SET status = 'active', unsubscribed_at = NULL, subscribed_at = NOW()
-       RETURNING id`,
-      [email, listType, unsubscribeToken]
-    );
-
-    return NextResponse.json({ message: 'You are subscribed.' });
-  } catch (error) {
-    console.error('[newsletter.subscribe] error', error);
+    await requestNewsletterConfirmation(email, listType);
+    return NextResponse.json({ message: 'Check your inbox for a confirmation link. If this address is already subscribed or recently requested a link, no further email is sent.' }, { headers: { 'Cache-Control': 'no-store' } });
+  } catch {
+    console.error('[newsletter.subscribe] Confirmation delivery unavailable.');
     return NextResponse.json({ error: 'Unable to subscribe right now.' }, { status: 500 });
   }
 }

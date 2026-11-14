@@ -19,7 +19,29 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      { source: '/mofolio', destination: '/stillbounds', permanent: true },
+      { source: '/mofolio/account', destination: '/stillbounds/account', permanent: true },
+      { source: '/mofolio/terms', destination: '/stillbounds/terms', permanent: true },
+      { source: '/mofolio/privacy', destination: '/stillbounds/privacy', permanent: true },
+      { source: '/mofolio/review/:id', destination: '/stillbounds/review/:id', permanent: true },
+    ];
+  },
   async headers() {
+    const contentSecurityPolicy = [
+      "default-src 'self'",
+      "base-uri 'self'",
+      "object-src 'none'",
+      "frame-ancestors 'none'",
+      "form-action 'self'",
+      "script-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: https://res.cloudinary.com https://images.unsplash.com",
+      "media-src 'self' blob: https://res.cloudinary.com",
+      "font-src 'self' data:",
+      "connect-src 'self' https://api.cloudinary.com https://res.cloudinary.com",
+    ].join('; ');
     return [
       {
         source: '/:path*',
@@ -36,8 +58,12 @@ const nextConfig: NextConfig = {
             key: 'Permissions-Policy',
             value: 'camera=(), microphone=(), geolocation=()',
           },
+          { key: 'Content-Security-Policy', value: contentSecurityPolicy },
+          { key: 'Strict-Transport-Security', value: 'max-age=31536000' },
+          { key: 'X-Frame-Options', value: 'DENY' },
         ],
       },
+      ...['/art/shop/payment', '/photography/shop/payment', '/payments/:path*', '/collector/:path*', '/client/:path*', '/stillbounds/account', '/stillbounds/review/:path*', '/mofolio/account', '/mofolio/review/:path*', '/newsletter/preferences'].map(source => ({ source, headers: [{ key: 'Referrer-Policy', value: 'no-referrer' }, { key: 'Cache-Control', value: 'private, no-store' }, { key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' }] })),
       {
         source: '/:all*(svg|jpg|jpeg|png|webp|avif|gif|ico)',
         headers: [

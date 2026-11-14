@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import PDFDocument from 'pdfkit';
 import { query } from '@/lib/db';
+import { verifyGallerySettlement, paymentFailure } from '@/lib/payments/server';
 
 export const runtime = 'nodejs';
 
@@ -14,6 +15,7 @@ export async function GET(req: NextRequest) {
   const invoice = inquiry.gallery_id ? (await query(`SELECT amount, paid_at, payments FROM gallery_documents WHERE gallery_id=$1 AND document_type='invoice' ORDER BY created_at DESC LIMIT 1`, [inquiry.gallery_id])).rows[0] : null;
   const paid = invoice?.payments?.length ? invoice.payments.reduce((sum: number, payment: { amount: number }) => sum + Number(payment.amount), 0) : invoice?.paid_at ? Number(invoice.amount) : 0;
   if (!invoice || paid < Number(invoice.amount)) return NextResponse.json({ error: 'The certificate becomes available after full payment.' }, { status: 403 });
+  try { if (!await verifyGallerySettlement(inquiry.gallery_id)) return NextResponse.json({ error: 'This payment needs studio review.' }, { status: 403 }); } catch (error) { return paymentFailure(error); }
   const details = inquiry.details || {};
   const title = inquiry.title || details.artwork || `Commission ART-${inquiry.id}`;
   const pdf = await new Promise<Buffer>((resolve, reject) => {

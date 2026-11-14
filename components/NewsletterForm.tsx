@@ -19,6 +19,7 @@ export default function NewsletterForm({ profileType }: NewsletterFormProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [showToast, setShowToast] = useState(false);
+    const [confirmationMessage, setConfirmationMessage] = useState('');
 
     const title = profileType === 'photography'
         ? translateText(settings.newsletter.photographyTitle || t('newsletter.photography.title'))
@@ -56,6 +57,7 @@ export default function NewsletterForm({ profileType }: NewsletterFormProps) {
                 throw new Error(data.error || t('newsletter.subscribeError'));
             }
 
+            setConfirmationMessage(data.message || 'Check your inbox to confirm your subscription.');
             setEmail('');
             setShowToast(true);
         } catch (err) {
@@ -133,7 +135,7 @@ export default function NewsletterForm({ profileType }: NewsletterFormProps) {
                         aria-live="polite"
                         className="fixed bottom-6 left-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 border border-accent/40 bg-background/95 px-5 py-4 text-center text-[10px] font-bold uppercase tracking-[0.28em] text-accent shadow-2xl backdrop-blur-md md:left-auto md:right-6 md:translate-x-0"
                     >
-                        {t('ui.subscribed')}
+                        {confirmationMessage}
                     </motion.div>
                 )}
             </AnimatePresence>
