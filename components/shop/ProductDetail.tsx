@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUpRight, Check, Download, Mail, ShieldCheck } from 'luc
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import SeoImage from '@/components/SeoImage';
+import { RegionalPrice, CurrencySelector } from '@/components/RegionalPricing';
 import PaystackPurchase from '@/components/PaystackPurchase';
 import { productPath, type StoreProduct } from '@/lib/productStory';
 import { productShopPath } from '@/lib/productSections';
@@ -20,10 +21,11 @@ export default function ProductDetail({product,related,email,checkoutEnabled}:{p
         <p className={s.eyebrow}>{story.category||'From the studio'} <span>Digital download</span></p>
         <h1>{product.title}</h1>
         {(story.tagline||product.details)&&<p className={s.tagline}>{story.tagline||product.details}</p>}
-        <div className={s.priceLine}><span>{product.price}</span><span>One-time purchase</span></div>
+        <div className={s.priceLine}><span><RegionalPrice value={product.price}/></span><span>One-time purchase</span></div>
         {(story.compatibility.length>0||story.formats.length>0)&&<dl className={s.quickFacts}>{story.compatibility.length>0&&<div><dt>Made for</dt><dd>{story.compatibility.join(' · ')}</dd></div>}{story.formats.length>0&&<div><dt>File formats</dt><dd>{story.formats.join(' · ')}</dd></div>}</dl>}
         <section id="purchase" className={s.purchase} aria-label={`Purchase ${product.title}`} tabIndex={-1}>
-          {canBuy?<PaystackPurchase productId={product.id} title={product.title} section={product.section}/>:<a href={contact} className={s.primaryButton}>Ask the studio <ArrowUpRight size={17}/></a>}
+          <CurrencySelector/>
+          {canBuy?<PaystackPurchase productId={product.id} title={product.title} section={product.section} price={product.price}/>:<a href={contact} className={s.primaryButton}>Ask the studio <ArrowUpRight size={17}/></a>}
           <div className={s.purchaseNotes}><p><ShieldCheck size={15}/>{canBuy?'Secure payment through Paystack':'Ordering details confirmed by the studio'}</p><p><Download size={15}/>Digital product. No physical item is shipped.</p></div>
         </section>
         <a className={s.textLink} href={contact}><Mail size={15}/>Questions before you buy?</a>
@@ -37,8 +39,8 @@ export default function ProductDetail({product,related,email,checkoutEnabled}:{p
       {story.usageRights&&<section className={s.detailSection}><div className={s.sectionHeading}><p className={s.eyebrow}>Make it yours</p><h2>Usage & licence.</h2></div><p className={s.description}>{story.usageRights}</p></section>}
       {canBuy&&<section className={s.delivery}><div><p className={s.eyebrow}>From checkout to creating</p><h2>Your next steps.</h2></div><ol><li><span>01</span><h3>Use your email</h3><p>Enter the address you want to use for your receipt and download link.</p></li><li><span>02</span><h3>Complete payment</h3><p>Choose an available payment method in Paystack’s secure checkout.</p></li><li><span>03</span><h3>Get your download</h3><p>Return from Paystack after payment. Your download becomes available once payment is verified.</p></li></ol></section>}
     </div>
-    {related.length>0&&<section className={s.related}><div className={s.collectionHeading}><div><p className={s.eyebrow}>Keep exploring</p><h2>More from the studio.</h2></div><Link href={productShopPath(product.section)} className={s.textLink}>View the collection <ArrowUpRight size={16}/></Link></div><div className={s.relatedGrid}>{related.map(item=><Link className={s.relatedCard} href={productPath(item.section,item)} key={item.id}><div><SeoImage src={item.image} alt={item.title} fill sizes="(min-width: 960px) 33vw, 75vw" unoptimized={/\.svg$/i.test(item.image)} className={s.relatedImage}/></div><p>{item.storefront.category||'Digital product'}</p><h3>{item.title}<ArrowUpRight size={19}/></h3><span>{item.price}</span></Link>)}</div></section>}
+    {related.length>0&&<section className={s.related}><div className={s.collectionHeading}><div><p className={s.eyebrow}>Keep exploring</p><h2>More from the studio.</h2></div><Link href={productShopPath(product.section)} className={s.textLink}>View the collection <ArrowUpRight size={16}/></Link></div><div className={s.relatedGrid}>{related.map(item=><Link className={s.relatedCard} href={productPath(item.section,item)} key={item.id}><div><SeoImage src={item.image} alt={item.title} fill sizes="(min-width: 960px) 33vw, 75vw" unoptimized={/\.svg$/i.test(item.image)} className={s.relatedImage}/></div><p>{item.storefront.category||'Digital product'}</p><h3>{item.title}<ArrowUpRight size={19}/></h3><span><RegionalPrice value={item.price}/></span></Link>)}</div></section>}
   </div><Footer/>
-  <div className={s.mobileBuyBar}><div><span>{product.title}</span><strong>{product.price}</strong></div><a href="#purchase">{canBuy?'Buy product':'Order details'}<ArrowUpRight size={17}/></a></div>
+  <div className={s.mobileBuyBar}><div><span>{product.title}</span><strong><RegionalPrice value={product.price}/></strong></div><a href="#purchase">{canBuy?'Buy product':'Order details'}<ArrowUpRight size={17}/></a></div>
   </main>;
 }

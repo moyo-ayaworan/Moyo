@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { ProfileProvider } from '@/context/ProfileContext';
 import { LanguageProvider } from '@/context/LanguageContext';
 import { ThemeProvider } from '@/components/ThemeProvider';
+import { RegionalPricingProvider } from '@/components/RegionalPricing';
 import ClickSpark from '@/components/ClickSpark';
 
 const SessionTracker = dynamic(() => import('@/components/SessionTracker'), { ssr: false });
@@ -69,7 +70,7 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
               </ClickSpark>
             </>
           ) : null}
-          {page}
+          <RegionalPricingProvider>{page}</RegionalPricingProvider>
         </ProfileProvider>
       </LanguageProvider>
     </ThemeProvider>

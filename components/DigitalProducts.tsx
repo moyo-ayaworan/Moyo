@@ -6,7 +6,8 @@ import { useLanguage } from '@/context/LanguageContext';
 import { useTranslate } from '@/lib/translations';
 import GlareHover from '@/components/GlareHover';
 import { useSiteSettings } from '@/lib/useSiteSettings';
-import { productPath, formatProductPrice } from '@/lib/productStory';
+import { productPath } from '@/lib/productStory';
+import { RegionalPrice, CurrencySelector } from '@/components/RegionalPricing';
 import SeoImage from '@/components/SeoImage';
 
 type DigitalProduct = {
@@ -53,6 +54,7 @@ export default function DigitalProducts() {
                     </p>
                 </header>
 
+                <CurrencySelector />
                 <div className="grid min-w-0 grid-cols-1 gap-10 sm:grid-cols-2 md:grid-cols-3 md:gap-12">
                     {products.map((product, index) => (
                         <motion.div
@@ -95,7 +97,7 @@ export default function DigitalProducts() {
                                         <h3 className="text-xl font-heading text-white transition-colors [overflow-wrap:anywhere] group-hover:text-accent">{translateText(product.title)}</h3>
                                         <span className="block font-body text-[10px] uppercase tracking-[0.18em] text-white/30 [overflow-wrap:anywhere] sm:tracking-widest">{translateText(product.details)}</span>
                                     </div>
-                                    <span className="shrink-0 font-body text-[10px] uppercase tracking-widest text-accent sm:pr-2">{formatProductPrice(product.price)}</span>
+                                    <span className="shrink-0 font-body text-[10px] uppercase tracking-widest text-accent sm:pr-2"><RegionalPrice value={product.price} /></span>
                                 </div>
                             </GlareHover>
                         </motion.div>
