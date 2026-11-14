@@ -28,3 +28,14 @@ test('expired signed licence proofs do not remain valid after their grace deadli
  assert(verifyLicense(paid,signing.publicKey,expected,now+DAY));
  assert.equal(verifyLicense(paid,signing.publicKey,expected,now+2*DAY),null);
 });
+
+test('website domain migration preserves the configured desktop licence issuer',async()=>{
+ const signing=keys(),device=keys();
+ const config=billingConfig({STILLBOUNDS_LICENSING_ENABLED:'true',STILLBOUNDS_BILLING_ORIGIN:'https://moyoayaworan.com',STILLBOUNDS_LICENSE_ISSUER:'https://moyo-roan.vercel.app',STILLBOUNDS_LICENSE_PRIVATE_KEY:signing.privateKey});
+ const deviceId='a'.repeat(64),deviceKey=publicKeyHash(device.publicKey);
+ const store={activate:async()=>({account:{paid:true},device:{activation_id:randomUUID(),device_id:deviceId,device_key:deviceKey}}),status:async()=>({account:{paid:true},devices:[]})};
+ const service=new BillingService(config,store);
+ const result=await service.activate({id:'user',email:'buyer@example.test',emailVerified:true},'challenge','signature');
+ assert.equal(config.origin,'https://moyoayaworan.com');
+ assert(verifyLicense(result.certificate,signing.publicKey,{issuer:'https://moyo-roan.vercel.app',environment:'test',deviceId,deviceKey}));
+});

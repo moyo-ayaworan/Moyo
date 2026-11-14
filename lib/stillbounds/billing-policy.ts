@@ -17,12 +17,14 @@ export function checkoutAddress(value:unknown){if(typeof value!=='string'||value
 export function billingConfig(env:NodeJS.ProcessEnv=process.env){
  const mode:BillingMode=env.STILLBOUNDS_BILLING_MODE==='live'?'live':'test';
  const origin=new URL(env.STILLBOUNDS_BILLING_ORIGIN||env.STILLBOUNDS_AUTH_URL||'https://moyo-roan.vercel.app').origin;
+ // Keep desktop certificate identity stable when the website changes domains.
+ const issuer=new URL(env.STILLBOUNDS_LICENSE_ISSUER||origin).origin;
  const privateKey=(env.STILLBOUNDS_LICENSE_PRIVATE_KEY||'').replace(/\\n/g,'\n');
  let publicKey='';if(privateKey){const key=createPrivateKey(privateKey);if(key.asymmetricKeyType!=='ed25519')throw Error('Invalid licence signing configuration.');publicKey=createPublicKey(key).export({type:'spki',format:'pem'}).toString();}
  const secret=env.STILLBOUNDS_PAYSTACK_SECRET_KEY||env.PAYSTACK_SECRET_KEY||'';
  const webhookSecret=env.STILLBOUNDS_PAYSTACK_WEBHOOK_SECRET||(secret===env.PAYSTACK_SECRET_KEY?env.PAYSTACK_WEBHOOK_SECRET:'')||'';
  const checkoutEnabled=(env.VERCEL_ENV!=='production'||!!webhookSecret)&&env.STILLBOUNDS_CHECKOUT_ENABLED==='true'&&secret.startsWith(mode==='live'?'sk_live_':'sk_test_')&&!!privateKey;
- return {mode,origin,privateKey,publicKey,secret,webhookSecret,checkoutEnabled,creatorUserId:env.STILLBOUNDS_CREATOR_USER_ID?.trim()||'',enabled:env.STILLBOUNDS_LICENSING_ENABLED==='true'&&!!privateKey};
+ return {mode,origin,issuer,privateKey,publicKey,secret,webhookSecret,checkoutEnabled,creatorUserId:env.STILLBOUNDS_CREATOR_USER_ID?.trim()||'',enabled:env.STILLBOUNDS_LICENSING_ENABLED==='true'&&!!privateKey};
 }
 
 // Configure only on the server after verifying the creator account identity.

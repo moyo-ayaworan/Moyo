@@ -21,6 +21,12 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
+      ...['/', '/art/:path*', '/photography/:path*', '/admin/:path*', '/stillbounds/:path*', '/mofolio/:path*', '/client/:path*', '/collector/:path*', '/payments/:path*', '/newsletter/:path*', '/privacy', '/terms', '/robots.txt', '/sitemap.xml'].map(source => ({
+        source,
+        has: [{ type: 'host' as const, value: 'moyo-roan.vercel.app' }],
+        destination: `https://moyoayaworan.com${source}`,
+        permanent: false,
+      })),
       { source: '/mofolio', destination: '/stillbounds', permanent: true },
       { source: '/mofolio/account', destination: '/stillbounds/account', permanent: true },
       { source: '/mofolio/terms', destination: '/stillbounds/terms', permanent: true },
