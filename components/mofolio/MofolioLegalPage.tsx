@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { RegionalPrice, CurrencySelector } from '@/components/RegionalPricing';
 import styles from './mofolio.module.css';
 import type { LegalSection } from '@/lib/stillboundsLegal';
 
@@ -10,8 +11,9 @@ export default function MofolioLegalPage({title, introduction, sections}: Props)
       <Link className={styles.legalBack} href="/stillbounds">← Back to Stillbounds</Link>
       <p className={styles.eyebrow}>Effective 9 November 2026</p>
       <h1>{title}</h1><p className={styles.legalIntro}>{introduction}</p>
+      {sections.some(([,paragraphs])=>paragraphs.some(p=>p.includes('[regional-price]')))&&<CurrencySelector/>}
       <nav className={styles.legalContents} aria-label={`${title} contents`}>{sections.map(([heading],index)=><a key={index} href={`#section-${index+1}`}>{String(index+1).padStart(2,'0')} · {heading}</a>)}</nav>
-      <div className={styles.legalText}>{sections.map(([heading,paragraphs],index)=><section key={index} id={`section-${index+1}`}><h2>{index+1}. {heading}</h2>{paragraphs.map(paragraph=><p key={paragraph}>{paragraph}</p>)}</section>)}</div>
+      <div className={styles.legalText}>{sections.map(([heading,paragraphs],index)=><section key={index} id={`section-${index+1}`}><h2>{index+1}. {heading}</h2>{paragraphs.map(paragraph=><p key={paragraph}>{paragraph.split('[regional-price]').map((part,index)=><span key={index}>{index>0&&<RegionalPrice value={30000}/>}{part}</span>)}</p>)}</section>)}</div>
       <p className={styles.legalContact}>Questions? <a href="mailto:ijabikenm@gmail.com?subject=Stillbounds%20privacy">Contact Moyo Ayaworan</a>.</p>
     </main>
     <footer className={styles.footer}><Link className={styles.logo} href="/stillbounds">Stillbounds<span>.</span></Link><span>by Moyo Ayaworan.</span><div><Link href="/stillbounds/terms">Terms</Link><Link href="/stillbounds/privacy">Privacy</Link></div></footer>

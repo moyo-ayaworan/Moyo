@@ -35,9 +35,9 @@ export function RegionalPricingProvider({ children }: { children: React.ReactNod
   };
   return <PricingContext.Provider value={{ ...pricing, choose }}>{children}</PricingContext.Provider>;
 }
-export function RegionalPrice({ value }: { value: string | number }) {
+export function RegionalPrice({ value, adjusted = false }: { value: string | number; adjusted?: boolean }) {
   const { currency, rates, multiplier, loaded, failed } = useContext(PricingContext);
-  const price = displayPrice(regionalAmount(value, multiplier), currency, rates);
+  const price = displayPrice(adjusted ? value : regionalAmount(value, multiplier), currency, rates);
   if (!loaded) return <span>{failed ? 'Price unavailable' : 'Checking price…'}</span>;
   return <span>{price.converted ? '≈ ' : ''}{price.text}</span>;
 }

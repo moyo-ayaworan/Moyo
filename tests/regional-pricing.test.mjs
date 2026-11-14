@@ -67,3 +67,19 @@ test('Stillbounds offer and actual Paystack initialization use the same regional
   assert.equal(charged.amount,amount);assert.equal(charged.currency,'NGN');
  }
 });
+test('account prices convert the server regional amount without doubling it again',async()=>{
+ const React=await import('react'),{renderToStaticMarkup}=await import('react-dom/server'),jsx=await import('react/jsx-runtime');
+ const state={currency:'USD',rates:{NGN:1,USD:0.001},multiplier:2,loaded:true,failed:false};
+ const compiled={exports:{}};
+ const code=ts.transpileModule(fs.readFileSync('components/RegionalPricing.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
+ vm.runInNewContext(code,{module:compiled,exports:compiled.exports,require:name=>{
+  if(name==='react')return {...React,useContext:()=>state};
+  if(name==='react/jsx-runtime')return jsx;
+  if(name==='next/navigation')return {usePathname:()=>'/stillbounds/account'};
+  if(name==='@/lib/browserStorage')return {};
+  return pricing;
+ }});
+ const Price=compiled.exports.RegionalPrice;
+ assert.match(renderToStaticMarkup(React.createElement(Price,{value:60000,adjusted:true})),/60\.00/);
+ assert.match(renderToStaticMarkup(React.createElement(Price,{value:30000})),/60\.00/);
+});
