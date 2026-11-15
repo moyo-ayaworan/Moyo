@@ -5,7 +5,7 @@ import { BOOKING_TIMES, isCalendarDate, parseBookingDate } from '@/lib/bookingDa
 import { bookingDetailsError, bookingSlotError, type BookingDraft } from '@/lib/bookingRequest';
 import { DEFAULT_BOOKING_OPTIONS, getBookingPackage } from '@/lib/bookingRates';
 
-const emptyDraft: BookingDraft = { name: '', email: '', phone: '', service: '', packageId: '', options: DEFAULT_BOOKING_OPTIONS, message: '', bookingDate: '', bookingTime: '' };
+const emptyDraft: BookingDraft = { name: '', email: '', phone: '', service: '', packageId: '', options: DEFAULT_BOOKING_OPTIONS, message: '', bookingDate: '', bookingTime: '', website: '' };
 type Step = 'service' | 'schedule' | 'details' | 'review' | 'complete';
 type Result = { id: number; emailSent: boolean; status: string };
 
@@ -78,6 +78,7 @@ export function useEniyanBooking() {
     setStep(next);
   }
   function chooseService(packageId: string) {
+    if (locked) return;
     const resolvedId = packageId === 'portrait' ? 'portrait-one' : packageId;
     const selectedPackage = getBookingPackage(resolvedId);
     if (!selectedPackage) return;
@@ -113,6 +114,10 @@ export function useEniyanBooking() {
         setUncertain(false); submission.current = null;
         setDraft(current => ({ ...current, bookingTime: '' }));
         retryAvailability(); setStep('schedule'); setError('That time was just taken. Your request was not saved; please choose another time.'); return;
+      }
+      if (response.status === 429 && !uncertain) {
+        submission.current = null;
+        setError('The request limit has been reached. Nothing was saved by this attempt. Try later or contact ijabikenm@gmail.com.'); return;
       }
       if (response.status === 400) {
         setUncertain(false); submission.current = null; setStep('details');

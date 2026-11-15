@@ -7,6 +7,7 @@ export type BookingDraft = {
   name: string; email: string; phone: string; service: string; message: string;
   bookingDate: string; bookingTime: string;
   packageId?: string; options?: BookingOptions;
+  website?: string;
 };
 
 export function bookingDetailsError(draft: BookingDraft, requireContact = false) {

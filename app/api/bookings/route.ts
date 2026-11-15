@@ -4,10 +4,11 @@ import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import { query } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
-import { rateLimit } from '@/lib/rateLimit';
+import { rateLimit, rateLimitIdentity } from '@/lib/rateLimit';
 import { BOOKING_TIMES, isCalendarDate, parseBookingDate } from '@/lib/bookingDates';
 import { bookingDetailsError } from '@/lib/bookingRequest';
 import { calculateBookingEstimate, formatNaira } from '@/lib/bookingRates';
+import { bookingOrigin } from '@/lib/bookingOrigin';
 
 export const runtime = 'nodejs';
 
@@ -186,8 +187,8 @@ export async function GET(req: NextRequest) {
          LIMIT 100`
       );
       return NextResponse.json({ bookings: rows });
-    } catch (error) {
-      console.error('[bookings] Failed to load admin bookings:', error);
+    } catch {
+      console.error('[bookings] Failed to load admin bookings');
       return NextResponse.json({ error: 'Failed to load bookings.' }, { status: 500 });
     }
   }
@@ -197,6 +198,11 @@ export async function GET(req: NextRequest) {
   if (!isCalendarDate(start) || !isCalendarDate(end) || start > end) {
     return NextResponse.json({ error: 'Valid start and end dates are required.' }, { status: 400 });
   }
+  if (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`) > 62 * 86400000) {
+    return NextResponse.json({ error: 'Request no more than 63 days of availability at once.' }, { status: 400 });
+  }
+  const limited = await rateLimit(req, 'booking-availability', 120, 900);
+  if (limited) return limited;
 
   try {
     const { rows } = await query(
@@ -214,13 +220,14 @@ export async function GET(req: NextRequest) {
     }, {});
 
     return NextResponse.json({ booked, slots: Array.from(SLOT_TIMES) }, { headers: { 'Cache-Control': 'private, no-store' } });
-  } catch (error) {
-    console.error('[bookings] Failed to load availability:', error);
+  } catch {
+    console.error('[bookings] Failed to load availability');
     return NextResponse.json({ error: 'Could not load availability. Please try again.' }, { status: 503 });
   }
 }
 
 export async function POST(req: NextRequest) {
+  if (req.headers.get('sec-fetch-site') === 'cross-site') return NextResponse.json({ error: 'Open booking from the studio website.' }, { status: 403 });
   const limited = await rateLimit(req, 'booking-create', 5, 3600);
   if (limited) return limited;
   let creationKey = '';
@@ -245,16 +252,20 @@ export async function POST(req: NextRequest) {
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return NextResponse.json({ error: 'A booking object is required.' }, { status: 400 });
     }
+    if (typeof body.website === 'string' && body.website.trim()) return NextResponse.json({ error: 'Please reload the booking form.' }, { status: 400 });
     const name = normalize(body.name);
     const email = normalize(body.email).toLowerCase();
     const phone = normalize(body.phone);
-    const service = normalize(body.service);
     const packageId = normalize(body.packageId);
     const estimate = calculateBookingEstimate(packageId, body.options);
+    const service = estimate.selectedPackage?.category || normalize(body.service);
     const message = normalize(body.message);
     const bookingDate = normalize(body.bookingDate);
     const bookingTime = normalize(body.bookingTime);
     fromEniyan = body.source === 'eniyan';
+    if ((fromEniyan || packageId) && !estimate.selectedPackage) {
+      return NextResponse.json({ error: 'Choose a current photography package.' }, { status: 400 });
+    }
     creationKey = normalize(body.bookingRequestId);
     if ((creationKey && !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(creationKey)) || (fromEniyan && (!creationKey || body.confirmed !== true))) {
       return NextResponse.json({ error: 'Review your details and confirm the booking request first.' }, { status: 400 });
@@ -280,6 +291,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Choose a future booking slot.' }, { status: 400 });
     }
 
+    // These budgets are independent of IP, so rotating proxy addresses cannot
+    // create unlimited requests or email arbitrary recipients without a bound.
+    const recipientLimited = await rateLimitIdentity(email, 'booking-recipient-create', 3, 86400);
+    if (recipientLimited) return recipientLimited;
+    if (phone) {
+      const phoneLimited = await rateLimitIdentity(phone.replace(/\D/g, ''), 'booking-phone-create', 3, 86400);
+      if (phoneLimited) return phoneLimited;
+    }
+    const configuredLimit = Number(process.env.BOOKING_DAILY_LIMIT || 100);
+    const dailyLimit = Number.isInteger(configuredLimit) && configuredLimit >= 1 && configuredLimit <= 10000 ? configuredLimit : 100;
+    const siteLimited = await rateLimitIdentity('site', 'booking-site-create', dailyLimit, 86400);
+    if (siteLimited) return siteLimited;
+
     const { rows } = await query(
       `INSERT INTO bookings (name, email, phone, service, package_id, booking_options, base_price, estimated_total, quote_required, message, booking_date, booking_time, scheduled_at, timezone, manage_token, client_notes, internal_notes, creation_key, request_hash)
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11::date, $12, $13, $14, $15, $16, $17, $18, $19)
@@ -291,12 +315,12 @@ export async function POST(req: NextRequest) {
     const booking = rows[0] as BookingRow;
     let emailSent = false;
     try {
-      emailSent = await sendBookingEmails(booking, req.nextUrl.origin);
+      emailSent = await sendBookingEmails(booking, bookingOrigin());
       if (emailSent) {
         await query('UPDATE bookings SET confirmation_sent_at = NOW(), updated_at = NOW() WHERE id = $1', [booking.id]);
       }
-    } catch (error) {
-      console.error('[bookings] Booking saved but confirmation email failed:', error);
+    } catch {
+      console.error('[bookings] Booking saved but confirmation email failed');
     }
 
     return savedResponse(booking, emailSent);
@@ -312,7 +336,7 @@ export async function POST(req: NextRequest) {
       }
       return NextResponse.json({ error: 'That time has just been booked. Please choose another slot.', code: 'slot_taken' }, { status: 409 });
     }
-    console.error('[bookings] Failed to create booking:', error);
+    console.error('[bookings] Failed to create booking');
     return NextResponse.json({ error: 'Failed to create booking.' }, { status: 500 });
   }
 }
@@ -334,7 +358,7 @@ export async function PUT(req: NextRequest) {
       );
       const booking = rows[0] as BookingRow | undefined;
       if (!booking) return NextResponse.json({ error: 'Booking not found.' }, { status: 404 });
-      const delivered = await sendTrackingEmail(booking, req.nextUrl.origin);
+      const delivered = await sendTrackingEmail(booking, bookingOrigin());
       if (!delivered) return NextResponse.json({ error: 'The tracking email was rejected by the mail provider.' }, { status: 502 });
       const updated = await query(
         `UPDATE bookings SET confirmation_sent_at = NOW(), updated_at = NOW() WHERE id = $1
@@ -373,8 +397,8 @@ export async function PUT(req: NextRequest) {
 
     if (!rows[0]) return NextResponse.json({ error: 'Booking not found.' }, { status: 404 });
     return NextResponse.json({ booking: rows[0] });
-  } catch (error) {
-    console.error('[bookings] Failed to update booking:', error);
+  } catch {
+    console.error('[bookings] Failed to update booking');
     return NextResponse.json({ error: 'Failed to update booking.' }, { status: 500 });
   }
 }

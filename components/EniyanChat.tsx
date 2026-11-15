@@ -5,8 +5,9 @@ import Link from 'next/link';
 import EniyanBooking from '@/components/EniyanBooking';
 import BookingAccess from '@/components/BookingAccess';
 import { useEniyanBooking } from '@/lib/useEniyanBooking';
+import { containsPersonalContext as containsPrivateDetails } from '@/lib/privacy';
 import { wantsEniyanBooking } from '@/lib/bookingRequest';
-import { ENIYAN_ROUTES as ROUTE_LABELS, ENIYAN_MESSAGE_LIMIT, getEniyanLinks } from '@/lib/eniyanNavigation';
+import { ENIYAN_ROUTES as ROUTE_LABELS, ENIYAN_LINK_ROUTES, wantsEniyanTracking, prepareEniyanTurn, ENIYAN_MESSAGE_LIMIT, getEniyanLinks } from '@/lib/eniyanNavigation';
 import {
   ArrowRight,
   CalendarCheck,
@@ -225,6 +226,19 @@ const ENIYAN_COPY: Record<LanguageCode, {
   },
 };
 
+const CHAT_CONTROLS: Record<LanguageCode, readonly string[]> = {
+  EN: ['Book a session', 'Track my booking', 'Retry message', 'Back to Ẹnìyàn', 'Send message', 'Close', 'Reset chat'],
+  FR: ['Réserver une séance', 'Suivre ma réservation', 'Réessayer', 'Retour à Ẹnìyàn', 'Envoyer', 'Fermer', 'Réinitialiser'],
+  ES: ['Reservar una sesión', 'Seguir mi reserva', 'Reintentar', 'Volver a Ẹnìyàn', 'Enviar', 'Cerrar', 'Reiniciar'],
+  DE: ['Session buchen', 'Buchung verfolgen', 'Erneut versuchen', 'Zurück zu Ẹnìyàn', 'Senden', 'Schließen', 'Chat zurücksetzen'],
+  PT: ['Marcar uma sessão', 'Acompanhar reserva', 'Tentar novamente', 'Voltar ao Ẹnìyàn', 'Enviar', 'Fechar', 'Reiniciar'],
+  AR: ['حجز جلسة', 'تتبع حجزي', 'إعادة المحاولة', 'العودة إلى Ẹnìyàn', 'إرسال', 'إغلاق', 'إعادة ضبط المحادثة'],
+  ZH: ['预约摄影', '查看预约', '重试', '返回 Ẹnìyàn', '发送', '关闭', '重置对话'],
+  YO: ['Ṣètò ìgbà fọ́tò', 'Tọpinpin ìfipamọ́ mi', 'Gbìyànjú lẹ́ẹ̀kan sí i', 'Padà sí Ẹnìyàn', 'Firanṣẹ́', 'Pa', 'Bẹ̀rẹ̀ ìjíròrò tuntun'],
+  IG: ['Debe oge foto', 'Sochie ndoputa m', 'Nwaa ọzọ', 'Laghachi na Ẹnìyàn', 'Zipu', 'Mechie', 'Malite mkparịta ụka ọhụrụ'],
+  HA: ['Yi ajiyar zaman hoto', 'Bibiyar ajiyata', 'Sake gwadawa', 'Koma ga Ẹnìyàn', 'Aika', 'Rufe', 'Sake fara hira'],
+};
+
 function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
@@ -233,10 +247,11 @@ function EniyanSign({ compact = false }: { compact?: boolean }) {
   return <span aria-hidden="true" style={{ width: compact ? 36 : 56, height: compact ? 36 : 56, backgroundImage: 'url("/eniyan-sign.svg?v=2")' }} className="block shrink-0 bg-contain bg-center bg-no-repeat" />;
 }
 
-export default function EniyanChat() {
+export default function EniyanChat({ hidden = false }: { hidden?: boolean }) {
   const { language } = useLanguage();
   const pathname = usePathname();
   const { resolvedTheme, theme } = useTheme();
+  const controls = CHAT_CONTROLS[language];
   const baseCopy = ENIYAN_COPY[language] || ENIYAN_COPY.EN;
   const copy = {
     ...baseCopy,
@@ -247,9 +262,10 @@ export default function EniyanChat() {
   const isLight = (resolvedTheme || theme) === 'light';
   const reducedMotion = useReducedMotion();
   const booking = useEniyanBooking();
-  const [failedMessage, setFailedMessage] = useState<string | null>(null);
+  const [failedMessage, setFailedMessage] = useState<ChatMessage | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [trackingOpen, setTrackingOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
   const [viewport, setViewport] = useState<{ height: number; inset: number } | null>(null);
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -269,7 +285,20 @@ export default function EniyanChat() {
   const launcherRef = useRef<HTMLButtonElement>(null);
   const pendingRef = useRef<AbortController | null>(null);
   useEffect(() => () => pendingRef.current?.abort(), []);
-  useEffect(() => { if (isOpen) inputRef.current?.focus(); }, [isOpen]);
+  const trackingHeading = useRef<HTMLHeadingElement>(null);
+  const supportHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (!isOpen || hidden || booking.active) return;
+    if (supportOpen) supportHeading.current?.focus();
+    else if (trackingOpen) trackingHeading.current?.focus();
+    else inputRef.current?.focus();
+  }, [isOpen, hidden, booking.active, trackingOpen, supportOpen]);
+  useEffect(() => {
+    if (!booking.locked) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [booking.locked]);
   useEffect(() => {
     const visual = window.visualViewport;
     if (!isOpen || !visual) return;
@@ -292,18 +321,24 @@ export default function EniyanChat() {
     const trimmed = text.trim();
     if (!trimmed || pendingRef.current) return;
     if (trimmed.length > ENIYAN_MESSAGE_LIMIT) { setError(`Please keep messages under ${ENIYAN_MESSAGE_LIMIT} characters.`); return; }
+    const recentUserText = messages.filter(message => message.role === 'user' && !containsPrivateDetails(message.content)).slice(-2).map(message => message.content).concat(trimmed);
+    if (containsPrivateDetails(trimmed) || containsPrivateDetails(recentUserText.join('')) || containsPrivateDetails(recentUserText.join(' '))) {
+      setInput(''); setError(''); setFailedMessage(null); setIsOpen(true);
+      setMessages(current => [...current, { id: createId(), role: 'assistant', mode: 'guided', content: 'This looks like private information, so I have not sent it to the server or AI provider. Use the booking form or Account & purchase help. Never share passwords, access codes, payment details or private links in chat.' }]);
+      return;
+    }
     if (wantsEniyanBooking(trimmed)) {
       setInput(''); setError(''); setFailedMessage(null); setIsOpen(true); booking.start();
       return;
     }
-    if (/\b(track|status|find|recover|lost)\b.{0,45}\b(booking|appointment|session|link)\b|\b(booking|appointment)\b.{0,30}\b(status|link)\b/i.test(trimmed)) {
+    if (wantsEniyanTracking(trimmed)) {
       setInput(''); setError(''); setFailedMessage(null); setIsOpen(true); setTrackingOpen(true);
       setMessages(current => [...current, { id: createId(), role: 'user', content: trimmed }, { id: createId(), role: 'assistant', mode: 'guided', content: 'I can help you safely recover your private booking-status link. Enter the booking reference and the same email used to book; I’ll send the link there.' }]);
       return;
     }
 
-    const userMessage: ChatMessage = { id: createId(), role: 'user', content: trimmed };
-    const nextMessages = retry ? messages : [...messages, userMessage];
+    const userMessage: ChatMessage = { id: retry && failedMessage ? failedMessage.id : createId(), role: 'user', content: trimmed };
+    const nextMessages = prepareEniyanTurn(messages, userMessage, failedMessage?.id);
     const controller = new AbortController();
     pendingRef.current = controller;
     const timeout = window.setTimeout(() => controller.abort(), 20_000);
@@ -321,7 +356,7 @@ export default function EniyanChat() {
         signal: controller.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: nextMessages.filter((message) => message.id !== 'welcome').slice(-10).map(({ role, content }) => ({ role, content })),
+          messages: nextMessages.filter((message) => message.id !== 'welcome' && !containsPrivateDetails(message.content)).slice(-10).map(({ role, content }) => ({ role, content })),
           page: { path: pathname, language },
         }),
       });
@@ -340,7 +375,7 @@ export default function EniyanChat() {
     } catch (err) {
       const message = controller.signal.aborted ? 'The request timed out. Please try again.' : err instanceof Error ? err.message : 'Eniyan is unavailable right now.';
       setError(message);
-      setFailedMessage(trimmed);
+      setFailedMessage(userMessage);
     } finally {
       window.clearTimeout(timeout);
       pendingRef.current = null;
@@ -357,6 +392,7 @@ export default function EniyanChat() {
     if (isSending || booking.locked) return;
     booking.cancel();
     setTrackingOpen(false);
+    setSupportOpen(false);
     setMessages([{ id: 'welcome', role: 'assistant', content: copy.greeting }]);
     setInput('');
     setError('');
@@ -364,7 +400,7 @@ export default function EniyanChat() {
     inputRef.current?.focus();
   }
 
-  if (pathname.startsWith('/admin') || pathname.startsWith('/client/')) return null;
+  if (hidden || pathname.startsWith('/admin') || pathname.startsWith('/client/') || pathname.startsWith('/collector/') || pathname.startsWith('/payments/')) return null;
 
   return (
     <div style={isOpen && viewport?.inset ? { bottom: viewport.inset + 8 } : undefined} className="fixed inset-x-2 bottom-2 z-[120] flex max-w-[calc(100vw-1rem)] flex-col items-stretch gap-3 pb-[env(safe-area-inset-bottom)] sm:inset-x-auto sm:bottom-4 sm:right-4 sm:max-w-[calc(100vw-2rem)] sm:items-end md:bottom-6 md:right-6">
@@ -417,7 +453,7 @@ export default function EniyanChat() {
                     className={`grid size-11 place-items-center rounded-[8px] transition disabled:opacity-40 ${
                       isLight ? 'text-black/45 hover:bg-black/5 hover:text-black' : 'text-white/50 hover:bg-white/8 hover:text-white'
                     }`}
-                    aria-label="Reset Eniyan chat"
+                    aria-label={controls[6]}
                   >
                     <RotateCcw className="size-4" aria-hidden="true" />
                   </button>
@@ -427,7 +463,7 @@ export default function EniyanChat() {
                     className={`grid size-11 place-items-center rounded-[8px] transition disabled:opacity-40 ${
                       isLight ? 'text-black/45 hover:bg-black/5 hover:text-black' : 'text-white/50 hover:bg-white/8 hover:text-white'
                     }`}
-                    aria-label="Close Eniyan"
+                    aria-label={controls[5]}
                   >
                     <X className="size-4" aria-hidden="true" />
                   </button>
@@ -437,8 +473,16 @@ export default function EniyanChat() {
 
             <div className="grid min-h-0 min-w-0 flex-1 grid-rows-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_280px]">
               <section className="flex min-h-0 min-w-0 flex-col">
-                {booking.active ? <EniyanBooking flow={booking} isLight={isLight} /> : trackingOpen ? <section className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
-                  <button type="button" onClick={() => setTrackingOpen(false)} className="mb-4 min-h-11 rounded-lg border border-current/25 px-3 py-2 text-xs">Back to Ẹnìyàn</button>
+                {booking.active ? <EniyanBooking flow={booking} isLight={isLight} /> : supportOpen ? <section className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
+                  <button type="button" onClick={() => setSupportOpen(false)} className="min-h-11 rounded-lg border border-current/25 px-3 py-2 text-xs">{controls[3]}</button>
+                  <h3 ref={supportHeading} tabIndex={-1} className="text-xl outline-none">Account & purchase help</h3>
+                  <p className="text-sm leading-relaxed opacity-75">These are secure site forms. Ẹnìyàn cannot see your account, verify a payment, activate a device or issue a refund. Enter private details only in the matching form. If a charge is uncertain, check it before paying again.</p>
+                  <div className="grid gap-2">{['/stillbounds/account', '/photography/shop/payment', '/art/shop/payment', '/photography/client-gallery', '/art/commissions'].map(path => <Link key={path} href={path} onClick={closeChat} className="min-h-11 rounded-lg border border-current/25 px-3 py-3 text-sm">{ENIYAN_LINK_ROUTES[path]} <ArrowRight className="inline size-4" aria-hidden="true" /></Link>)}</div>
+                  <button type="button" onClick={() => { setSupportOpen(false); setTrackingOpen(true); }} className="min-h-11 rounded-lg border border-current/25 px-3 py-2 text-sm">{controls[1]}</button>
+                  <p className="text-sm">Need the studio? <a href="mailto:ijabikenm@gmail.com" className="underline">ijabikenm@gmail.com</a></p>
+                </section> : trackingOpen ? <section className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+                  <button type="button" onClick={() => setTrackingOpen(false)} className="mb-4 min-h-11 rounded-lg border border-current/25 px-3 py-2 text-xs">{controls[3]}</button>
+                  <h3 ref={trackingHeading} tabIndex={-1} className="sr-only">Recover your booking link</h3>
                   <BookingAccess compact isLight={isLight} />
                   <p className="mt-4 text-[11px] leading-relaxed opacity-60">For your privacy, Ẹnìyàn never displays booking details in chat and only sends access to the email attached to the booking.</p>
                 </section> : <>
@@ -470,7 +514,7 @@ export default function EniyanChat() {
                           >
                             {message.content}
                           </p>
-                          {message.mode === 'guided' && <span className="mt-1 text-[10px] opacity-65">Site guide · automatic reply</span>}
+                          {message.mode && <span className="mt-1 text-[10px] opacity-65">{message.mode === 'guided' ? 'Site guide · automatic reply' : 'AI suggestion · check the source pages'}</span>}
                           {links.length > 0 && (
                             <div className="mt-2 flex max-w-full flex-wrap gap-2">
                               {links.map((path) => (
@@ -484,7 +528,7 @@ export default function EniyanChat() {
                                       : 'border-white/10 bg-white/[0.045] text-white/62 hover:border-white/22 hover:text-white'
                                   }`}
                                 >
-                                  {ROUTE_LABELS[path]}
+                                  {ENIYAN_LINK_ROUTES[path]}
                                   <ArrowRight className="size-3" aria-hidden="true" />
                                 </Link>
                               ))}
@@ -509,13 +553,14 @@ export default function EniyanChat() {
                       </div>
                     </div>
                   )}
-                  {error && <div role="alert" className="space-y-2 text-xs leading-relaxed text-red-500"><p>{error}</p>{failedMessage && <button type="button" onClick={() => sendMessage(failedMessage, true)} disabled={isSending} className="min-h-11 rounded border border-current px-3 font-semibold">Retry message</button>}</div>}
+                  {error && <div role="alert" className="space-y-2 text-xs leading-relaxed text-red-500"><p>{error}</p>{failedMessage && <button type="button" onClick={() => sendMessage(failedMessage.content, true)} disabled={isSending} className="min-h-11 rounded border border-current px-3 font-semibold">{controls[2]}</button>}</div>}
                 </div>
 
                 <div className={`shrink-0 border-t px-3 py-3 sm:px-5 sm:py-4 ${isLight ? 'border-black/10' : 'border-white/10'}`}>
                   <div className="mb-2 flex flex-wrap gap-2">
-                    <button type="button" disabled={isSending} onClick={() => { setInput(''); setTrackingOpen(false); booking.start(); }} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-current/25 px-3 text-xs font-semibold disabled:opacity-40"><CalendarCheck className="size-4" aria-hidden="true" />Book a session</button>
-                    <button type="button" disabled={isSending} onClick={() => { setInput(''); setTrackingOpen(true); }} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-current/25 px-3 text-xs font-semibold disabled:opacity-40"><Search className="size-4" aria-hidden="true" />Track my booking</button>
+                    <button type="button" disabled={isSending} onClick={() => { setInput(''); setSupportOpen(true); }} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-current/25 px-3 text-xs font-semibold disabled:opacity-40"><LockKeyhole className="size-4" aria-hidden="true" />Account & purchase help</button>
+                    <button type="button" disabled={isSending} onClick={() => { setInput(''); setTrackingOpen(false); booking.start(); }} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-current/25 px-3 text-xs font-semibold disabled:opacity-40"><CalendarCheck className="size-4" aria-hidden="true" />{controls[0]}</button>
+                    <button type="button" disabled={isSending} onClick={() => { setInput(''); setTrackingOpen(true); }} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-current/25 px-3 text-xs font-semibold disabled:opacity-40"><Search className="size-4" aria-hidden="true" />{controls[1]}</button>
                   </div>
                   <div className={`${shortViewport ? 'hidden' : 'flex'} mb-3 max-w-full gap-2 overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch]`}>
                     {copy.starterPrompts.map((prompt, index) => (
@@ -575,7 +620,7 @@ export default function EniyanChat() {
                           ? 'bg-black text-[#ffffff] hover:bg-accent'
                           : 'bg-white text-black hover:bg-accent'
                       }`}
-                      aria-label="Send message"
+                      aria-label={controls[4]}
                     >
                       <Send className="size-4" aria-hidden="true" />
                     </button>
@@ -659,7 +704,7 @@ export default function EniyanChat() {
         {isOpen ? (
           <>
             <X className="size-5" aria-hidden="true" />
-            <span className="hidden pr-1 text-[10px] font-semibold uppercase tracking-[0.18em] sm:inline">Close</span>
+            <span className="hidden pr-1 text-[10px] font-semibold uppercase tracking-[0.18em] sm:inline">{controls[5]}</span>
           </>
         ) : (
           <>

@@ -1,6 +1,7 @@
 import { Pool, type PoolClient } from 'pg';
 import { newsletterSchema } from './newsletter/schema';
 import { paymentSchema } from './payments/schema';
+import { bookingRecoverySchema } from './bookingRecoverySchema';
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -404,6 +405,7 @@ async function initializeTables(connection: PoolClient) {
   `);
 
   await connection.query("ALTER TABLE digital_products ADD COLUMN IF NOT EXISTS storefront JSONB NOT NULL DEFAULT '{}'::jsonb");
+  await connection.query(bookingRecoverySchema);
   await connection.query(paymentSchema);
   await connection.query(newsletterSchema);
   await connection.query(`INSERT INTO content (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);

@@ -57,6 +57,7 @@ function maintenance(query, verifyOrder = async () => {}) {
     '@/lib/auth': { requireAdmin: () => null },
     '@/lib/db': { query },
     '@/lib/payments/server': { verifyOrder, payments: { transact: async work => work({ query: async () => ({ rows: [] }) }) }, privateHeaders: {} },
+    '@/lib/bookingRecovery': { deliverBookingRecovery: async () => {} },
     '@/lib/payments/notifications': { deliverPaymentNotifications: async () => {} },
   };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync('app/api/payments/maintenance/route.ts', 'utf8'), {
@@ -111,4 +112,17 @@ test('non-production session tracking cannot parse customer data or send notific
     assert.equal((await route.POST(new Request('http://localhost/api/notify-session', { method: 'POST' }))).status, 204);
     assert.equal(touched, false);
   }
+});
+
+test('deferred booking recovery delivery makes maintenance unhealthy instead of silently acknowledging success', async () => {
+  let heartbeat;
+  const route = load('app/api/payments/maintenance/route.ts', {
+    'node:crypto': { timingSafeEqual: () => false }, 'next/server': { NextResponse: { json: (body, options = {}) => ({ body, ...options }) } },
+    '@/lib/auth': { requireAdmin: () => null }, '@/lib/db': { query: async (sql, params) => { if (sql.includes('operations_runs')) heartbeat = params; return { rows: [] }; } },
+    '@/lib/payments/server': { verifyOrder: async () => {}, payments: {}, privateHeaders: {} },
+    '@/lib/payments/notifications': { deliverPaymentNotifications: async () => {} },
+    '@/lib/bookingRecovery': { deliverBookingRecovery: async () => ({ delivered: 0, deferred: 1 }) },
+  });
+  const response = await route.GET({ headers: new Headers() });
+  assert.equal(response.status, 503); assert.equal(heartbeat[0], 1);
 });

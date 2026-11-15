@@ -185,3 +185,13 @@ test('authorized image delivery is not delayed by SMTP notification work', {time
   assert.equal(await response.text(),'synthetic image');
   assert.equal(jobs.length,1);
 });
+
+test('AI privacy checks cover encoded portal URLs, Unicode disguises and common pasted credentials', () => {
+  for (const value of [
+    '/api/bookings/portal/private-token', '/api/art-inquiries/portal/private-token',
+    '%252Fclient%252Fbooking%252Fprivate-token', 'ｐａｓｓｗｏｒｄ： secret-value',
+    'customer\u200b@example.test', 'Bearer fake-token-value-1234567890',
+    '-----BEGIN PRIVATE KEY-----', '08012345678', '+1 (202) 555-0123',
+  ]) assert.equal(privacy.containsPrivateDetails(value), true, value);
+  for (const value of ['Which package costs NGN 100000?', 'Does Stillbounds sync my books?', 'How do I recover my purchase?']) assert.equal(privacy.containsPrivateDetails(value), false, value);
+});
