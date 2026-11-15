@@ -42,6 +42,7 @@ export default function EniyanBooking({ flow, isLight }: { flow: EniyanBookingFl
       <div className="flex flex-wrap gap-2"><button type="button" className={secondary} onClick={() => flow.go('service')}>Back</button><button className={primary} disabled={!flow.ready || !flow.slots.includes(draft.bookingTime)}>Continue</button></div>
     </form>}
     {step === 'details' && <form className="space-y-4" onSubmit={event => { event.preventDefault(); flow.go('review'); }}>
+      <div aria-hidden="true" style={{ position: 'absolute', left: '-10000px' }}><label>Leave this field empty<input name="website" tabIndex={-1} autoComplete="off" value={draft.website || ''} onChange={event => flow.update('website', event.target.value)} /></label></div>
       <p className="text-sm opacity-80">{serviceLabel}<br />{dateLabel} at {draft.bookingTime} WAT</p>
       <div className="space-y-3 rounded-lg border border-current/20 p-3">
         <p className="text-xs font-medium uppercase tracking-wider opacity-70">Price adjustments</p>

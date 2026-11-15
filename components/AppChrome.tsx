@@ -41,7 +41,7 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
     <>
       {children}
       {!productPage && !purchasePage && <SocialLinks />}
-      {!productPage && !purchasePage && <EniyanChat />}
+      <EniyanChat hidden={productPage || purchasePage} />
     </>
   );
 

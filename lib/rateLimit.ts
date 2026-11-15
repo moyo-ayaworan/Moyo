@@ -7,7 +7,13 @@ export async function rateLimit(req: Request, action: string, limit: number, sec
   const forwarded = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
   // Vercel overwrites X-Forwarded-For, preventing clients from choosing this key.
   const ip = forwarded || 'unknown';
-  const key = createHash('sha256').update(`${action}:${ip}`).digest('hex');
+  return rateLimitIdentity(ip, action, limit, seconds);
+}
+
+// For recipient/resource cooldowns. Callers choose the identity server-side;
+// only its hash is persisted, never an email address or private portal token.
+export async function rateLimitIdentity(identity: string, action: string, limit: number, seconds: number) {
+  const key = createHash('sha256').update(`${action}:${identity}`).digest('hex');
   const { rows } = await query(
     `INSERT INTO request_rate_limits (rate_key, hits, window_start)
      VALUES ($1, 1, NOW())

@@ -52,7 +52,7 @@ function buildMonthDays(date: Date) {
 }
 
 export default function BookingForm({ embedded = false }: BookingFormProps) {
-    const [formData, setFormData] = useState({ name: '', email: '', phone: '', service: 'portrait', packageId: 'portrait-one', message: '' });
+    const [formData, setFormData] = useState({ name: '', email: '', phone: '', service: 'portrait', packageId: 'portrait-one', message: '', website: '' });
     const [bookingOptions, setBookingOptions] = useState<BookingOptions>({ ...DEFAULT_BOOKING_OPTIONS });
     const [selectedDate, setSelectedDate] = useState('');
     const [selectedTime, setSelectedTime] = useState('');
@@ -149,7 +149,7 @@ export default function BookingForm({ embedded = false }: BookingFormProps) {
                     ...current,
                     [selectedDate]: [...(current[selectedDate] || []), selectedTime],
                 }));
-                setFormData({ name: '', email: '', phone: '', service: 'portrait', packageId: 'portrait-one', message: '' });
+                setFormData({ name: '', email: '', phone: '', service: 'portrait', packageId: 'portrait-one', message: '', website: '' });
                 setBookingOptions({ ...DEFAULT_BOOKING_OPTIONS });
                 setSelectedDate('');
                 setSelectedTime('');
@@ -175,6 +175,7 @@ export default function BookingForm({ embedded = false }: BookingFormProps) {
 
     const form = (
         <form onSubmit={handleSubmit} aria-busy={status === 'loading'} className="min-w-0 space-y-7 md:space-y-9">
+            <div aria-hidden="true" style={{ position: 'absolute', left: '-10000px' }}><label>Leave this field empty<input name="website" tabIndex={-1} autoComplete="off" value={formData.website} onChange={event => setFormData(current => ({ ...current, website: event.target.value }))} /></label></div>
             {!availabilityReady && <p role="status" className="text-sm text-foreground/60">
                 {availability.error ? 'Availability could not be loaded.' : 'Loading available dates…'}
                 {availability.error && <button type="button" className="ml-2 underline" onClick={() => { setAvailability({ month: '', error: false }); setAvailabilityRetry((value) => value + 1); }}>Try again</button>}

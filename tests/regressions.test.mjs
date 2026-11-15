@@ -37,7 +37,7 @@ const documentPdf = {
 const securityRouteMocks = {
   '@/lib/requestBody': { readJsonRequest: async req => ({ body: await req.json() }) },
   '@/lib/payments/server': { verifyGallerySettlement: async () => true, paymentFailure: () => next.NextResponse.json({ error: 'Payment unavailable' }, { status: 503 }) },
-  '@/lib/rateLimit': { rateLimit: async () => null },
+  '@/lib/rateLimit': { rateLimit: async () => null, rateLimitIdentity: async () => null },
   '@/lib/privateMedia': { signedGalleryPreview: () => 'https://example.test/signed-preview.jpg', signedGallerySoundtrack: (src) => src ? 'https://example.test/signed-track.mp3' : null },
   '@/lib/galleryAccess': { createGalleryCookie: () => 'test-cookie', galleryCookieAge: 900, galleryCookieName: () => 'gallery-test' },
 };
@@ -49,7 +49,7 @@ function load(file, mocks = {}, globals = {}) {
   const compiledModule = { exports: {} };
   vm.runInNewContext(source, {
     module: compiledModule, exports: compiledModule.exports,
-    require: (name) => name in mocks ? mocks[name] : name in securityRouteMocks ? securityRouteMocks[name] : name === '@/lib/productStory' ? load('lib/productStory.ts', { './productSections': load('lib/productSections.ts') }) : name === '@/lib/privacy' ? load('lib/privacy.ts', { './eniyanNavigation': load('lib/eniyanNavigation.ts') }) : name === '@/lib/productSections' ? load('lib/productSections.ts') : name === './newsletter/schema' ? load('lib/newsletter/schema.ts') : name === './payments/schema' ? load('lib/payments/schema.ts') : name === '@/lib/paystack' ? load('lib/payments/policy.ts') : name === '@/lib/imagePosition' ? load('lib/imagePosition.ts') : name === '@/lib/galleryPresentation' ? load('lib/galleryPresentation.ts') : name === '@/lib/mediaUrl' ? load('lib/mediaUrl.ts') : (name === '@/lib/documentPayments' || name === './documentPayments') ? load('lib/documentPayments.ts') : (name === '@/lib/bookingRates' || name === './bookingRates') ? load('lib/bookingRates.ts') : requireDependency(name),
+    require: (name) => name in mocks ? mocks[name] : name in securityRouteMocks ? securityRouteMocks[name] : name === './bookingRecoverySchema' ? load('lib/bookingRecoverySchema.ts') : name === '@/lib/bookingOrigin' ? load('lib/bookingOrigin.ts') : name === '@/lib/productStory' ? load('lib/productStory.ts', { './productSections': load('lib/productSections.ts') }) : name === '@/lib/privacy' ? load('lib/privacy.ts', { './eniyanNavigation': load('lib/eniyanNavigation.ts') }) : name === '@/lib/productSections' ? load('lib/productSections.ts') : name === './newsletter/schema' ? load('lib/newsletter/schema.ts') : name === './payments/schema' ? load('lib/payments/schema.ts') : name === '@/lib/paystack' ? load('lib/payments/policy.ts') : name === '@/lib/imagePosition' ? load('lib/imagePosition.ts') : name === '@/lib/galleryPresentation' ? load('lib/galleryPresentation.ts') : name === '@/lib/mediaUrl' ? load('lib/mediaUrl.ts') : (name === '@/lib/documentPayments' || name === './documentPayments') ? load('lib/documentPayments.ts') : (name === '@/lib/bookingRates' || name === './bookingRates') ? load('lib/bookingRates.ts') : requireDependency(name),
     process: { cwd: () => process.cwd(), env: { DATABASE_URL: 'postgres://localhost/test', ADMIN_KEY: 'test-key', SMTP_USER: 'test@example.test', SMTP_PASS: 'test' } },
     console: { error() {} }, URL, Date, Buffer, AbortSignal, ...globals,
   });
@@ -139,7 +139,7 @@ test('invalid availability dates are rejected before querying the database', asy
 const bookingKey = '72f0291c-5f19-41aa-9a39-4548db1087b9';
 const bookingDraft = {
   name: 'Test Visitor', email: 'visitor@example.test', phone: '+2348000000000',
-  service: 'portrait', message: 'Studio portrait test, no real booking.', bookingDate: '2099-09-12', bookingTime: '09:00',
+  service: 'portrait', packageId: 'portrait-one', message: 'Studio portrait test, no real booking.', bookingDate: '2099-09-12', bookingTime: '09:00',
   source: 'eniyan', confirmed: true, bookingRequestId: bookingKey,
 };
 const bookingReq = body => ({ ...request(body), nextUrl: new URL('https://example.test/api/bookings') });
@@ -156,7 +156,7 @@ test('Eniyan booking requires explicit confirmation, an idempotency key, and com
   const route = loadBooking(async () => { throw Error('must not query'); });
   for (const changes of [
     { confirmed: false }, { confirmed: 'true' }, { bookingRequestId: '' }, { bookingRequestId: 'guessable' },
-    { phone: '' }, { phone: 'abcdefghij' }, { service: 'invented service' }, { message: '' },
+    { phone: '' }, { phone: 'abcdefghij' }, { packageId: 'invented-package' }, { message: '' },
     { name: 'a'.repeat(121) }, { email: 'invalid' }, { message: 'a'.repeat(3001) },
   ]) assert.equal((await route.POST(bookingReq({ ...bookingDraft, ...changes }))).status, 400);
 });
@@ -435,6 +435,7 @@ test('Eniyan falls back after a provider failure and excludes private page text'
 function eniyanRoute(globals = {}) {
   return load('app/api/eniyan/route.ts', { 'next/server': next, '@/lib/eniyanKnowledge': knowledge, '@/lib/eniyanNavigation': eniyanNavigation }, globals);
 }
+const providerReply = (reply, sources = ['/photography/bookings']) => JSON.stringify({ reply, sources });
 const chatRequest = (content, page = {}, history = []) => request({ messages: [...history, { role: 'user', content }], page });
 
 test('Eniyan guided replies prioritize specific visitor goals without making up prices or actions', async () => {
@@ -508,7 +509,7 @@ test('AI chat keeps pasted customer email and labelled phone details out of prov
   let payload = '', calls = 0;
   const route = eniyanRoute({ process: { env: { GEMINI_API_KEY: 'fixture' } }, fetch: async (_url, options) => {
     calls++; payload = options.body;
-    return { ok: true, json: async () => ({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: 'Use /photography/bookings.' }] } }] }) };
+    return { ok: true, json: async () => ({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: providerReply('Use /photography/bookings.') }] } }] }) };
   } });
   for (const value of ['My email is customer@example.test', 'My phone number is +1 (202) 555-0123']) {
     assert.match((await route.POST(chatRequest(value))).body.reply, /not sent this message/);
@@ -531,7 +532,7 @@ test('Eniyan blocks common secrets before provider calls and scrubs them from la
   let payload;
   const route = eniyanRoute({ process: { env: { GEMINI_API_KEY: 'test' } }, fetch: async (_url, options) => {
     calls++; payload = options.body;
-    return { ok: true, json: async () => ({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: 'Use /photography/bookings.' }] } }] }) };
+    return { ok: true, json: async () => ({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: providerReply('Use /photography/bookings.') }] } }] }) };
   } });
   for (const secret of ['My access code is FAKE-SECRET', 'password: SECRET', '4111 1111 1111 1111', 'https://example.test/client/booking/private-token']) {
     const result = await route.POST(chatRequest(secret));
@@ -548,7 +549,7 @@ test('Eniyan ignores all caller-supplied page text and titles, even on public ro
   let headers;
   const route = eniyanRoute({ process: { env: { GEMINI_API_KEY: 'test-secret' } }, fetch: async (url, options) => {
     endpoint = url; headers = options.headers; payload = JSON.parse(options.body);
-    return { ok: true, json: async () => ({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: 'Go to /art/commissions.' }] } }] }) };
+    return { ok: true, json: async () => ({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: providerReply('Go to /art/commissions.') }] } }] }) };
   } });
   const result = await route.POST(chatRequest('Commission an artwork', { path: '/art', title: 'UNTRUSTED TITLE', visibleText: 'UNTRUSTED PAGE', language: 'FR' }, [{ role: 'assistant', content: 'Orphaned old answer' }]));
   assert.equal(result.body.mode, 'ai');
@@ -560,14 +561,14 @@ test('Eniyan ignores all caller-supplied page text and titles, even on public ro
 });
 
 test('Eniyan does not expose provider thoughts or return truncated and blocked answers', async () => {
-  for (const finishReason of ['MAX_TOKENS', 'SAFETY', 'RECITATION']) {
-    const route = eniyanRoute({ process: { env: { GEMINI_API_KEY: 'test' } }, fetch: async () => ({ ok: true, json: async () => ({ candidates: [{ finishReason, content: { parts: [{ text: 'UNFINISHED ANSWER' }] } }] }) }) });
+  for (const finishReason of ['MAX_TOKENS', 'SAFETY', 'RECITATION', undefined]) {
+    const route = eniyanRoute({ process: { env: { GEMINI_API_KEY: 'test' } }, fetch: async () => ({ ok: true, json: async () => ({ candidates: [{ finishReason, content: { parts: [{ text: providerReply('UNFINISHED ANSWER') }] } }] }) }) });
     const result = await route.POST(chatRequest('Commission artwork'));
     assert.equal(result.body.mode, 'guided');
     assert.ok(!result.body.reply.includes('UNFINISHED'));
   }
-  const route = eniyanRoute({ process: { env: { GEMINI_API_KEY: 'test' } }, fetch: async () => ({ ok: true, json: async () => ({ candidates: [{ finishReason: 'STOP', content: { parts: [{ thought: true, text: 'INTERNAL THOUGHT' }, { text: 'Visit /art/commissions.' }] } }] }) }) });
-  assert.equal((await route.POST(chatRequest('Commission artwork'))).body.reply, 'Visit /art/commissions.');
+  const route = eniyanRoute({ process: { env: { GEMINI_API_KEY: 'test' } }, fetch: async () => ({ ok: true, json: async () => ({ candidates: [{ finishReason: 'STOP', content: { parts: [{ thought: true, text: 'INTERNAL THOUGHT' }, { text: providerReply('Visit /art/commissions.') }] } }] }) }) });
+  assert.match((await route.POST(chatRequest('Commission artwork'))).body.reply, /^Visit \/art\/commissions\./);
 });
 
 test('Eniyan links use exact known routes, including punctuation and Markdown boundaries', () => {
@@ -1307,4 +1308,229 @@ test('category organization validates complete unique orders and authenticates b
   });
   assert.equal((await denied.PATCH(request({ ids: [3, 1, 2] }))).status, 401);
   assert.equal(writes, 1);
+});
+
+
+test('Eniyan tracking never mistakes purchase or gallery recovery for a booking', () => {
+  for (const text of ['Recover my download link', 'Find my gallery link', 'I lost my MELATONE booking link', 'Recover my link']) {
+    assert.equal(eniyanNavigation.wantsEniyanTracking(text), false, text);
+  }
+  for (const text of ['Track my booking status', 'Recover my booking link', 'I lost my appointment reference']) {
+    assert.equal(eniyanNavigation.wantsEniyanTracking(text), true, text);
+  }
+  for (const path of ['/stillbounds/account', '/photography/shop/payment', '/art/shop/payment']) {
+    assert.ok(eniyanNavigation.ENIYAN_LINK_ROUTES[path]);
+  }
+});
+
+test('Eniyan retries replace the failed turn and new questions omit unanswered failures', () => {
+  const first = { id: '1', role: 'user', content: 'first' };
+  const failed = { id: '2', role: 'user', content: 'failed' };
+  const retry = { ...failed };
+  const next = { id: '3', role: 'user', content: 'next' };
+  assert.deepEqual(JSON.parse(JSON.stringify(eniyanNavigation.prepareEniyanTurn([first, failed], retry, '2'))), [first, retry]);
+  assert.deepEqual(JSON.parse(JSON.stringify(eniyanNavigation.prepareEniyanTurn([first, failed], next, '2'))), [first, next]);
+});
+
+
+test('Stillbounds support answers the specific question without repeating unrelated instructions', async () => {
+  const route = eniyanRoute();
+  for (const [question, expected, excluded] of [
+    ['How do I activate Stillbounds?', /device activation/, /current offer/],
+    ['How much does Stillbounds cost?', /current Stillbounds offer/, /editable books/],
+    ['Does Stillbounds back up my photos?', /does not back them up or sync/, /current offer/],
+  ]) {
+    const result = await route.POST(chatRequest(question));
+    assert.equal(result.body.mode, 'guided');
+    assert.match(result.body.reply, expected);
+    assert.doesNotMatch(result.body.reply, excluded);
+  }
+});
+
+test('Eniyan normalizes public collection context without disclosing slugs or private route identities', async () => {
+  let payload;
+  const route = eniyanRoute({ process: { env: { GEMINI_API_KEY: 'fixture' } }, fetch: async (_url, options) => {
+    payload = JSON.parse(options.body);
+    return { ok: true, json: async () => ({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: providerReply('Browse /photography/shop.') }] } }] }) };
+  } });
+  await route.POST(chatRequest('What can I browse?', { path: '/photography/shop/products/12-public-product', visibleText: 'PRIVATE IGNORED TEXT' }));
+  assert.match(payload.systemInstruction.parts[0].text, /Current public page: \/photography\/shop\./);
+  assert.doesNotMatch(JSON.stringify(payload), /12-public-product|PRIVATE IGNORED/);
+  assert.equal(eniyanNavigation.getEniyanPublicRoute('/art/shop/products/1-example?token=secret'), null);
+  assert.equal(eniyanNavigation.getEniyanPublicRoute('/stillbounds/account'), null);
+  assert.equal(eniyanNavigation.getEniyanPublicRoute('/client/booking/secret'), null);
+});
+
+test('Eniyan rejects generated phishing links, private endpoints and unsupported transaction claims', async () => {
+  for (const text of ['Pay at https://evil.test', 'Visit /api/bookings/portal/private-token', 'Open /stillbounds/account?token=private', 'I have refunded your payment.', 'I have sent you an email.', 'Contact thief@evil.test']) {
+    const route = eniyanRoute({ process: { env: { GEMINI_API_KEY: 'fixture' } }, fetch: async () => ({ ok: true, json: async () => ({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: providerReply(text) }] } }] }) }) });
+    const result = await route.POST(chatRequest('Help me choose a service'));
+    assert.equal(result.body.mode, 'guided', text);
+    assert.notEqual(result.body.reply, text);
+  }
+  assert.equal(eniyanNavigation.isSafeEniyanReply('I cannot verify your payment. Open /photography/shop/payment.'), true);
+  assert.equal(eniyanNavigation.isSafeEniyanReply('打开 /api/bookings/portal/private。'), false);
+  assert.equal(eniyanNavigation.isSafeEniyanReply('https：／／evil.test'), false);
+  assert.deepEqual(Array.from(eniyanNavigation.getEniyanLinks('请访问 /art/shop。')), ['/art/shop']);
+});
+
+test('Eniyan rejects cross-site browser requests before quota or provider work', async () => {
+  const route = load('app/api/eniyan/route.ts', { 'next/server': next, '@/lib/eniyanKnowledge': knowledge, '@/lib/eniyanNavigation': eniyanNavigation,
+    '@/lib/rateLimit': { rateLimit: () => assert.fail('cross-site requests must not consume quota') },
+  });
+  const req = chatRequest('hello'); req.headers.set('sec-fetch-site', 'cross-site');
+  assert.equal((await route.POST(req)).status, 403);
+});
+
+test('Stillbounds and digital purchase support stay deterministic in every supported site language', async () => {
+  const route = eniyanRoute({ process: { env: { GEMINI_API_KEY: 'fixture' } }, fetch: () => assert.fail('no provider for account or paid-product support') });
+  for (const language of ['EN', 'FR', 'ES', 'DE', 'PT', 'AR', 'ZH', 'YO', 'IG', 'HA']) {
+    const account = await route.POST(chatRequest('Stillbounds activation', { language }));
+    assert.equal(account.body.mode, 'guided'); assert.match(account.body.reply, /\/stillbounds\/account/);
+    const purchase = await route.POST(chatRequest('Recover my MELATONE download', { language, path: '/photography/shop/products/1-melatone' }));
+    assert.equal(purchase.body.mode, 'guided'); assert.match(purchase.body.reply, /\/photography\/shop\/payment/);
+  }
+});
+
+test('availability rejects bulk calendar scraping before database work and applies a quota', async () => {
+  const route = loadBooking(() => assert.fail('must not query for bulk dates'));
+  assert.equal((await route.GET({ nextUrl: new URL('https://example.test/?start=2000-01-01&end=2099-12-31') })).status, 400);
+  const limited = load('app/api/bookings/route.ts', { 'next/server': next, '@/lib/bookingRequest': bookingRequest, '@/lib/bookingDates': dates,
+    '@/lib/rateLimit': { rateLimit: async (_req, action) => { assert.equal(action, 'booking-availability'); return { status: 429 }; } },
+    '@/lib/auth': {}, '@/lib/db': { query: () => assert.fail('must not query once limited') },
+  });
+  assert.equal((await limited.GET({ nextUrl: new URL('https://example.test/?start=2099-01-01&end=2099-01-31') })).status, 429);
+});
+
+test('private booking URLs use configured HTTPS origins, never the request host', () => {
+  for (const [env, expected] of [
+    [{}, 'https://moyoayaworan.com'],
+    [{ NEXT_PUBLIC_SITE_URL: 'https://studio.example.test/path' }, 'https://studio.example.test'],
+    [{ NEXT_PUBLIC_SITE_URL: 'javascript:alert(1)' }, 'https://moyoayaworan.com'],
+    [{ NEXT_PUBLIC_SITE_URL: 'http://unsafe.test' }, 'https://moyoayaworan.com'],
+    [{ NEXT_PUBLIC_SITE_URL: 'https://user:pass@unsafe.test' }, 'https://moyoayaworan.com'],
+  ]) assert.equal(load('lib/bookingOrigin.ts', {}, { process: { env } }).bookingOrigin(), expected);
+});
+
+test('booking recovery persists before acknowledging and queues delivery after the generic response', async () => {
+  const jobs = [], saved = []; let deliveries = 0;
+  const route = load('app/api/bookings/access/route.ts', {
+    'next/server': { ...next, after: job => jobs.push(job) },
+    '@/lib/bookingRecovery': {
+      enqueueBookingRecovery: async (reference, email) => { saved.push([reference, email]); },
+      deliverBookingRecovery: async () => { deliveries++; },
+    },
+  });
+  const response = await route.POST(request({ reference: '#92', email: 'visitor@example.test' }));
+  assert.equal(saved.length, 1); assert.deepEqual(saved[0], [92, 'visitor@example.test']);
+  assert.equal(deliveries, 0);
+  await jobs.shift()(); assert.equal(deliveries, 1);
+  const repeated = await route.POST(request({ reference: '00092', email: 'visitor@example.test' }));
+  assert.deepEqual(repeated.body, response.body); assert.deepEqual(saved[1], saved[0]);
+});
+
+test('server derives the service and estimate from the selected current package', async () => {
+  let saved;
+  const route = loadBooking(async (sql, params) => {
+    if (sql.startsWith('SELECT')) return { rows: [] };
+    if (sql.startsWith('INSERT')) { saved = params; return { rows: [{ id: 99, status: 'pending', booking_date: '2099-09-12', booking_time: '09:00' }] }; }
+    return { rows: [] };
+  });
+  const result = await route.POST(bookingReq({ ...bookingDraft, service: 'wedding', estimatedTotal: 1, basePrice: 1 }));
+  assert.equal(result.status, 201); assert.equal(saved[3], 'portrait'); assert.equal(saved[6], 50000); assert.equal(saved[7], 50000);
+});
+
+
+test('ambiguous purchase recovery asks which product instead of assuming a booking or gallery', async () => {
+  const route = eniyanRoute({ process: { env: { GEMINI_API_KEY: 'fixture' } }, fetch: () => assert.fail('ambiguous recovery must be guided') });
+  const result = await route.POST(chatRequest('Recover my download link'));
+  assert.equal(result.body.mode, 'guided');
+  assert.match(result.body.reply, /Which needs recovery/);
+  assert.doesNotMatch(result.body.reply, /client-gallery|private booking/);
+});
+
+test('a failed chat quota store returns a private service error without calling the model', async () => {
+  const route = load('app/api/eniyan/route.ts', { 'next/server': next, '@/lib/eniyanKnowledge': knowledge, '@/lib/eniyanNavigation': eniyanNavigation,
+    '@/lib/rateLimit': { rateLimit: async () => { throw Error('private-db-detail'); } },
+  }, { fetch: () => assert.fail('must fail closed') });
+  const response = await route.POST(chatRequest('hello'));
+  assert.equal(response.status, 503); assert.equal(response.headers['Cache-Control'], 'private, no-store');
+  assert.doesNotMatch(JSON.stringify(response.body), /private-db-detail/);
+});
+
+test('Gemini conversation remains enabled but must return a bounded structured answer with allowed source pages', async () => {
+  let requestBody;
+  const route = eniyanRoute({ process: { env: { GEMINI_API_KEY: 'fixture' } }, fetch: async (_url, options) => {
+    requestBody = JSON.parse(options.body);
+    return { ok: true, json: async () => ({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: providerReply('For a personal keepsake, consider a portrait session. Is this for you or your family?', ['/photography/bookings']) }] } }] }) };
+  } });
+  const response = await route.POST(chatRequest('I want something personal rather than a brand shoot. What suits me?'));
+  assert.equal(response.body.mode, 'ai'); assert.match(response.body.reply, /personal keepsake/); assert.match(response.body.reply, /\/photography\/bookings/);
+  assert.equal(requestBody.generationConfig.responseMimeType, 'application/json');
+  assert.ok(requestBody.generationConfig.responseJsonSchema.properties.sources.items.enum.includes('/photography/bookings'));
+});
+test('unsourced, incorrectly shaped and quantitative model claims use verified guidance instead', async () => {
+  for (const text of [
+    'Unstructured prose', providerReply('Helpful answer', []), providerReply('Helpful answer', ['/api/admin']),
+    providerReply('Your shoot is ₦123,456.'), providerReply('You get 99 photos.'), providerReply('Free shipping is guaranteed.'), providerReply('Full refunds within fourteen days.'),
+  ]) {
+    const route = eniyanRoute({ process: { env: { GEMINI_API_KEY: 'fixture' } }, fetch: async () => ({ ok: true, json: async () => ({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text }] } }] }) }) });
+    assert.equal((await route.POST(chatRequest('Help me choose a service'))).body.mode, 'guided');
+  }
+});
+test('published pricing is answered from server facts without asking Gemini to invent a quote', async () => {
+  const route = eniyanRoute({ process: { env: { GEMINI_API_KEY: 'fixture' } }, fetch: () => assert.fail('pricing must use server facts') });
+  const response = await route.POST(chatRequest('How much is a family portrait?'));
+  assert.equal(response.body.mode, 'guided'); assert.match(response.body.reply, /100,000/);
+});
+test('labelled identity, street addresses and split contact disclosures are kept out of Gemini', async () => {
+  const route = eniyanRoute({ process: { env: { GEMINI_API_KEY: 'fixture' } }, fetch: () => assert.fail('private text must not reach Gemini') });
+  for (const value of ['My name is Test Visitor', 'My address is 12 Example Street', 'Je m’appelle Test Visitor', '我的地址是测试街']) {
+    assert.equal((await route.POST(chatRequest(value))).body.mode, 'guided');
+  }
+  const split = await route.POST(chatRequest('@example.test', {}, [{ role: 'user', content: 'customer' }]));
+  assert.match(split.body.reply, /not sent this message/);
+});
+test('booking limits cover recipient, normalized phone and global traffic independently of IP', async () => {
+  for (const stopAt of ['booking-recipient-create', 'booking-phone-create', 'booking-site-create']) {
+    const calls = [];
+    const route = load('app/api/bookings/route.ts', {
+      crypto: { default: requireDependency('node:crypto') }, 'next/server': next, '@/lib/bookingDates': dates, '@/lib/bookingRequest': bookingRequest,
+      '@/lib/auth': {}, '@/lib/db': { query: async sql => { assert.ok(!sql.startsWith('INSERT INTO bookings')); return { rows: [] }; } },
+      '@/lib/rateLimit': { rateLimit: async () => null, rateLimitIdentity: async (identity, action) => { calls.push([identity, action]); return action === stopAt ? { status: 429 } : null; } },
+    });
+    assert.equal((await route.POST(bookingReq(bookingDraft))).status, 429);
+    assert.equal(calls.at(-1)[1], stopAt);
+    if (stopAt === 'booking-site-create') { assert.equal(calls[0][0], bookingDraft.email); assert.equal(calls[1][0], bookingDraft.phone.replace(/\D/g, '')); }
+  }
+});
+test('booking honeypot and cross-site browser submissions are rejected before insert', async () => {
+  const route = loadBooking(() => assert.fail('must not query'));
+  assert.equal((await route.POST(bookingReq({ ...bookingDraft, website: 'spam' }))).status, 400);
+  const req = bookingReq(bookingDraft); req.headers.set('sec-fetch-site', 'cross-site');
+  assert.equal((await route.POST(req)).status, 403);
+});
+test('a fresh rate-limited guided submission stays editable but an uncertain retry remains frozen', async () => {
+  for (const previousFailure of [false, true]) {
+    let count = 0;
+    const harness = bookingFlowHarness(async (_url, options) => {
+      if (options.method !== 'POST') return availableSlots();
+      count++; if (previousFailure && count === 1) throw Error('unknown save result');
+      return { ok: false, status: 429, json: async () => ({ error: 'Too many' }) };
+    });
+    let flow = await prepareBookingReview(harness);
+    await flow.confirm(); flow = harness.render();
+    if (previousFailure) { await flow.confirm(); flow = harness.render(); }
+    assert.equal(flow.uncertain, previousFailure); assert.equal(flow.locked, previousFailure);
+  }
+});
+
+test('recovery enqueue failure returns a private error and never falsely acknowledges or schedules delivery', async () => {
+  const route = load('app/api/bookings/access/route.ts', {
+    'next/server': { ...next, after: () => assert.fail('not persisted; must not schedule') },
+    '@/lib/bookingRecovery': { enqueueBookingRecovery: async () => { throw Error('private-storage-details'); } },
+  });
+  const response = await route.POST(request({ reference: '92', email: 'visitor@example.test' }));
+  assert.equal(response.status, 503); assert.equal(response.headers['Cache-Control'], 'private, no-store');
+  assert.doesNotMatch(JSON.stringify(response.body), /private-storage-details/);
 });

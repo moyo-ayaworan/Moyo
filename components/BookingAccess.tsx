@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { Loader2, Mail, Search } from 'lucide-react';
 
 export default function BookingAccess({ compact = false, isLight = false }: { compact?: boolean; isLight?: boolean }) {
@@ -8,26 +8,33 @@ export default function BookingAccess({ compact = false, isLight = false }: { co
   const [email, setEmail] = useState('');
   const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
   const [notice, setNotice] = useState('');
+  const pending = useRef<AbortController | null>(null);
+  useEffect(() => () => pending.current?.abort(), []);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (state === 'sending') return;
+    if (pending.current) return;
+    const controller = new AbortController();
+    pending.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
     setState('sending');
     setNotice('');
     try {
       const response = await fetch('/api/bookings/access', {
         method: 'POST',
+        signal: controller.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reference, email }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Could not send the tracking link.');
+      if (typeof data.message !== 'string' || !data.message.trim()) throw new Error('Could not verify delivery. Check your inbox before trying again.');
       setState('done');
       setNotice(data.message);
     } catch (error) {
       setState('error');
-      setNotice(error instanceof Error ? error.message : 'Could not send the tracking link.');
-    }
+      setNotice(controller.signal.aborted ? 'Could not verify delivery. Check your inbox and spam folder before trying again.' : error instanceof Error ? error.message : 'Could not send the tracking link.');
+    } finally { window.clearTimeout(timeout); pending.current = null; }
   }
 
   const field = `min-h-11 w-full rounded-lg border bg-transparent px-3 py-2 text-base outline-none focus:ring-2 focus:ring-accent ${isLight ? 'border-black/15 text-black' : 'border-foreground/15 text-foreground'}`;
