@@ -8,6 +8,7 @@ import { rateLimit } from '@/lib/rateLimit';
 const CONTACT_EMAIL = process.env.CONTACT_EMAIL || 'ijabikenm@gmail.com';
 
 export async function POST(req: Request) {
+  if (process.env.VERCEL_ENV !== 'production') return new Response(null, { status: 204 });
   try {
     const limited = await rateLimit(req, 'session-email', 3, 3600);
     if (limited) return limited;

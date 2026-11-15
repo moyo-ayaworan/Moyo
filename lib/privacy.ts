@@ -14,6 +14,8 @@ export function containsPrivateDetails(text: string): boolean {
   let decoded = text;
   try { decoded = decodeURIComponent(text); } catch { /* Check the original if malformed. */ }
   return /\b(?:password|passcode|access\s*code|api\s*key|secret|card\s*(?:number|details)|cvv|otp)\s*(?::|=|is\b)\s*\S+/i.test(decoded)
+    || /\b[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9-]+(?:\.[A-Z0-9-]+)+\b/i.test(decoded)
+    || /\b(?:phone|mobile|telephone|whatsapp)(?:\s+number)?\s*(?::|=|is\b)\s*\+?[\d(][\d\s().-]{5,}/i.test(decoded)
     || /\b(?:\d[ -]?){13,19}\b/.test(decoded)
     || /\/(?:client\/booking|collector|(?:stillbounds|mofolio)\/review)\/[^\s]+/i.test(decoded)
     || /(?:[?#&](?:access|token|proof|code)=)\S+/i.test(decoded)

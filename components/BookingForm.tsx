@@ -102,6 +102,8 @@ export default function BookingForm({ embedded = false }: BookingFormProps) {
     useEffect(() => {
         const range = monthRange(month);
         const controller = new AbortController();
+        let cancelled = false;
+        const timeout = window.setTimeout(() => controller.abort(), 15000);
         fetch(`/api/bookings?start=${range.start}&end=${range.end}`, { signal: controller.signal })
             .then((res) => res.ok ? res.json() : Promise.reject())
             .then((data) => {
@@ -110,9 +112,10 @@ export default function BookingForm({ embedded = false }: BookingFormProps) {
                 setAvailability({ month: range.start, error: false });
             })
             .catch(() => {
-                if (!controller.signal.aborted) setAvailability({ month: range.start, error: true });
-            });
-        return () => controller.abort();
+                if (!cancelled) setAvailability({ month: range.start, error: true });
+            })
+            .finally(() => window.clearTimeout(timeout));
+        return () => { cancelled = true; window.clearTimeout(timeout); controller.abort(); };
     }, [month, availabilityRetry]);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -171,7 +174,7 @@ export default function BookingForm({ embedded = false }: BookingFormProps) {
     };
 
     const form = (
-        <form onSubmit={handleSubmit} className="min-w-0 space-y-7 md:space-y-9">
+        <form onSubmit={handleSubmit} aria-busy={status === 'loading'} className="min-w-0 space-y-7 md:space-y-9">
             {!availabilityReady && <p role="status" className="text-sm text-foreground/60">
                 {availability.error ? 'Availability could not be loaded.' : 'Loading available dates…'}
                 {availability.error && <button type="button" className="ml-2 underline" onClick={() => { setAvailability({ month: '', error: false }); setAvailabilityRetry((value) => value + 1); }}>Try again</button>}
@@ -179,11 +182,11 @@ export default function BookingForm({ embedded = false }: BookingFormProps) {
             <div className="grid gap-6 md:grid-cols-2">
                 <div className="space-y-2 group">
                     <label htmlFor="booking-name" className="block text-[10px] uppercase tracking-widest text-foreground/40">{t('booking.yourName')}</label>
-                    <input id="booking-name" type="text" value={formData.name} required onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full bg-transparent border-b border-foreground/10 py-3 text-foreground focus:outline-none focus:border-accent transition-colors font-body" />
+                    <input id="booking-name" name="name" autoComplete="name" type="text" value={formData.name} required onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full bg-transparent border-b border-foreground/10 py-3 text-foreground focus:outline-none focus:border-accent transition-colors font-body" />
                 </div>
                 <div className="space-y-2 group">
                     <label htmlFor="booking-email" className="block text-[10px] uppercase tracking-widest text-foreground/40">{t('booking.emailAddress')}</label>
-                    <input id="booking-email" type="email" value={formData.email} required onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full bg-transparent border-b border-foreground/10 py-3 text-foreground focus:outline-none focus:border-accent transition-colors font-body" />
+                    <input id="booking-email" name="email" autoComplete="email" type="email" value={formData.email} required onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full bg-transparent border-b border-foreground/10 py-3 text-foreground focus:outline-none focus:border-accent transition-colors font-body" />
                 </div>
             </div>
 
@@ -215,6 +218,8 @@ export default function BookingForm({ embedded = false }: BookingFormProps) {
                                     key={key}
                                     type="button"
                                     disabled={!availabilityReady || disabled || fullyBooked}
+                                    aria-label={new Intl.DateTimeFormat('en', { dateStyle: 'full' }).format(day)}
+                                    aria-pressed={isSelected}
                                     onClick={() => {
                                         setSelectedDate(key);
                                         setSelectedTime('');
@@ -243,6 +248,8 @@ export default function BookingForm({ embedded = false }: BookingFormProps) {
                                     key={slot.id}
                                     type="button"
                                     disabled={!availabilityReady || !selectedDate || booked}
+                                    aria-label={`${slot.label}, Lagos time${past ? ', unavailable' : booked ? ', booked' : ''}`}
+                                    aria-pressed={isActive}
                                     onClick={() => setSelectedTime(slot.id)}
                                     className={`min-h-11 border px-3 text-xs uppercase tracking-[0.16em] transition ${isActive ? 'border-accent bg-accent text-background' : !selectedDate || booked ? 'border-foreground/5 text-foreground/20' : 'border-foreground/10 text-foreground/55 hover:border-accent hover:text-accent'}`}
                                 >
@@ -261,7 +268,7 @@ export default function BookingForm({ embedded = false }: BookingFormProps) {
                 <label className="block text-[10px] uppercase tracking-widest text-foreground/40 font-medium">Choose a package</label>
                 <div className="grid gap-3 sm:grid-cols-2">
                     {BOOKING_PACKAGES.map((service) => (
-                        <button key={service.id} type="button" onClick={() => setFormData({ ...formData, packageId: service.id, service: service.category })} className={`border p-4 text-left transition-all duration-300 ${formData.packageId === service.id ? 'border-accent text-accent bg-accent/5' : 'border-foreground/10 text-foreground/60 hover:border-foreground/30 hover:text-foreground'}`}>
+                        <button key={service.id} type="button" aria-pressed={formData.packageId === service.id} onClick={() => setFormData({ ...formData, packageId: service.id, service: service.category })} className={`border p-4 text-left transition-all duration-300 ${formData.packageId === service.id ? 'border-accent text-accent bg-accent/5' : 'border-foreground/10 text-foreground/60 hover:border-foreground/30 hover:text-foreground'}`}>
                             <span className="block text-xs font-medium uppercase tracking-wider">{service.label}</span>
                             <span className="mt-2 block text-lg">{service.price === null ? 'Quote required' : formatNaira(service.price)}</span>
                             <span className="mt-1 block text-xs leading-relaxed opacity-65">{service.details}</span>
@@ -285,8 +292,8 @@ export default function BookingForm({ embedded = false }: BookingFormProps) {
 
             <div className="grid gap-6 md:grid-cols-2">
                 <div className="space-y-2 group">
-                    <label className="block text-[10px] uppercase tracking-widest text-foreground/40">Phone</label>
-                    <input type="tel" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} className="w-full bg-transparent border-b border-foreground/10 py-3 text-foreground focus:outline-none focus:border-accent transition-colors font-body" />
+                    <label htmlFor="booking-phone" className="block text-[10px] uppercase tracking-widest text-foreground/40">Phone</label>
+                    <input id="booking-phone" name="phone" autoComplete="tel" type="tel" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} className="w-full bg-transparent border-b border-foreground/10 py-3 text-foreground focus:outline-none focus:border-accent transition-colors font-body" />
                 </div>
                 <div className="space-y-2 group">
                     <label className="block text-[10px] uppercase tracking-widest text-foreground/40">Selected Slot</label>
