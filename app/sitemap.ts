@@ -2,7 +2,6 @@ import { MetadataRoute } from 'next';
 import { siteUrl } from '@/lib/seo';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-    const lastModified = new Date('2026-08-04');
     const routes = [
         { path: '/', changeFrequency: 'monthly', priority: 1 },
         { path: '/stillbounds', changeFrequency: 'monthly', priority: 0.8 },
@@ -29,7 +28,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
     return routes.map((route) => ({
         url: route.path === '/' ? siteUrl : `${siteUrl}${route.path}`,
-        lastModified,
         changeFrequency: route.changeFrequency,
         priority: route.priority,
     }));

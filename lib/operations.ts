@@ -1,6 +1,7 @@
 import { query } from './db';
 export async function recordOperationalFailure(event: 'request_error' | 'payment_error' | 'download_error' | 'stillbounds_error') {
   console.error(JSON.stringify({ event }));
+  if (process.env.VERCEL_ENV !== 'production') return;
   try {
     await query(`INSERT INTO operations_failures(event,bucket,total) VALUES($1,date_trunc('hour',NOW()),1)
       ON CONFLICT(event,bucket) DO UPDATE SET total=operations_failures.total+1`, [event]);

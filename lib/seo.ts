@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 function normalizeSiteUrl(value: string | undefined) {
-  const fallback = 'https://ijabikenmoyo.com';
+  const fallback = 'https://moyoayaworan.com';
   if (!value) return fallback;
 
   const withProtocol = /^https?:\/\//i.test(value) ? value : `https://${value}`;

@@ -1,8 +1,8 @@
 import { readJsonRequest } from '@/lib/requestBody';
 import { NextResponse } from 'next/server';
-import { ENIYAN_GUIDED_LINKS, ENIYAN_KNOWLEDGE } from '@/lib/eniyanKnowledge';
+import { ENIYAN_GUIDED_LINKS, ENIYAN_KNOWLEDGE, ENIYAN_PACKAGE_GUIDE } from '@/lib/eniyanKnowledge';
 
-import { ENIYAN_ROUTES, ENIYAN_MESSAGE_LIMIT } from '@/lib/eniyanNavigation';
+import { ENIYAN_ROUTES, ENIYAN_LINK_ROUTES, ENIYAN_MESSAGE_LIMIT } from '@/lib/eniyanNavigation';
 import { containsPrivateDetails } from '@/lib/privacy';
 import { rateLimit } from '@/lib/rateLimit';
 
@@ -40,7 +40,7 @@ type GeminiResponse = {
 const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
-const SITE_MAP = Object.entries(ENIYAN_ROUTES).map(([path, label]) => `${label}: ${path}`).join('\n');
+const SITE_MAP = Object.entries(ENIYAN_LINK_ROUTES).map(([path, label]) => `${label}: ${path}`).join('\n');
 
 const LANGUAGE_NAMES: Record<string, string> = {
   EN: 'English',
@@ -86,6 +86,25 @@ function pagePrompt(page: PageContext | undefined) {
   return `Current public page: ${path || 'Unknown'}. Selected site language: ${LANGUAGE_NAMES[languageCode] || 'English'}.`;
 }
 
+function buildProductSupportReply(messages: unknown, page?: PageContext): string | undefined {
+  const language = cleanText(page?.language, 10).toUpperCase();
+  if (language && language !== 'EN') return;
+  const normalized = normalizeMessages(messages);
+  const latest = normalized.at(-1)?.parts?.[0]?.text?.toLowerCase() || '';
+  const prior = normalized.filter(message => message?.role === 'user').slice(-3, -1).map(message => message?.parts[0].text.toLowerCase()).join(' ');
+  const stillboundsContext = /\b(stillbounds|mofolio)\b/.test(prior) || (typeof page?.path === 'string' && ['/stillbounds', '/stillbounds/account', '/mofolio', '/mofolio/account'].includes(page.path));
+  if (/\b(stillbounds|mofolio)\b/.test(latest) || (stillboundsContext && !/\b(melatone|presets?|luts?|photography|portraits?|wedding|commission|painting)\b/.test(latest) && /\b(licen[cs]e|trial|activat\w*|mac|devices?|account|sign\s?in|download|price|cost|payment|refund|receipt|books?|sync|backup)\b/.test(latest))) {
+    return 'Stillbounds is the Mac book-design app at /stillbounds. Open /stillbounds/account for the current offer, sign-in, trial eligibility and device activation. Your photos and editable books stay on your Mac; signing in does not back them up or sync them. I cannot view your account, verify a purchase or activate a device. For a payment issue, do not pay again while its status is uncertain; contact ijabikenm@gmail.com.';
+  }
+  const productContext = /\b(melatone|presets?|luts?|capture one|digital products?|digital downloads?)\b/.test(latest + ' ' + prior)
+    || (typeof page?.path === 'string' && ['/photography/shop', '/art/shop'].includes(page.path));
+  if (productContext && /\b(download|receipt|recover|lost|paid|charged|payment|refund)\b/.test(latest)) {
+    const artPurchase = /\b(art|artwork|painting|edition)\b/.test(latest) || (typeof page?.path === 'string' && page.path === '/art/shop' && !/\b(melatone|presets?|luts?|capture one|photography)\b/.test(latest));
+    const recovery = artPurchase ? '/art/shop/payment' : '/photography/shop/payment';
+    return `For a paid digital product, open ${recovery} and use “Recover a paid purchase”. Enter the checkout email in that form, not this chat. Check your inbox and spam folder. If you were charged, do not pay again while delivery is uncertain. I cannot verify or refund payments; contact ijabikenm@gmail.com if recovery does not resolve it. Physical artwork inquiries are handled by the studio.`;
+  }
+}
+
 function buildFallbackReply(messages: unknown, page?: PageContext) {
   const normalized = normalizeMessages(messages);
   const latest = normalized.at(-1)?.parts?.[0]?.text?.toLowerCase() || '';
@@ -103,6 +122,8 @@ function buildFallbackReply(messages: unknown, page?: PageContext) {
     HA: 'Jagoran AI ba ya samuwa yanzu. Hoto: /photography/bookings. Aikin fasaha na musamman: /art/commissions. Hotunan abokin ciniki: /photography/client-gallery. Kada ka aika lambar shiga a nan.',
   };
   if (localized[language]) return localized[language];
+  const productSupport = buildProductSupportReply(messages, page);
+  if (productSupport) return productSupport;
   if (/\b(invoice|receipt|contract|refund|cancel|reschedule|paid|payment status)\b/.test(latest)) {
     return 'I cannot view or change bookings, documents, or payments. For your invoice, contract, or receipt, use the private booking link in your studio email. To cancel, reschedule, or query a payment, contact ijabikenm@gmail.com. Do not paste your private link or payment details here.';
   }
@@ -126,7 +147,7 @@ function buildFallbackReply(messages: unknown, page?: PageContext) {
   if (/\b(price|prices|pricing|cost|costs|budget|rate|rates|packages|how much)\b/.test(latest)) {
     return artContext
       ? `For art pricing, check ${ENIYAN_GUIDED_LINKS.artShop}, or ${ENIYAN_GUIDED_LINKS.artCommissions} for custom work. The studio confirms the final quote and availability; I cannot provide a live price.`
-      : `Photography packages start at ₦50,000: portraits are ₦50,000 for one outfit or ₦70,000 for two; family portraits are ₦80,000 for one outfit or ₦100,000 for two; weddings are ₦400,000 for one day or ₦600,000 for two days. An extra wedding shooter is ₦100,000. Use “Book a session with Ẹnìyàn” or ${ENIYAN_GUIDED_LINKS.bookings} to see deliverables and build an estimate. Travel, rush delivery and custom additions need a final studio quote.`;
+      : `Photography package rates: ${ENIYAN_PACKAGE_GUIDE} Use “Book a session with Ẹnìyàn” or ${ENIYAN_GUIDED_LINKS.bookings} to see deliverables and build an estimate. Travel, rush delivery and custom additions need a final studio quote.`;
   }
   if (/\b(book|booking|shoot|session|photoshoot|portrait|editorial|commercial|date|dates|availability|tomorrow)\b/.test(latest)) {
     return `Use “Book a session with Eniyan” below to choose a service, check available Lagos-time slots, and enter your contact and project details privately. Review everything, then press “Confirm booking request” to save it. The studio still confirms final arrangements and pricing. You can also use ${ENIYAN_GUIDED_LINKS.bookings}.`;
@@ -170,13 +191,18 @@ export async function POST(req: Request) {
     }
 
     if (containsPrivateDetails(contents.at(-1)!.parts[0].text)) {
-      return replyJson('Please keep access codes, passwords, private booking links, and payment details out of this chat. Enter gallery details only at /photography/client-gallery. For account or payment help, contact ijabikenm@gmail.com. I have not sent this message to the AI provider.');
+      return replyJson('Please keep personal contact details, access codes, passwords, private booking links, and payment details out of this chat. Use /photography/bookings or /art/commissions for contact details; enter gallery details only at /photography/client-gallery. For account or payment help, contact ijabikenm@gmail.com. I have not sent this message to the AI provider.');
     }
     for (const message of contents) {
       if (message && containsPrivateDetails(message.parts[0].text)) message.parts[0].text = '[Private details removed]';
     }
     // A sliced history can begin with an assistant answer. Start the provider turn with a user.
     while (contents[0]?.role === 'model') contents.shift();
+
+    // Account and paid-product recovery are deterministic navigation, not claims
+    // generated by a model about a customer's private state.
+    const productSupport = buildProductSupportReply(body.messages, body.page);
+    if (productSupport) return replyJson(productSupport);
 
     if (!apiKey) {
       return fallback();

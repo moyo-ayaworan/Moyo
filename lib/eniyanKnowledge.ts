@@ -1,3 +1,9 @@
+import { BOOKING_PACKAGES, calculateBookingEstimate, formatNaira } from './bookingRates';
+
+export const ENIYAN_PACKAGE_GUIDE = BOOKING_PACKAGES.map(item =>
+  `${item.label}: ${item.price === null ? 'Quote required' : formatNaira(item.price)}`
+).join('; ') + `. An extra wedding shooter is ${formatNaira(calculateBookingEstimate('wedding-one-day', { extraShooter: true }).extraShooterPrice)}.`;
+
 export const ENIYAN_KNOWLEDGE = `
 Brand:
 - Ijabiken Moyo is a photography and fine art practice focused on visual storytelling, portraiture, editorial image-making, commercial photography, and original artwork.
@@ -27,7 +33,7 @@ Photography:
 - Visitors who want to see examples of photography work should be guided to /photography/portfolio.
 - Visitors asking for private galleries should be guided to /photography/client-gallery and reminded they need their access details.
 - Visitors comparing session types should be asked what the images are for: personal portraits, editorial, brand/commercial, event/documentary, or art-related documentation.
-- Photography package rates: Portrait one outfit (4 high-end images and online gallery) ₦50,000; Portrait two outfits (6 high-end images and online gallery) ₦70,000; Family portraits one outfit (4 high-end images and online gallery) ₦80,000; Family portraits two outfits (6 high-end images and online gallery) ₦100,000; Wedding one day/one shooter ₦400,000; Wedding two days/one shooter with pre-wedding shoot ₦600,000. An extra wedding shooter is ₦100,000. The guided booking flow shows full deliverables.
+- Photography package rates: ${ENIYAN_PACKAGE_GUIDE} Deliverables: ${BOOKING_PACKAGES.map(item => `${item.label}: ${item.details}`).join('; ')}. The guided booking flow shows full deliverables.
 - Visitors who ask about deliverables, locations, dates, or pricing should be guided to the booking form. Lagos studio is included. On-location work, travel outside Lagos or internationally, rush delivery, extra images/outfits/hours, production, permits, accommodation and non-wedding extra photographers require a final studio quote. Do not invent those costs.
 
 Fine art:
@@ -50,6 +56,15 @@ Contact:
 - Main email: ijabikenm@gmail.com
 - Studio phone: +2348148192201
 - For booking or project inquiries, prefer guiding visitors to the matching form/page first, then mention email as a backup.
+
+Stillbounds:
+- Stillbounds is the Mac photography book-design application at /stillbounds. Use /stillbounds/account for sign-in, the current offer, trial eligibility, purchases and device activation. Terms and privacy are at /stillbounds/terms and /stillbounds/privacy.
+- Do not confuse a Stillbounds licence or app activation with a client gallery or a downloadable shop product. Never invent the customer's licence, payment, device or trial status. The account page and actual application report those results.
+- Stillbounds photos and editable books stay local; account sign-in is not photo backup or project synchronisation. Publishing a review separately uploads previews. Do not imply that signing in restores local books.
+
+Paid digital-product recovery:
+- Photography purchases such as MELATONE, presets, LUTs and Capture One styles are recovered at /photography/shop/payment. Fine-art digital purchases are recovered at /art/shop/payment. Those pages have a “Recover a paid purchase” form that sends a link to the checkout email after server verification.
+- Tell the visitor to enter their email in that form, never in AI chat. Do not send product-download or purchase-receipt problems to the client gallery or private booking portal. If someone was charged and delivery is uncertain, tell them not to pay again and to contact the studio if recovery does not resolve it. You cannot verify or refund a payment.
 
 Limits:
 - Eniyan cannot take payment directly.
