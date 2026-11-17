@@ -60,7 +60,7 @@ export default function GallerySoundtrackEditor({ url, title, preview, disabled,
   return (
     <section className="space-y-3 border border-white/10 bg-black/20 p-3" aria-label="Gallery soundtrack settings">
       <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-white/70">Gallery soundtrack · optional</p>
-      <p className="text-xs text-white/40">Choose a track for this gallery. Visitors press play to listen. Upload music you own or have permission to use.</p>
+      <p className="text-xs text-white/40">Choose a track for this gallery. Music starts automatically when the browser allows it, or after the visitor interacts with the gallery. Visitors can pause or mute it anytime. Upload music you own or have permission to use.</p>
       <label className="block text-xs text-white/60">
         Track title
         <input value={trackTitle} maxLength={160} disabled={busy || disabled} onChange={event => setTrackTitle(event.target.value)} placeholder="Song title — artist" className="mt-2 block w-full border border-white/15 bg-black/30 p-3 text-white" />
