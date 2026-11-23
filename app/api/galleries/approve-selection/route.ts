@@ -1,6 +1,7 @@
 import { readJsonRequest } from '@/lib/requestBody';
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rateLimit';
+import { galleryPreviewUrl } from '@/lib/galleryPreview';
 import { query } from '@/lib/db';
 
 function uniqueStrings(value: unknown) {
@@ -46,24 +47,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'This gallery is currently locked.' }, { status: 403 });
   }
 
-  const galleryImages = new Set((gallery.images || []) as string[]);
+  const sources = (gallery.images || []) as string[];
+  const references = new Map(sources.map((source, index) => [galleryPreviewUrl(galleryId, index), source]));
+  const galleryImages = new Set(references.keys());
   const invalidImages = selectedImages.filter((image) => !galleryImages.has(image));
 
   if (invalidImages.length > 0) {
     return NextResponse.json({ error: 'Selection contains images outside this gallery.' }, { status: 400 });
   }
 
-  const updated = await query(
+  await query(
     `UPDATE galleries
      SET approved_images = $1::text[]
      WHERE id = $2
      RETURNING approved_images`,
-    [selectedImages, galleryId]
+    [selectedImages.map(image => references.get(image)), galleryId]
   );
 
   return NextResponse.json({
     message: 'Selection approved.',
-    approved_images: updated.rows[0]?.approved_images || [],
+    approved_images: selectedImages,
     approved_count: selectedImages.length,
   });
 }

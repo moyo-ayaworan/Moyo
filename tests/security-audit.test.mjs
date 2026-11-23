@@ -9,6 +9,7 @@ const next = { NextResponse: class extends Response {
   static json(value, options) { return new this(JSON.stringify(value), options); }
 } };
 function load(file, mocks = {}, extra = {}) {
+  if (file !== 'lib/galleryPreview.ts') mocks = { '@/lib/galleryPreview': load('lib/galleryPreview.ts'), ...mocks };
   const compiledModule = { exports: {} };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
     module: compiledModule, exports: compiledModule.exports, Buffer, Request, Response, URL, AbortSignal, console,
@@ -194,4 +195,77 @@ test('AI privacy checks cover encoded portal URLs, Unicode disguises and common 
     '-----BEGIN PRIVATE KEY-----', '08012345678', '+1 (202) 555-0123',
   ]) assert.equal(privacy.containsPrivateDetails(value), true, value);
   for (const value of ['Which package costs NGN 100000?', 'Does Stillbounds sync my books?', 'How do I recover my purchase?']) assert.equal(privacy.containsPrivateDetails(value), false, value);
+});
+
+test('gallery previews reject missing sessions, locked galleries and invalid indices before fetching', async () => {
+  for (const [cookie, locked] of [[false, false], [true, true]]) {
+    const route = load('app/api/galleries/preview/route.ts', {
+      '@/lib/db': {query: async () => ({rows:[{access_code:'test',is_locked:locked,images:['source.jpg']}]})},
+      '@/lib/galleryAccess': {hasGalleryCookie: () => cookie},
+      '@/lib/privateMedia': {signedGalleryPreview() {assert.fail('must authorize first');}},
+      sharp: {},
+    }, {fetch() {assert.fail('must authorize first');}});
+    const response = await route.GET(new Request('https://example.test/api/galleries/preview?galleryId=1&index=0&collection=proofs'));
+    assert.equal(response.status,403);
+    assert.equal(response.headers.get('cache-control'),'private, no-store');
+    assert.equal((await route.GET(new Request('https://example.test/api/galleries/preview?galleryId=1&index=-1&collection=proofs'))).status,400);
+  }
+});
+
+test('gallery previews bake a watermark into bounded JPEG bytes without redirecting to the source', async () => {
+  const sharp = dependency('sharp');
+  const input = await sharp({create:{width:1600,height:800,channels:3,background:'#303030'}}).png().toBuffer();
+  const route = load('app/api/galleries/preview/route.ts', {
+    '@/lib/db':{query:async()=>({rows:[{access_code:'test',images:['private-original.jpg']}]})},
+    '@/lib/galleryAccess':{hasGalleryCookie:()=>true},
+    '@/lib/privateMedia':{signedGalleryPreview:()=> 'https://provider.test/signed'},
+    sharp:{default:sharp},
+  }, {fetch:async()=>new Response(input)});
+  const response = await route.GET(new Request('https://example.test/api/galleries/preview?galleryId=7&index=0&collection=proofs'));
+  assert.equal(response.status,200);
+  assert.equal(response.headers.get('location'),null);
+  assert.equal(response.headers.get('content-type'),'image/jpeg');
+  const image = Buffer.from(await response.arrayBuffer());
+  const metadata = await sharp(image).metadata();
+  assert.equal(metadata.width,1200);
+  assert.equal(metadata.height,600);
+  const stats = await sharp(image).stats();
+  assert.ok(stats.channels[0].stdev > 1, 'watermark must change the uniform input pixels');
+});
+
+test('gallery selections resolve scoped preview references to server-side originals', async () => {
+  let saved;
+  const route = load('app/api/galleries/approve-selection/route.ts', {
+    '@/lib/requestBody':body,
+    '@/lib/rateLimit':{rateLimit:async()=>null},
+    '@/lib/db':{query:async(sql,params)=>{
+      if(sql.startsWith('SELECT')) return {rows:[{images:['secret-original.jpg'],is_locked:false}]};
+      saved = params[0]; return {rows:[]};
+    }},
+  });
+  const reference = '/api/galleries/preview?galleryId=7&index=0&collection=proofs';
+  const request = images => new Request('https://example.test',{method:'POST',body:JSON.stringify({accessCode:'test',galleryId:7,images})});
+  const result = await route.POST(request([reference]));
+  assert.equal(result.status,200);
+  assert.equal(saved[0],'secret-original.jpg');
+  assert.deepEqual((await result.json()).approved_images,[reference]);
+  assert.equal((await route.POST(request([reference.replace('galleryId=7','galleryId=8')]))).status,400);
+  assert.equal((await route.POST(request(['secret-original.jpg']))).status,400);
+});
+
+test('finished downloads preserve preview indices when an earlier file is unsupported', async () => {
+  let fetched;
+  const route = load('app/api/galleries/download/route.ts', {
+    'next/server':{...next,after(){}},
+    '@/lib/db':{query:async()=>({rows:[{access_code:'test',finished_images:['https://source.test/unsupported.zip','https://source.test/second.jpg'],payment_verified:true}]})},
+    '@/lib/rateLimit':{rateLimit:async()=>null},
+    '@/lib/galleryAccess':{hasGalleryCookie:()=>true},
+    '@/lib/privateMedia':{parseAuthenticatedAsset:src=>({resourceType:src.endsWith('.jpg')?'image':'raw'}),temporaryOriginalUrl:src=>src.replace('source.test','provider.test')},
+    '@/lib/payments/server':{verifyGallerySettlement:async()=>true},
+    nodemailer:{},
+  },{fetch:async url=>{fetched=String(url);return new Response('image');}});
+  assert.equal((await route.GET(new Request('https://example.test/api/galleries/download?galleryId=1&index=0'))).status,403);
+  assert.equal(fetched,undefined);
+  assert.equal((await route.GET(new Request('https://example.test/api/galleries/download?galleryId=1&index=1'))).status,200);
+  assert.equal(fetched,'https://provider.test/second.jpg');
 });

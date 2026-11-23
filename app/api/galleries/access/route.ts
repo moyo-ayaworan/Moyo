@@ -3,9 +3,11 @@ import { normalizeImagePosition } from '@/lib/imagePosition';
 import { normalizeGalleryPresentation } from '@/lib/galleryPresentation';
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { signedGallerySoundtrack, signedGalleryPreview } from '@/lib/privateMedia';
+import { signedGallerySoundtrack } from '@/lib/privateMedia';
 import { rateLimit } from '@/lib/rateLimit';
 import { createGalleryCookie, galleryCookieAge, galleryCookieName } from '@/lib/galleryAccess';
+
+import { galleryPreviewUrl } from '@/lib/galleryPreview';
 
 function toStringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
@@ -61,15 +63,20 @@ export async function POST(req: NextRequest) {
   const allImages = toStringArray(gallery.images);
   const approvedImages = toStringArray(gallery.approved_images);
   const finishedImages = toStringArray(gallery.finished_images);
-  const finishedPreviews = finishedImages.map(signedGalleryPreview).filter((url): url is string => Boolean(url));
+  const previews = allImages.map((_, index) => galleryPreviewUrl(gallery.id, index));
+  const finishedPreviews = finishedImages.map((_, index) => galleryPreviewUrl(gallery.id, index, 'finished'));
+  const previewFor = (source: string) => {
+    const index = allImages.indexOf(source);
+    return index >= 0 ? previews[index] : finishedPreviews[finishedImages.indexOf(source)] || '';
+  };
 
   const response = NextResponse.json({
     gallery: {
       id: gallery.id,
       client_name: gallery.client_name,
       slug: gallery.slug,
-      images: allImages,
-      approved_images: approvedImages,
+      images: previews,
+      approved_images: approvedImages.map(previewFor).filter(Boolean),
       finished_images: finishedPreviews,
       payment_verified: gallery.payment_verified || false,
       payment_url: gallery.has_invoice ? `/payments/gallery?gallery=${gallery.id}` : gallery.payment_url || '',
@@ -79,9 +86,9 @@ export async function POST(req: NextRequest) {
       hero_position: normalizeImagePosition(gallery.hero_position),
       presentation: gallery.presentation ? (() => {
         const settings = normalizeGalleryPresentation(gallery.presentation);
-        // Resolve only gallery-owned covers, with signed media delivery when needed.
+        // Resolve gallery-owned covers to the same session-protected previews.
         const source = [...allImages, ...finishedImages].includes(settings.coverImage) ? settings.coverImage : allImages[0] || finishedImages[0] || '';
-        return { ...settings, coverImage: source ? signedGalleryPreview(source) || (allImages.includes(source) ? source : '') : '' };
+        return { ...settings, coverImage: source ? previewFor(source) : '' };
       })() : null,
       soundtrack_url: signedGallerySoundtrack(gallery.soundtrack_url || ''),
       soundtrack_title: gallery.soundtrack_title || '',

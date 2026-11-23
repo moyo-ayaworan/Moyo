@@ -66,10 +66,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'This gallery is currently locked.' }, { status: 403 });
   }
 
-  const finishedImages = (Array.isArray(gallery.finished_images) ? gallery.finished_images : [])
-    .filter((url: string) => parseAuthenticatedAsset(url)?.resourceType === 'image');
+  const finishedImages = Array.isArray(gallery.finished_images) ? gallery.finished_images : [];
   const fileUrl = finishedImages[imageIndex];
-  if (!gallery.payment_verified || !fileUrl) {
+  if (!gallery.payment_verified || typeof fileUrl !== 'string' || parseAuthenticatedAsset(fileUrl)?.resourceType !== 'image') {
     return NextResponse.json({ error: 'This download is not available.' }, { status: 403 });
   }
 

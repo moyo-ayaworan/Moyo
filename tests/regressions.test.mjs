@@ -43,6 +43,7 @@ const securityRouteMocks = {
 };
 
 function load(file, mocks = {}, globals = {}) {
+  if (file !== 'lib/galleryPreview.ts') mocks = { '@/lib/galleryPreview': load('lib/galleryPreview.ts'), ...mocks };
   const source = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
@@ -817,7 +818,9 @@ test('gallery access returns previews without exposing original file URLs', asyn
   });
   const result = await route.POST(request({ accessCode: 'test' }));
   assert.equal(result.body.gallery.finished_count, 1);
-  assert.deepEqual(Array.from(result.body.gallery.finished_images), ['https://example.test/signed-preview.jpg']);
+  assert.deepEqual(Array.from(result.body.gallery.finished_images), ['/api/galleries/preview?galleryId=1&index=0&collection=finished']);
+  assert.deepEqual(Array.from(result.body.gallery.images), ['/api/galleries/preview?galleryId=1&index=0&collection=proofs']);
+  assert.equal(JSON.stringify(result.body).includes('proof.jpg'), false);
   assert.equal(result.body.gallery.finished_images.includes('original.jpg'), false);
 });
 
@@ -1249,7 +1252,7 @@ test('gallery access signs the selected cover and preserves saved presentation s
     '@/lib/db': { query: async () => ({ rows: [{ id: 1, images: ['cover.jpg'], finished_images: [], presentation: { coverImage: 'cover.jpg', palette: 'forest', coverLayout: 'frame', spacing: 'compact' } }] }) },
   });
   const result = await route.POST(request({ accessCode: 'test' }));
-  assert.equal(result.body.gallery.presentation.coverImage, 'https://example.test/signed-preview.jpg');
+  assert.equal(result.body.gallery.presentation.coverImage, '/api/galleries/preview?galleryId=1&index=0&collection=proofs');
   assert.equal(result.body.gallery.presentation.coverLayout, 'frame');
 });
 
