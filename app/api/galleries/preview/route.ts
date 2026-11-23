@@ -49,7 +49,6 @@ export async function GET(req: NextRequest) {
     }
     const preview = await sharp(Buffer.concat(chunks), { limitInputPixels: 40_000_000 }).rotate().resize({ width: 1200, height: 1200, fit: 'inside', withoutEnlargement: true }).toBuffer({ resolveWithObject: true });
     const { width, height } = preview.info;
-    const fontSize = Math.max(12, Math.round(width / 34));
     // Paths keep the watermark readable on hosts without installed fonts.
     const glyphs: Record<string, string[]> = {
       M: ['10001','11011','10101','10101','10001','10001','10001'],
@@ -59,8 +58,10 @@ export async function GET(req: NextRequest) {
       R: ['11110','10001','10001','11110','10100','10010','10001'],
       F: ['11111','10000','10000','11110','10000','10000','10000'],
     };
-    const paths = [...'MOYO PROOF'].flatMap((letter, i) => (glyphs[letter] || []).flatMap((row, y) => [...row].flatMap((pixel, x) => pixel === '1' ? [`M${i * 6 + x} ${y}h1v1h-1z`] : []))).join('');
-    const watermark = Buffer.from(`<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="proof" width="${width / 2}" height="${height / 3}" patternUnits="userSpaceOnUse"><g transform="translate(12 ${height / 6}) rotate(-20) scale(${fontSize / 7})"><path d="${paths}" fill="white" fill-opacity="0.48" stroke="black" stroke-opacity="0.35" stroke-width="0.06"/></g></pattern></defs><rect width="100%" height="100%" fill="url(#proof)"/></svg>`);
+    const paths = ['MOYO', 'PROOF'].flatMap((line, lineIndex) => [...line].flatMap((letter, i) => glyphs[letter].flatMap((row, y) => [...row].flatMap((pixel, x) => pixel === '1' ? [`M${i * 6 + x + (lineIndex === 0 ? 3 : 0)} ${y + lineIndex * 10}h1v1h-1z`] : [])))).join('');
+    // Fill the centre of portrait and landscape previews with a large diagonal mark.
+    const scale = Math.min(width * 0.94 / 33.1, height * 0.70 / 25.9);
+    const watermark = Buffer.from(`<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg"><g transform="translate(${width / 2} ${height / 2}) rotate(-20) scale(${scale}) translate(-14.5 -8.5)"><path d="${paths}" fill="white" fill-opacity="0.48" stroke="black" stroke-opacity="0.35" stroke-width="0.06"/></g></svg>`);
     const image = await sharp(preview.data).composite([{ input: watermark }]).jpeg({ quality: 72 }).toBuffer();
     return new NextResponse(new Uint8Array(image), { headers: { ...headers, 'Content-Type': 'image/jpeg' } });
   } catch {
