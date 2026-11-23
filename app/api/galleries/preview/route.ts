@@ -50,7 +50,17 @@ export async function GET(req: NextRequest) {
     const preview = await sharp(Buffer.concat(chunks), { limitInputPixels: 40_000_000 }).rotate().resize({ width: 1200, height: 1200, fit: 'inside', withoutEnlargement: true }).toBuffer({ resolveWithObject: true });
     const { width, height } = preview.info;
     const fontSize = Math.max(12, Math.round(width / 34));
-    const watermark = Buffer.from(`<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="proof" width="${width / 2}" height="${height / 3}" patternUnits="userSpaceOnUse"><text x="12" y="${height / 6}" font-family="sans-serif" font-size="${fontSize}" fill="white" fill-opacity="0.48" stroke="black" stroke-opacity="0.35" stroke-width="0.6" transform="rotate(-20 12 ${height / 6})">MOYO · PROOF · #${id}</text></pattern></defs><rect width="100%" height="100%" fill="url(#proof)"/></svg>`);
+    // Paths keep the watermark readable on hosts without installed fonts.
+    const glyphs: Record<string, string[]> = {
+      M: ['10001','11011','10101','10101','10001','10001','10001'],
+      O: ['01110','10001','10001','10001','10001','10001','01110'],
+      Y: ['10001','10001','01010','00100','00100','00100','00100'],
+      P: ['11110','10001','10001','11110','10000','10000','10000'],
+      R: ['11110','10001','10001','11110','10100','10010','10001'],
+      F: ['11111','10000','10000','11110','10000','10000','10000'],
+    };
+    const paths = [...'MOYO PROOF'].flatMap((letter, i) => (glyphs[letter] || []).flatMap((row, y) => [...row].flatMap((pixel, x) => pixel === '1' ? [`M${i * 6 + x} ${y}h1v1h-1z`] : []))).join('');
+    const watermark = Buffer.from(`<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="proof" width="${width / 2}" height="${height / 3}" patternUnits="userSpaceOnUse"><g transform="translate(12 ${height / 6}) rotate(-20) scale(${fontSize / 7})"><path d="${paths}" fill="white" fill-opacity="0.48" stroke="black" stroke-opacity="0.35" stroke-width="0.06"/></g></pattern></defs><rect width="100%" height="100%" fill="url(#proof)"/></svg>`);
     const image = await sharp(preview.data).composite([{ input: watermark }]).jpeg({ quality: 72 }).toBuffer();
     return new NextResponse(new Uint8Array(image), { headers: { ...headers, 'Content-Type': 'image/jpeg' } });
   } catch {
