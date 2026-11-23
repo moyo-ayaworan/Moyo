@@ -1109,6 +1109,7 @@ export default function AdminPage() {
     if (activeTransfers.current.has(target)) return { urls: [], failedFiles: files };
     activeTransfers.current.add(target);
     const preserveOriginal = target.endsWith('-finished') || target === 'digital-product-file';
+    const privateAsset = target.startsWith('gallery-') || preserveOriginal;
     setTargetUploading(target, true);
     const fractions = files.map(() => 0);
     let completedCount = 0;
@@ -1128,13 +1129,13 @@ export default function AdminPage() {
           const seoNamedFile = renameFileForSeo(file, getUploadFilenameParts(target), index);
           const prepared = await prepareUploadFile(seoNamedFile, { preserveOriginal });
           const hash = await fileFingerprint(prepared.file);
-          const cacheKey = `${preserveOriginal ? 'private' : 'public'}:${uploadPublicId(hash, prepared.file.name, prepared.file.type)}`;
+          const cacheKey = `${privateAsset ? 'private' : 'public'}:${uploadPublicId(hash, prepared.file.name, prepared.file.type)}`;
           let transfer = uploadedAssets.current.get(cacheKey);
           if (!transfer) {
             transfer = uploadAdminFile(prepared.file, hash, (percent) => {
               fractions[index] = percent;
               report(percent === 100 ? 'processing' : 'uploading');
-            }, preserveOriginal);
+            }, privateAsset);
             uploadedAssets.current.set(cacheKey, transfer);
             transfer.catch(() => uploadedAssets.current.delete(cacheKey));
           }

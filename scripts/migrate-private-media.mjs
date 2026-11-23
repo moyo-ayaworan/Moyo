@@ -30,10 +30,9 @@ databaseUrl.searchParams.delete('uselibpqcompat');
 const pool = new Pool({ connectionString: databaseUrl.toString(), ssl: { rejectUnauthorized: true } });
 try {
   const [galleries, products, publicReferences] = await Promise.all([
-    pool.query('SELECT id, finished_images FROM galleries'),
+    pool.query('SELECT id, images, finished_images FROM galleries'),
     pool.query('SELECT id, product_url FROM digital_products'),
     pool.query(`SELECT image AS url FROM artworks UNION ALL
-      SELECT unnest(images) FROM galleries UNION ALL
       SELECT image FROM digital_products UNION ALL
       SELECT homepage_hero_image FROM content UNION ALL
       SELECT about_image FROM content UNION ALL
@@ -42,11 +41,11 @@ try {
   ]);
   const inPublicUse = new Set(publicReferences.rows.map((row) => row.url).filter(Boolean));
   const targets = new Set([
-    ...galleries.rows.flatMap((row) => row.finished_images || []),
+    ...galleries.rows.flatMap((row) => [...(row.images || []), ...(row.finished_images || [])]),
     ...products.rows.map((row) => row.product_url).filter(Boolean),
   ]);
   const label = (source) => [
-    ...galleries.rows.filter((row) => (row.finished_images || []).includes(source)).map((row) => `gallery #${row.id}`),
+    ...galleries.rows.filter((row) => [...(row.images || []), ...(row.finished_images || [])].includes(source)).map((row) => `gallery #${row.id}`),
     ...products.rows.filter((row) => row.product_url === source).map((row) => `product #${row.id}`),
   ].join(', ');
   let migrated = 0;
@@ -82,7 +81,12 @@ try {
       }
     }
     if (!result?.secure_url?.includes('/authenticated/')) throw new Error('Cloudinary did not return an authenticated URL.');
-    await pool.query('UPDATE galleries SET finished_images = array_replace(finished_images, $1, $2) WHERE $1 = ANY(finished_images)', [source, result.secure_url]);
+    await pool.query(`UPDATE galleries SET
+      images = array_replace(images, $1, $2),
+      approved_images = array_replace(approved_images, $1, $2),
+      finished_images = array_replace(finished_images, $1, $2),
+      presentation = CASE WHEN presentation->>'coverImage' = $1 THEN jsonb_set(presentation, '{coverImage}', to_jsonb($2::text)) ELSE presentation END
+      WHERE $1 = ANY(images) OR $1 = ANY(finished_images)`, [source, result.secure_url]);
     await pool.query('UPDATE digital_products SET product_url = $2, updated_at = NOW() WHERE product_url = $1', [source, result.secure_url]);
     migrated++;
     console.log(`Migrated: ${label(source)}`);
