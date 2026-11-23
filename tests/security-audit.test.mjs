@@ -269,3 +269,33 @@ test('finished downloads preserve preview indices when an earlier file is unsupp
   assert.equal((await route.GET(new Request('https://example.test/api/galleries/download?galleryId=1&index=1'))).status,200);
   assert.equal(fetched,'https://provider.test/second.jpg');
 });
+
+test('installed Stillbounds betas receive their pinned approval address after the website domain migration', async () => {
+  const issued = {device_code:'synthetic-private-device-code',user_code:'ABCD1234',verification_uri:'https://moyoayaworan.com/mofolio/account',verification_uri_complete:'https://moyoayaworan.com/mofolio/account?user_code=ABCD1234',expires_in:600,interval:5};
+  const route = load('app/api/stillbounds/auth/[...all]/route.ts', {
+    '@/lib/stillboundsAuth': {stillboundsAuth:()=>({handler:async()=>Response.json(issued,{headers:{'Content-Length':'999','X-Fixture':'preserved'}})})},
+  }, {Headers});
+  for (const origin of ['https://moyo-roan.vercel.app','https://moyoayaworan.com','https://untrusted.example']) {
+    const response = await route.POST(new Request(origin+'/api/stillbounds/auth/device/code',{method:'POST'}));
+    assert.equal(response.status,200);
+    const data = await response.json();
+    const expected = origin === 'https://moyo-roan.vercel.app' ? origin : 'https://moyoayaworan.com';
+    assert.equal(data.verification_uri,expected+'/mofolio/account');
+    assert.equal(data.verification_uri_complete,expected+'/mofolio/account?user_code=ABCD1234');
+    assert.equal(data.device_code,issued.device_code);
+    assert.equal(data.expires_in,600);
+    assert.equal(data.interval,5);
+    assert.equal(response.headers.get('cache-control'),'private, no-store');
+    assert.equal(response.headers.get('referrer-policy'),'no-referrer');
+    assert.equal(response.headers.get('x-fixture'),'preserved');
+    if (origin === 'https://moyo-roan.vercel.app') assert.equal(response.headers.get('content-length'),null);
+  }
+  const unrelated = await route.GET(new Request('https://moyo-roan.vercel.app/api/stillbounds/auth/get-session'));
+  assert.equal((await unrelated.json()).verification_uri,issued.verification_uri);
+  const failed = load('app/api/stillbounds/auth/[...all]/route.ts',{
+    '@/lib/stillboundsAuth':{stillboundsAuth:()=>({handler:async()=>Response.json({error:'rate_limited'},{status:429})})},
+  },{Headers});
+  const failure = await failed.POST(new Request('https://moyo-roan.vercel.app/api/stillbounds/auth/device/code',{method:'POST'}));
+  assert.equal(failure.status,429);
+  assert.deepEqual(await failure.json(),{error:'rate_limited'});
+});
