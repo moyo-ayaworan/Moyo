@@ -15,7 +15,8 @@ const EniyanChat = dynamic(() => import('@/components/EniyanChat'), { ssr: false
 
 export default function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const productPage = pathname === '/stillbounds' || pathname.startsWith('/stillbounds/') || pathname === '/admin/stillbounds';
+  const privateWorkspace = pathname === '/admin/stillbounds' || pathname.startsWith('/admin/stillbounds/');
+  const productPage = pathname === '/stillbounds' || pathname.startsWith('/stillbounds/') || privateWorkspace;
   const purchasePage = /\/shop\/(?:products\/|payment)/.test(pathname);
   const [enablePointerEffects, setEnablePointerEffects] = useState(false);
 
@@ -56,7 +57,7 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
       <LanguageProvider>
         <ProfileProvider>
           {!productPage && <SessionTracker />}
-          {enablePointerEffects ? (
+          {enablePointerEffects && !privateWorkspace ? (
             <>
               <ClickSpark
                 sparkColor="#920110"
