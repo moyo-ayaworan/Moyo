@@ -1,0 +1,30 @@
+{
+  "version": "0.4.25",
+  "date": "2026-11-24",
+  "highlights": [
+    {
+      "title": "Design across the fold",
+      "description": "Try continuous mosaics, across-fold hero photos and restrained layered layouts. Automatic design compares them with separate-page choices; you can disable cross-fold layouts or overlap."
+    },
+    {
+      "title": "Find replacement photos more easily",
+      "description": "Search by filename, section or folder, filter to unused photos, and browse smaller batches of replacement and layout previews."
+    },
+    {
+      "title": "Correct photo suggestions in one place",
+      "description": "Change story sections directly in AI results. Unknown categories stay flagged for review, even before face analysis runs."
+    },
+    {
+      "title": "Catch export problems before saving",
+      "description": "Jump from the export checklist to affected spreads or missing originals. Resolution warnings now account for crop and zoom."
+    },
+    {
+      "title": "Add optional edge bleed",
+      "description": "Repeat outer-edge pixels into PNG/JPEG or PDF bleed without stretching the trimmed design. Review a proof and your printer\u2019s requirements."
+    },
+    {
+      "title": "Send feedback from Stillbounds",
+      "description": "Report a bug or suggest an improvement from Home, Help or the activation screen. Reply email and system versions are optional; no photos, projects or logs are attached."
+    }
+  ]
+}
