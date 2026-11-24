@@ -1,5 +1,5 @@
 export type LegalSection = [heading: string, paragraphs: string[]];
-export const stillboundsLegalVersion = "2026-11-12-v5";
+export const stillboundsLegalVersion = "2026-11-24-v6";
 export const termsSections: LegalSection[] = [
   [
     "Who we are and what these terms cover",
@@ -197,5 +197,15 @@ privacySections.push([
     "People with your private review link and its access code can view that fixed version and submit comments or an approval decision. Share the link only with your intended client. Reviews are limited to 10 active books and 50 MiB of previews per account during the beta, subject to overall hosting capacity.",
     "You can inspect feedback, copy a client link and permanently delete a review in My review books. Deletion removes its previews and feedback and disables further client access. Expiry denies access immediately; expired data is removed during subsequent cleanup requests or the scheduled daily cleanup. Account deletion or other privacy requests can also be sent to the contact address above.",
     "Review devices paired through older app versions can publish to the account that approved their connection until the device connection expires or is disconnected in the profile. These review connections are separate from normal browser sign-in. Screenshots or copies made by a client cannot be revoked.",
+  ],
+]);
+
+privacySections.push([
+  "App feedback and bug reports",
+  [
+    "The desktop Send app feedback form sends only when you choose Send. We store the report type, title, description, optional reproduction steps, optional reply email, a report reference and timestamps in the website database. Sign-in is not required; a supplied reply email is not verified. Submitting a report does not subscribe you to marketing or trigger an automatic email.",
+    "If you enable app and system versions, the report also includes the Stillbounds version, macOS version and processor architecture shown before sending. You can turn this off. The form does not attach photographs, projects, screenshots, file paths, face-analysis results, account tokens or logs. Avoid putting confidential client information in your written report.",
+    "Reports are visible only to authorised website administrators and the hosting/database providers needed to operate the service. We use them to investigate problems, respond when appropriate and improve Stillbounds. Security request limits use the hashed request information described above. We do not publish reports in a public forum.",
+    "Reports remain in the private inbox until the operator removes them; changing a report to fixed or closed does not delete it. There is no automatic feedback-retention cleanup. Use the contact address in this notice for access, correction or deletion requests, and include the report reference if available. Unsent text stays in the app window until cleared or the app quits; the feedback form does not send it in the background.",
   ],
 ]);

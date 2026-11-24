@@ -1,0 +1,25 @@
+.page { min-height:100dvh; background:#121212; color:#fff; padding:clamp(24px,5vw,72px); font-family:var(--font-body, sans-serif); }
+.page > header,.page > section,.page > nav,.page > footer {max-width:1100px;margin-inline:auto;}
+.page h1 {font-size:clamp(36px,5vw,64px);line-height:1.1;margin:18px 0;letter-spacing:-.04em;}
+.page h2 {font-size:24px;margin:8px 0;overflow-wrap:anywhere;}
+.page p,.page dd,.page label,.page button,.page select,.page summary,.page footer {font-size:16px;line-height:1.55;}
+.page a {color:#fff;text-decoration:underline;text-underline-offset:4px;}
+.page .eyebrow {font-size:12px;letter-spacing:.14em;color:#b0b0b0;}
+.controls {display:flex;flex-wrap:wrap;gap:16px;align-items:end;padding-block:24px;}
+.page label {display:grid;gap:6px;}
+.page select,.page button {color:#fff;background:#252525;border:1px solid #555;border-radius:6px;padding:9px 14px;}
+.page button {cursor:pointer;}
+.page button:disabled,.page select:disabled {opacity:.5;cursor:wait;}
+.page button:focus-visible,.page select:focus-visible,.page a:focus-visible,.page summary:focus-visible {outline:2px solid #ff6b7b;outline-offset:4px;}
+.reports {display:grid;gap:20px;}
+.reports article {border:1px solid #3b3b3b;border-radius:10px;background:#1b1b1b;padding:clamp(18px,3vw,30px);min-width:0;}
+.reportHeader {display:flex;gap:20px;justify-content:space-between;align-items:start;}
+.reportHeader>div {min-width:0;}
+.description {white-space:pre-wrap;overflow-wrap:anywhere;}
+.page dl {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;border-top:1px solid #444;padding-top:20px;margin-top:24px;}
+.page dt {font-size:13px;color:#b0b0b0;}
+.page dd {margin:5px 0 0;overflow-wrap:anywhere;}
+.page footer {color:#b0b0b0;border-top:1px solid #444;padding-top:24px;}
+.error {border-left:3px solid #cf0015;padding:14px;background:#252525;overflow-wrap:anywhere;}
+.empty {padding:24px 0;color:#ccc;}
+@media(max-width:650px){.reportHeader {display:grid;}.page dl {grid-template-columns:1fr;}.page .eyebrow {letter-spacing:.06em;}}
