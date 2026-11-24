@@ -2737,6 +2737,7 @@ export default function AdminPage() {
           </p>
         </header>
 
+        <div className="mb-8"><Link href="/admin/stillbounds/feedback" className="inline-flex min-h-11 items-center rounded border border-white/30 px-4 py-2 text-base text-white hover:border-accent">Stillbounds app feedback</Link></div>
         <div className="mb-10 grid min-w-0 gap-4 md:grid-cols-4">
           <div className="flex min-w-0 flex-wrap gap-3 text-xs text-white/50 md:col-span-3">
             <span className="px-3 py-2 border border-white/10 bg-white/5 uppercase tracking-[0.16em] sm:tracking-[0.25em]">
