@@ -128,3 +128,21 @@ test('deferred booking recovery delivery makes maintenance unhealthy instead of 
   const response = await route.GET({ headers: new Headers() });
   assert.equal(response.status, 503); assert.equal(heartbeat[0], 1);
 });
+
+
+test('review delivery failures make the protected retry worker unhealthy and unauthenticated calls send nothing', async () => {
+  let calls=0;
+  const route=load('app/api/operations/email-retry/route.ts',{
+    'node:crypto':{timingSafeEqual},
+    '@/lib/payments/notifications':{deliverPaymentNotifications:async()=>{}},
+    '@/lib/bookingRecovery':{deliverBookingRecovery:async()=>({delivered:0,deferred:0})},
+    '@/lib/newsletter/queue':{deliverNewsletterCampaigns:async()=>({delivered:0,deferred:0})},
+    '@/lib/studio/mail':{deliverReviewMail:async()=>{calls++;return {delivered:1,deferred:1};}},
+    '@/lib/rateLimit':{rateLimitIdentity:async()=>null},
+  },{OPERATIONS_MONITOR_SECRET:'fixture'});
+  assert.equal((await route.POST(new Request('https://site.example/api/operations/email-retry',{method:'POST'}))).status,401);
+  assert.equal(calls,0);
+  const response=await route.POST(new Request('https://site.example/api/operations/email-retry',{method:'POST',headers:{authorization:'Bearer fixture'}}));
+  assert.equal(response.status,503);
+  const result=await response.json();assert.equal(result.reviewDelivered,1);assert.equal(result.deferred,1);
+});

@@ -1,5 +1,5 @@
 export type LegalSection = [heading: string, paragraphs: string[]];
-export const stillboundsLegalVersion = "2026-11-24-v6";
+export const stillboundsLegalVersion = "2026-11-25-v7";
 export const termsSections: LegalSection[] = [
   [
     "Who we are and what these terms cover",
@@ -87,14 +87,17 @@ export const termsSections: LegalSection[] = [
   ],
 ];
 export const privacySections: LegalSection[] = [
-  ["Accounts, payments and laptop activation", [
-    "Registering uses your name and email address. The account service stores a salted password hash, verification/reset records and sign-in sessions; we do not store your password in readable form. Emails for account verification and password recovery are transactional, not marketing consent.",
-    "Activation stores your account ID, a hashed device identifier, a public device key, the laptop name, activation status and timestamps. The raw hardware identifier is processed on your Mac to derive the hash and is not sent by the activation flow. These records enforce the free trial and two-laptop allowance. A device identifier is pseudonymous account data, not anonymous data.",
-    "Payments use Paystack’s hosted checkout. We retain the order reference, account/email, amount, currency, provider transaction ID and verified payment/refund/dispute status. Card numbers and card security codes are not collected by the Stillbounds application or website checkout form. Paystack processes payment details under its own policies.",
-    "Registration and activation do not upload your photographs, face-analysis results or book files. Those remain local unless you explicitly choose a separate sharing or support action. A desktop session token, device private key and signed activation are stored using macOS-protected encryption. No API secret or database credential is included in the app’s licence interface.",
-    "Paid activations refresh periodically and can work offline for up to 90 days, with a seven-day outage grace period. Deactivating a laptop is enforced when it next checks access or its offline certificate expires. Sign-out clears the local session and activation; it does not delete your photographs or projects.",
-    "Account, payment and activation records are accessible only to the operator and authorised service administrators and the providers required to run them: Vercel hosting, the PostgreSQL database provider, account email delivery and Paystack. Contact moyoayaworan@gmail.com for access, correction, export or deletion requests. Payment/dispute records and the minimal trial-abuse-prevention record may need to be retained where necessary for a legitimate purpose or legal obligation; local project files remain under your control.",
-  ]],
+  [
+    "Accounts, payments and laptop activation",
+    [
+      "Registering uses your name and email address. The account service stores a salted password hash, verification/reset records and sign-in sessions; we do not store your password in readable form. Emails for account verification and password recovery are transactional, not marketing consent.",
+      "Activation stores your account ID, a hashed device identifier, a public device key, the laptop name, activation status and timestamps. The raw hardware identifier is processed on your Mac to derive the hash and is not sent by the activation flow. These records enforce the free trial and two-laptop allowance. A device identifier is pseudonymous account data, not anonymous data.",
+      "Payments use Paystack’s hosted checkout. We retain the order reference, account/email, amount, currency, provider transaction ID and verified payment/refund/dispute status. Card numbers and card security codes are not collected by the Stillbounds application or website checkout form. Paystack processes payment details under its own policies.",
+      "Registration and activation do not upload your photographs, face-analysis results or book files. Those remain local unless you explicitly choose a separate sharing or support action. A desktop session token, device private key and signed activation are stored using macOS-protected encryption. No API secret or database credential is included in the app’s licence interface.",
+      "Paid activations refresh periodically and can work offline for up to 90 days, with a seven-day outage grace period. Deactivating a laptop is enforced when it next checks access or its offline certificate expires. Sign-out clears the local session and activation; it does not delete your photographs or projects.",
+      "Account, payment and activation records are accessible only to the operator and authorised service administrators and the providers required to run them: Vercel hosting, the PostgreSQL database provider, account email delivery and Paystack. Contact moyoayaworan@gmail.com for access, correction, export or deletion requests. Payment/dispute records and the minimal trial-abuse-prevention record may need to be retained where necessary for a legitimate purpose or legal obligation; local project files remain under your control.",
+    ],
+  ],
   [
     "Shared website and desktop accounts",
     [
@@ -103,12 +106,15 @@ export const privacySections: LegalSection[] = [
     ],
   ],
   [
-    "Private Moyo Studio book reviews",
+    "Private Stillbounds and Moyo Studio book reviews",
     [
       "Moyo Studio is a private connection for Moyo Ayaworan’s own Stillbounds desktop app. It is not an account or website connection for general beta users. Only devices approved through Moyo’s admin area can publish previews. Device access expires after 30 days and can be revoked sooner.",
       "When Moyo deliberately publishes a review, this website stores flattened JPEG previews, the book title, version and spread identifiers, expiry settings, and any watermark choice. It does not receive editable projects, source-photo files or print exports through this connector. If you review a book, we store the comments and approval or change request you submit for that fixed version, with timestamps. We use this information to provide the requested client-review service and protect it from unauthorised access; review activity is not added to the beta or marketing lists.",
+      "Review conversations include comments, pinned locations, and replies from clients and photographers. We record the first and latest successful review opens, group repeated opens into 30-minute sessions, and record timestamps for feedback, decisions and reminders. Review activity does not identify a named signer. Unsent comment drafts and viewed-page markers are stored in your browser, separately for each review version; you can discard drafts or clear your browser storage.",
+      "Photographers receive operational notifications at their verified account email or configured studio inbox and can turn them off per review. Clients can optionally request reply emails, approval receipts and one expiry reminder by confirming their email with a short-lived code. Confirmation codes have limited attempts. Approval stops pending reminders. Review emails are separate from marketing; use the email preference link or the review settings to stop them. Queued delivery retries after temporary failures. We retain the email subscription, delivery queue, activity and online approval receipts only while the review is retained; copies saved to an inbox or downloaded are under the recipient’s control.",
+      "Approval receipts record the fixed version, approval timestamp and a SHA-256 fingerprint of its preview images. They record approval by a holder of the private link, rather than certifying a person’s identity, payment or printing arrangements. Downloaded copies are unchanged by later decisions. Anyone with the review link can see the review conversation, activity and receipts, and can compare earlier published versions of the same book while those versions remain available.",
       "Anyone given the private access link can view that version and submit feedback. Share links only with the intended review group. The link’s access code is carried in a browser fragment, exchanged for a review-specific HttpOnly cookie, and removed from the address bar. The cookie lasts up to eight hours; the review’s expiry or revocation can end access sooner. Studio and review pages do not run this website’s session-notification tracker.",
-      "Published reviews expire after the period Moyo chooses, between 1 and 30 days. Expired previews, comments and review-access sessions are removed by the next daily cleanup or studio cleanup request. Unfinished uploads expire after 24 hours. Revoking a review removes its uploaded previews and access sessions immediately; its status and comments remain until its original expiry. Minimal book identifiers and version counters remain so later versions are numbered consistently. Hosting logs and provider backups follow their separate retention cycles. Contact moyoayaworan@gmail.com about access, correction or deletion.",
+      "Published reviews expire after the period Moyo chooses, between 1 and 30 days. Expired previews, conversations, email subscriptions, delivery queues, activity, online receipts and review-access sessions are removed by the next daily cleanup or studio cleanup request. Unfinished uploads expire after 24 hours. Revoking a review removes its uploaded previews and access sessions immediately; its status and comments remain until its original expiry. Minimal book identifiers and version counters remain so later versions are numbered consistently. Hosting logs and provider backups follow their separate retention cycles. Contact moyoayaworan@gmail.com about access, correction or deletion.",
       "Review records and previews use this website’s PostgreSQL database and Vercel hosting, with the provider and international-processing limitations described below. Review previews may contain identifiable people, so Moyo must have appropriate permission to share them. Watermarks and access controls cannot prevent screenshots or copying by an authorised viewer.",
     ],
   ],

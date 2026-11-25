@@ -44,3 +44,10 @@
 @media(max-width:600px){.page{padding-top:28px}.card{padding:26px 22px}.progress{gap:8px}.progress li{font-size:10px;flex-direction:column;align-items:flex-start}.modeLinks{display:block}.codeReview strong{font-size:25px}.nextStep{padding:18px}}
 .reviewBooks{margin-top:30px;padding-top:8px;border-top:1px solid var(--border)}
 .reviewBook{padding:18px 0;border-bottom:1px solid var(--border)}.reviewBook h3{font-size:18px;margin:8px 0}.reviewBook details{margin:18px 0}.reviewBook summary{cursor:pointer;font-size:12px}.reviewBook .actions{align-items:center}.reviewComment{padding:12px 0;border-bottom:1px solid var(--border)}.reviewComment small{display:block;margin-bottom:10px}.reviewBook button{margin-top:10px}
+
+.reviewBook { --review-muted: var(--mf-muted); }
+.reviewBook textarea { width: 100%; padding: 14px; background: var(--mf-bg); color: var(--mf-ink); border: 1px solid var(--border); border-radius: 4px; font: inherit; }
+.reviewBook time, .reviewBook small { color: var(--mf-muted); }
+.reviewBook a[class] { background: transparent; color: var(--mf-ink); border-color: var(--border); }
+
+.reviewBook label:has(input[type=checkbox]) { display: flex; align-items: flex-start; gap: 10px; }

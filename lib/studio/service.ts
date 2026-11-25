@@ -28,6 +28,19 @@ import {
   decryptCode,
 } from "./protocol";
 
+import {
+  addReply,
+  saveDecision,
+  reviewEvent,
+  queueOwner,
+  recordReviewOpen,
+  receiptDownload,
+  requestReviewEmails,
+  confirmReviewEmails,
+  emailPreferences,
+  stopReviewEmails,
+} from "./engagement";
+
 const json = (value: unknown, status = 200) =>
   NextResponse.json(value, { status, headers: privateHeaders });
 async function cleanup() {
@@ -45,24 +58,37 @@ async function reviewRecords(
   workspace = OWNER,
 ) {
   if (!ids.length) return [];
-  const [versions, media, comments] = await Promise.all([
-    studioQuery(
-      `SELECT id,book_id,title,version,expires_at,state,watermark,decision,encrypted_code,spread_metadata
+  const [versions, media, comments, replies, receipts, events] =
+    await Promise.all([
+      studioQuery(
+        `SELECT id,book_id,title,version,expires_at,state,watermark,decision,encrypted_code,spread_metadata,notify_owner,first_opened_at,last_opened_at,open_count,last_feedback_at
        FROM stillbounds_versions WHERE id=ANY($1::uuid[]) AND owner_id=$2`,
-      [ids, workspace],
-    ),
-    studioQuery(
-      `SELECT m.version_id,m.index,m.width,m.height,v.spread_ids->>m.index AS id
+        [ids, workspace],
+      ),
+      studioQuery(
+        `SELECT m.version_id,m.index,m.width,m.height,v.spread_ids->>m.index AS id
        FROM stillbounds_media m JOIN stillbounds_versions v ON v.id=m.version_id
        WHERE m.version_id=ANY($1::uuid[]) ORDER BY m.index`,
-      [ids],
-    ),
-    studioQuery(
-      `SELECT version_id,id,spread_id AS "spreadId",text,created_at AS "createdAt",resolved,pin
+        [ids],
+      ),
+      studioQuery(
+        `SELECT version_id,id,spread_id AS "spreadId",text,created_at AS "createdAt",resolved,pin
        FROM stillbounds_comments WHERE version_id=ANY($1::uuid[]) ORDER BY created_at,id`,
-      [ids],
-    ),
-  ]);
+        [ids],
+      ),
+      studioQuery(
+        `SELECT r.id,r.comment_id,r.actor,r.text,r.created_at FROM stillbounds_replies r JOIN stillbounds_comments c ON c.id=r.comment_id WHERE c.version_id=ANY($1::uuid[]) ORDER BY r.created_at,r.id`,
+        [ids],
+      ),
+      studioQuery(
+        `SELECT id,version_id,approved_at,snapshot FROM stillbounds_approval_receipts WHERE version_id=ANY($1::uuid[]) ORDER BY approved_at DESC,id`,
+        [ids],
+      ),
+      studioQuery(
+        `SELECT * FROM (SELECT id,version_id,kind,actor,created_at,ROW_NUMBER() OVER(PARTITION BY version_id ORDER BY created_at DESC,id) AS position FROM stillbounds_review_events WHERE version_id=ANY($1::uuid[])) recent WHERE position<=20 ORDER BY created_at DESC,id`,
+        [ids],
+      ),
+    ]);
   return ids.flatMap((id) => {
     const v = versions.rows.find((row) => row.id === id);
     if (!v) return [];
@@ -77,6 +103,33 @@ async function reviewRecords(
         state: v.state,
         watermark: v.watermark,
         decision: v.decision,
+        activity: {
+          firstOpenedAt: v.first_opened_at
+            ? new Date(v.first_opened_at).toISOString()
+            : null,
+          lastOpenedAt: v.last_opened_at
+            ? new Date(v.last_opened_at).toISOString()
+            : null,
+          openCount: v.open_count ?? 0,
+          lastFeedbackAt: v.last_feedback_at
+            ? new Date(v.last_feedback_at).toISOString()
+            : null,
+          events: events.rows
+            .filter((event) => event.version_id === id)
+            .map((event) => ({
+              id: event.id,
+              kind: event.kind,
+              actor: event.actor,
+              createdAt: new Date(event.created_at).toISOString(),
+            })),
+        },
+        receipts: receipts.rows
+          .filter((receipt) => receipt.version_id === id)
+          .map((receipt) => ({
+            id: receipt.id,
+            approvedAt: new Date(receipt.approved_at).toISOString(),
+            snapshot: receipt.snapshot,
+          })),
         spreads:
           v.state === "revoked"
             ? v.spread_metadata
@@ -97,9 +150,18 @@ async function reviewRecords(
             createdAt: new Date(c.createdAt).toISOString(),
             resolved: c.resolved,
             pin: c.pin ?? null,
+            replies: replies.rows
+              .filter((reply) => reply.comment_id === c.id)
+              .map((reply) => ({
+                id: reply.id,
+                actor: reply.actor,
+                text: reply.text,
+                createdAt: new Date(reply.created_at).toISOString(),
+              })),
           })),
         ...(owner
           ? {
+              notifyOwner: v.notify_owner,
               url: `${origin}/stillbounds/review/${id}${v.encrypted_code && v.state === "published" ? "#access=" + decryptCode(v.encrypted_code) : ""}`,
             }
           : {}),
@@ -259,11 +321,20 @@ export async function studioRequest(
       await revoke(path[2], workspace);
       return json({ ok: true });
     }
+    if (path[1] === "versions" && path.length >= 4)
+      return studioRequest(request, path.slice(1), workspace);
     assertStudio(false, "Route not found.", 404);
   }
   if (path[0] === "reviews") {
     assertStudio(uuid.test(path[1] || ""), "Invalid review.");
     const id = path[1];
+    if (path[2] === "unsubscribe" && path.length === 3 && method === "POST") {
+      sameOrigin(request);
+      await limited(request, `studio-unsubscribe-${id}`, 15, 600);
+      const input = await bodyJSON(request);
+      await stopReviewEmails(id, input.token);
+      return json({ ok: true });
+    }
     if (path[2] === "unlock" && path.length === 3 && method === "POST") {
       sameOrigin(request);
       await limited(request, `studio-unlock-${id}`, 12, 600);
@@ -309,8 +380,14 @@ export async function studioRequest(
       return response;
     }
     const version = await viewer(request, id);
-    if (path.length === 2 && method === "GET")
+    if (path.length === 2 && method === "GET") {
+      await recordReviewOpen(id, version.viewer_token_hash);
       return json(await reviewRecord(id, origin, false, version.owner_id));
+    }
+    if (path[2] === "notifications" && path.length === 3 && method === "GET")
+      return json(await emailPreferences(id, version.viewer_token_hash));
+    if (path[2] === "receipts" && path.length === 4 && method === "GET")
+      return receiptDownload(id, path[3]);
     // A live viewer may inspect only earlier published versions of this book
     // in this workspace. Never expose codes, drafts, revoked or expired media.
     if (path[2] === "history" && method === "GET") {
@@ -384,6 +461,39 @@ export async function studioRequest(
       sameOrigin(request);
       await limited(request, `studio-feedback-${id}`, 30, 600);
       const input = await bodyJSON(request);
+      if (path[2] === "notifications" && path.length === 3) {
+        await limited(request, `studio-subscribe-${id}`, 5, 3600);
+        await requestReviewEmails(id, input);
+        return json({ ok: true });
+      }
+      if (
+        path[2] === "notifications" &&
+        path[3] === "confirm" &&
+        path.length === 4
+      ) {
+        await limited(request, `studio-confirm-${id}`, 8, 900);
+        await confirmReviewEmails(id, version.viewer_token_hash, input);
+        return json({ ok: true });
+      }
+      if (
+        path[2] === "notifications" &&
+        path[3] === "stop" &&
+        path.length === 4
+      ) {
+        await studioQuery(
+          `DELETE FROM stillbounds_review_subscribers s USING stillbounds_viewers v WHERE v.subscriber_id=s.id AND v.version_id=$1 AND v.token_hash=$2 AND s.version_id=$1`,
+          [id, version.viewer_token_hash],
+        );
+        return json({ ok: true });
+      }
+      if (
+        path[2] === "comments" &&
+        path[4] === "replies" &&
+        path.length === 5
+      ) {
+        await addReply(id, path[3], "client", input);
+        return json({ ok: true });
+      }
       if (path[2] === "comments" && path.length === 3) {
         assertStudio(
           typeof input.spreadId === "string" &&
@@ -422,6 +532,8 @@ export async function studioRequest(
               pin === null ? null : JSON.stringify(pin),
             ],
           );
+          const event = await reviewEvent(db, id, "comment", "client");
+          await queueOwner(db, id, event, "owner_comment");
         });
         return json({ ok: true });
       }
@@ -434,11 +546,7 @@ export async function studioRequest(
           input.confirm === true,
           "Confirm your decision for this fixed version.",
         );
-        const { rows } = await studioQuery(
-          `UPDATE stillbounds_versions SET decision=$2 WHERE id=$1 AND state='published' AND expires_at>NOW() RETURNING id`,
-          [id, input.decision],
-        );
-        assertStudio(rows.length, "Review unavailable.", 410);
+        await saveDecision(id, input.decision);
         return json({ ok: true });
       }
     }
@@ -512,6 +620,32 @@ export async function studioRequest(
   const version = await ownerVersion(id, workspace);
   if (path.length === 2 && method === "GET")
     return json(await reviewRecord(id, origin, true, workspace));
+  if (path[2] === "receipts" && path.length === 4 && method === "GET")
+    return receiptDownload(id, path[3]);
+  if (path[2] === "settings" && path.length === 3 && method === "POST") {
+    if (accountOwner) sameOrigin(request);
+    const input = await bodyJSON(request);
+    assertStudio(
+      typeof input.notifyOwner === "boolean",
+      "Choose an email notification preference.",
+    );
+    await studioQuery(
+      "UPDATE stillbounds_versions SET notify_owner=$3 WHERE id=$1 AND owner_id=$2",
+      [id, workspace, input.notifyOwner],
+    );
+    return json({ ok: true });
+  }
+  if (
+    path[2] === "comments" &&
+    path[4] === "replies" &&
+    path.length === 5 &&
+    method === "POST"
+  ) {
+    if (accountOwner) sameOrigin(request);
+    await limited(request, `studio-owner-replies-${workspace}`, 30, 600);
+    await addReply(id, path[3], "photographer", await bodyJSON(request));
+    return json({ ok: true });
+  }
   if (path.length === 2 && method === "DELETE") {
     if (accountOwner) {
       const removed = await studioQuery(
@@ -646,11 +780,24 @@ export async function studioRequest(
     method === "POST"
   ) {
     assertStudio(uuid.test(path[3]), "Invalid comment.");
-    const { rows } = await studioQuery(
-      `UPDATE stillbounds_comments SET resolved=TRUE WHERE id=$1 AND version_id=$2 RETURNING id`,
-      [path[3], id],
-    );
-    assertStudio(rows.length, "Comment not found in this version.", 404);
+    await studioTransaction(async (db) => {
+      const comment = await db.query(
+        "SELECT id,resolved FROM stillbounds_comments WHERE id=$1 AND version_id=$2 FOR UPDATE",
+        [path[3], id],
+      );
+      assertStudio(
+        comment.rows.length,
+        "Comment not found in this version.",
+        404,
+      );
+      if (!comment.rows[0].resolved) {
+        await db.query(
+          "UPDATE stillbounds_comments SET resolved=TRUE WHERE id=$1 AND version_id=$2",
+          [path[3], id],
+        );
+        await reviewEvent(db, id, "resolved", "photographer");
+      }
+    });
     return json({ ok: true });
   }
   assertStudio(false, "Route not found.", 404);

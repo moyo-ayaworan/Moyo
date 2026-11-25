@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useBrowserLocation } from "@/lib/useBrowserLocation";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import s from "./studio.module.css";
+import OwnerReviewTools, { type OwnedReview } from "./OwnerReviewTools";
 type Device = {
   id: string;
   label: string;
@@ -44,6 +45,7 @@ function subscribeClock(notify: () => void) {
 const clockSnapshot = () => Math.floor(Date.now() / 30000) * 30000;
 const serverClockSnapshot = () => 0;
 export default function MoyoStudio() {
+  const [selectedReview, setSelectedReview] = useState<OwnedReview>();
   const [summary, setSummary] = useState<Summary>(),
     [code, setCode] = useState(""),
     [confirm, setConfirm] = useState(false),
@@ -52,12 +54,18 @@ export default function MoyoStudio() {
     [busy, setBusy] = useState(false);
   const href = useBrowserLocation();
   const origin = href ? new URL(href).origin : "";
-  const now = useSyncExternalStore(subscribeClock, clockSnapshot, serverClockSnapshot);
+  const now = useSyncExternalStore(
+    subscribeClock,
+    clockSnapshot,
+    serverClockSnapshot,
+  );
   const refresh = useCallback(async () => {
     setSummary(await api("/owner"));
   }, []);
   useEffect(() => {
-    api("/owner").then(setSummary).catch((e) => setError(e.message));
+    api("/owner")
+      .then(setSummary)
+      .catch((e) => setError(e.message));
   }, []);
   async function perform(action: () => Promise<void>) {
     setBusy(true);
@@ -240,6 +248,28 @@ export default function MoyoStudio() {
             </p>
           )}
         </section>
+        {selectedReview && (
+          <section className={`${s.panel} ${s.section}`}>
+            <h2>Selected review</h2>
+            <OwnerReviewTools
+              review={selectedReview}
+              base={`${base}/owner/versions/${selectedReview.id}`}
+              onRefresh={async () => {
+                setSelectedReview(
+                  await api(`/owner/versions/${selectedReview.id}`),
+                );
+              }}
+            />
+            <div className={s.actions}>
+              <button
+                className={s.button}
+                onClick={() => setSelectedReview(undefined)}
+              >
+                Close selected review
+              </button>
+            </div>
+          </section>
+        )}
         <section className={s.section}>
           <h2>Client book reviews</h2>
           {summary?.versions.map((v) => (
@@ -262,6 +292,17 @@ export default function MoyoStudio() {
                 </small>
               </div>
               <div className={s.actions}>
+                <button
+                  className={s.button}
+                  disabled={busy}
+                  onClick={() =>
+                    void perform(async () => {
+                      setSelectedReview(await api(`/owner/versions/${v.id}`));
+                    })
+                  }
+                >
+                  Manage feedback
+                </button>
                 {v.state === "published" && (
                   <button
                     className={s.button}

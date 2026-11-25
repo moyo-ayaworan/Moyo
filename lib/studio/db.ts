@@ -47,6 +47,11 @@ CREATE TABLE IF NOT EXISTS stillbounds_versions (
  gallery_id INTEGER, UNIQUE(owner_id,book_id,version)
 );
 ALTER TABLE stillbounds_versions ADD COLUMN IF NOT EXISTS spread_metadata JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE stillbounds_versions ADD COLUMN IF NOT EXISTS notify_owner BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE stillbounds_versions ADD COLUMN IF NOT EXISTS first_opened_at TIMESTAMPTZ;
+ALTER TABLE stillbounds_versions ADD COLUMN IF NOT EXISTS last_opened_at TIMESTAMPTZ;
+ALTER TABLE stillbounds_versions ADD COLUMN IF NOT EXISTS open_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE stillbounds_versions ADD COLUMN IF NOT EXISTS last_feedback_at TIMESTAMPTZ;
 CREATE TABLE IF NOT EXISTS stillbounds_media (
  version_id UUID NOT NULL REFERENCES stillbounds_versions(id) ON DELETE CASCADE,
  index INTEGER NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL, jpeg BYTEA NOT NULL,
@@ -62,6 +67,36 @@ CREATE TABLE IF NOT EXISTS stillbounds_viewers (
  token_hash TEXT PRIMARY KEY, version_id UUID NOT NULL REFERENCES stillbounds_versions(id) ON DELETE CASCADE,
  expires_at TIMESTAMPTZ NOT NULL
 );
+ALTER TABLE stillbounds_viewers ADD COLUMN IF NOT EXISTS last_opened_at TIMESTAMPTZ;
+ALTER TABLE stillbounds_viewers ADD COLUMN IF NOT EXISTS subscriber_id UUID;
+CREATE TABLE IF NOT EXISTS stillbounds_replies (
+ id UUID PRIMARY KEY, comment_id UUID NOT NULL REFERENCES stillbounds_comments(id) ON DELETE CASCADE,
+ actor TEXT NOT NULL CHECK(actor IN ('client','photographer')), text TEXT NOT NULL,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS stillbounds_review_events (
+ id UUID PRIMARY KEY, version_id UUID NOT NULL REFERENCES stillbounds_versions(id) ON DELETE CASCADE,
+ kind TEXT NOT NULL, actor TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS stillbounds_review_events_version ON stillbounds_review_events(version_id,created_at DESC);
+CREATE TABLE IF NOT EXISTS stillbounds_approval_receipts (
+ id UUID PRIMARY KEY, version_id UUID NOT NULL REFERENCES stillbounds_versions(id) ON DELETE CASCADE,
+ approved_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), snapshot JSONB NOT NULL
+);
+CREATE TABLE IF NOT EXISTS stillbounds_review_subscribers (
+ id UUID PRIMARY KEY, version_id UUID NOT NULL REFERENCES stillbounds_versions(id) ON DELETE CASCADE,
+ email TEXT NOT NULL, verified_at TIMESTAMPTZ, reminders BOOLEAN NOT NULL DEFAULT TRUE,
+ pending_reminders BOOLEAN NOT NULL DEFAULT TRUE, code_hash TEXT, code_expires_at TIMESTAMPTZ, code_attempts INTEGER NOT NULL DEFAULT 0,
+ manage_hash TEXT NOT NULL, encrypted_manage TEXT NOT NULL, UNIQUE(version_id,email)
+);
+CREATE TABLE IF NOT EXISTS stillbounds_review_outbox (
+ id TEXT PRIMARY KEY, version_id UUID NOT NULL REFERENCES stillbounds_versions(id) ON DELETE CASCADE,
+ kind TEXT NOT NULL, subscriber_id UUID REFERENCES stillbounds_review_subscribers(id) ON DELETE CASCADE,
+ payload JSONB NOT NULL DEFAULT '{}'::jsonb, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), lease UUID, lease_until TIMESTAMPTZ,
+ attempts INTEGER NOT NULL DEFAULT 0, sent_at TIMESTAMPTZ, discarded BOOLEAN NOT NULL DEFAULT FALSE
+);
+CREATE INDEX IF NOT EXISTS stillbounds_review_outbox_pending ON stillbounds_review_outbox(next_attempt_at) WHERE sent_at IS NULL AND discarded=FALSE;
 CREATE TABLE IF NOT EXISTS stillbounds_limits (
  key TEXT PRIMARY KEY, hits INTEGER NOT NULL, since TIMESTAMPTZ NOT NULL
 );
