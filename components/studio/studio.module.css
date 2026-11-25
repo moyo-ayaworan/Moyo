@@ -1,9 +1,9 @@
 .shell {
   min-height: 100svh;
-  background: #121212;
-  color: #fff;
+  background: var(--background);
+  color: var(--foreground);
   padding: 48px 24px 80px;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body);
 }
 .inner {
   max-width: 1080px;
@@ -22,11 +22,11 @@
   letter-spacing: -0.8px;
 }
 .muted {
-  color: #b3b3b3;
+  color: var(--muted);
   line-height: 1.7;
 }
 .eyebrow {
-  color: #ef6473;
+  color: var(--muted);
   text-transform: uppercase;
   font-size: 11px;
   letter-spacing: 2px;
@@ -35,7 +35,8 @@
   font-size: clamp(36px, 6vw, 64px);
   letter-spacing: -2px;
   line-height: 1.05;
-  font-weight: 500;
+  font-family: var(--font-heading);
+  font-weight: 300;
   margin: 14px 0 20px;
 }
 .intro {
@@ -48,10 +49,10 @@
   gap: 24px;
 }
 .panel {
-  background: #1b1b1b;
-  border: 1px solid #333;
+  background: var(--surface);
+  border: 1px solid var(--border);
   padding: 28px;
-  border-radius: 12px;
+  border-radius: 8px;
 }
 .panel h2 {
   font-size: 22px;
@@ -70,10 +71,10 @@
   width: 100%;
   min-width: 0;
   padding: 14px;
-  border: 1px solid #555;
-  border-radius: 6px;
-  background: #121212;
-  color: #fff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--background);
+  color: var(--foreground);
   font: inherit;
 }
 .code {
@@ -94,25 +95,33 @@
   width: 18px;
   height: 18px;
   flex-shrink: 0;
-  accent-color: #cf0015;
+  accent-color: var(--accent);
 }
 .button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 12px 18px;
-  border: 1px solid #555;
-  border-radius: 6px;
-  background: #252525;
-  color: #fff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--foreground);
   font: inherit;
-  font-size: 14px;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
   text-decoration: none;
 }
 .primary {
-  background: #cf0015;
-  border-color: #cf0015;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+.button:hover {
+  background: var(--glass-bg);
+}
+.primary:hover {
+  background: color-mix(in srgb, var(--accent) 85%, black);
 }
 .button:disabled {
   opacity: 0.45;
@@ -121,7 +130,7 @@
 .button:focus-visible,
 .input:focus-visible,
 .shell a:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--accent);
   outline-offset: 4px;
 }
 .actions {
@@ -132,8 +141,8 @@
 }
 .notice {
   padding: 16px;
-  background: #252525;
-  border-left: 3px solid #cf0015;
+  background: var(--surface);
+  border-left: 3px solid var(--accent);
   font-size: 14px;
   line-height: 1.6;
   margin: 24px 0;
@@ -151,7 +160,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 20px;
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--border);
   padding: 20px 0;
 }
 .row strong {
@@ -160,7 +169,7 @@
 }
 .row small {
   display: block;
-  color: #b3b3b3;
+  color: var(--muted);
   line-height: 1.6;
   margin-top: 6px;
 }
@@ -172,10 +181,10 @@
   width: 100%;
   height: auto;
   display: block;
-  background: #252525;
+  background: var(--surface);
   max-height: 70svh;
   object-fit: contain;
-  border: 1px solid #333;
+  border: 1px solid var(--border);
 }
 .navigation {
   display: flex;
@@ -186,17 +195,18 @@
 }
 .feedback {
   display: grid;
+  align-items: start;
   grid-template-columns: 1.1fr 1fr;
   gap: 24px;
 }
 .comment {
   padding: 16px 0;
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--border);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .comment small {
-  color: #b3b3b3;
+  color: var(--muted);
   font-size: 12px;
 }
 .center {
@@ -209,21 +219,21 @@
   font-family: monospace;
   font-size: 14px;
   padding: 14px;
-  background: #121212;
-  border-radius: 6px;
+  background: var(--background);
+  border-radius: 4px;
 }
 .shell a {
   color: inherit;
 }
 .empty {
-  color: #b3b3b3;
+  color: var(--muted);
   padding: 24px 0;
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--border);
 }
 .footer {
   margin-top: 64px;
   font-size: 12px;
-  color: #b3b3b3;
+  color: var(--muted);
 }
 @media (max-width: 700px) {
   .shell {
@@ -298,7 +308,7 @@
   cursor: grabbing;
 }
 .book:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--accent);
   outline-offset: 8px;
 }
 .restingSpread,
@@ -434,17 +444,17 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: #121212;
-  color: #fff;
+  background: var(--background);
+  color: var(--foreground);
   padding: 10px;
-  border: 1px solid #555;
-  border-radius: 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
   text-align: left;
   cursor: pointer;
 }
 .thumbnail[aria-current] {
-  border-color: #ef6473;
-  box-shadow: 0 0 0 1px #ef6473;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 .thumbnail img {
   width: 100%;
@@ -452,11 +462,11 @@
   object-fit: contain;
 }
 .thumbnail small {
-  color: #b3b3b3;
+  color: var(--muted);
   line-height: 1.5;
 }
 .thumbnail:focus-visible {
-  outline: 2px solid white;
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 .pinLayer {
@@ -476,21 +486,21 @@
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: #cf0015;
-  color: white;
-  border: 2px solid white;
+  background: var(--accent);
+  color: var(--on-accent);
+  border: 2px solid var(--on-accent);
   box-shadow: 0 2px 8px #0009;
-  font:
-    bold 13px Arial,
-    sans-serif;
+  font: 600 12px var(--font-body);
 }
 .draftPin {
-  background: #161616;
-  outline: 2px solid #ef6473;
+  background: var(--surface);
+  color: var(--foreground);
+  border-color: var(--foreground);
+  outline: 2px solid var(--accent);
 }
 .pinControls {
-  border: 1px solid #555;
-  border-radius: 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
   padding: 14px;
 }
 .pinControls label {
@@ -502,7 +512,7 @@
   display: block;
   width: 100%;
   margin: 8px 0;
-  accent-color: #ef6473;
+  accent-color: var(--accent);
 }
 .comparison {
   display: grid;
@@ -517,7 +527,7 @@
   width: 100%;
   height: 260px;
   object-fit: contain;
-  background: #121212;
+  background: var(--background);
   margin-top: 16px;
 }
 .approvalDialog {
@@ -525,10 +535,10 @@
   max-height: 85svh;
   overflow-y: auto;
   margin: auto;
-  background: #1b1b1b;
-  color: white;
-  border: 1px solid #555;
-  border-radius: 12px;
+  background: var(--surface);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: 8px;
   padding: 28px;
   line-height: 1.7;
 }
@@ -555,4 +565,92 @@
   .compareImage {
     height: 210px;
   }
+}
+
+.thread {
+  margin-top: 18px;
+  white-space: normal;
+}
+.reply {
+  margin: 12px 0;
+  border-left: 2px solid var(--accent);
+  padding: 12px 16px;
+  background: var(--glass-bg);
+}
+.reply p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 8px 0;
+}
+.reply time,
+.activityNote,
+.receipt small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.activity {
+  padding-bottom: 20px;
+}
+.activity summary {
+  cursor: pointer;
+  font-family: var(--font-heading);
+  font-weight: 300;
+  letter-spacing: -0.01em;
+  font-size: 22px;
+}
+.timeline {
+  list-style: none !important;
+  padding: 0 !important;
+}
+.timeline li {
+  display: grid;
+  gap: 6px;
+  border-top: 1px solid var(--border);
+  padding: 12px 0;
+  font-size: 14px;
+}
+.timeline time {
+  color: var(--muted);
+  font-size: 12px;
+}
+.receipts,
+.emailSettings {
+  margin-top: 24px;
+  border-top: 1px solid var(--border);
+  padding-top: 24px;
+}
+.receipt {
+  display: grid;
+  gap: 12px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.receipt .button {
+  justify-self: start;
+}
+.receipt code {
+  display: block;
+  font-size: 12px;
+  margin-top: 10px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.emailSettings {
+  max-width: 600px;
+}
+
+.ownerTools {
+  margin: 24px 0;
+}
+.ownerTools > summary {
+  cursor: pointer;
+  line-height: 1.7;
+}
+.reply time,
+.activityNote,
+.receipt small,
+.timeline time {
+  color: var(--review-muted, var(--muted));
 }

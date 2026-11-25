@@ -7,6 +7,15 @@ import {
   removeStorageItem,
 } from "@/lib/browserStorage";
 import ClientBookPreview from "./ClientBookPreview";
+import ReviewThread from "./ReviewThread";
+import ReviewActivity from "./ReviewActivity";
+import ReviewReceipts from "./ReviewReceipts";
+import ReviewEmailSettings from "./ReviewEmailSettings";
+import type {
+  ReviewReply,
+  ReviewActivityData,
+  ApprovalReceipt,
+} from "./reviewTypes";
 import s from "./studio.module.css";
 
 type Pin = { x: number; y: number };
@@ -17,6 +26,7 @@ type Comment = {
   createdAt: string;
   resolved: boolean;
   pin?: Pin | null;
+  replies?: ReviewReply[];
 };
 type Review = {
   id: string;
@@ -27,6 +37,8 @@ type Review = {
   decision: string;
   spreads: { id: string; width: number; height: number }[];
   comments: Comment[];
+  activity?: ReviewActivityData;
+  receipts?: ApprovalReceipt[];
 };
 type Draft = { text: string; pin: Pin | null };
 type Saved = { drafts: Record<string, Draft>; seen: string[] };
@@ -288,6 +300,13 @@ export default function ClientReview({ id }: { id: string }) {
     await api("/decision", "POST", { decision, confirm: true });
     setReview((current) => (current ? { ...current, decision } : current));
     setApproval(false);
+    try {
+      setReview(await api(""));
+    } catch {
+      setError(
+        "Your decision was saved. Refresh feedback to load your latest status and any approval receipt.",
+      );
+    }
     setMessage(
       decision === "approved"
         ? "Version approved. Your photographer can see your decision."
@@ -621,6 +640,18 @@ export default function ClientReview({ id }: { id: string }) {
                     )}
                   </div>
                 </form>
+                <button
+                  className={s.button}
+                  disabled={busy}
+                  onClick={() =>
+                    void perform(async () => {
+                      setReview(await api(""));
+                      setMessage("Feedback refreshed.");
+                    })
+                  }
+                >
+                  Refresh feedback
+                </button>
                 {!comments.length && (
                   <p className={s.muted}>No feedback on this page yet.</p>
                 )}
@@ -642,6 +673,25 @@ export default function ClientReview({ id }: { id: string }) {
                         : "Sent to your photographer"}{" "}
                       · {new Date(comment.createdAt).toLocaleDateString()}
                     </small>
+                    <ReviewThread
+                      commentId={comment.id}
+                      replies={comment.replies}
+                      actor="client"
+                      disabled={busy}
+                      onReply={async (text) => {
+                        await api(`/comments/${comment.id}/replies`, "POST", {
+                          text,
+                        });
+                        setMessage("Your reply has been saved.");
+                        try {
+                          setReview(await api(""));
+                        } catch {
+                          setError(
+                            "Your reply was saved. Refresh feedback to see the latest conversation.",
+                          );
+                        }
+                      }}
+                    />
                   </div>
                 ))}
               </section>
@@ -671,6 +721,11 @@ export default function ClientReview({ id }: { id: string }) {
                     Request changes
                   </button>
                 </div>
+                <ReviewReceipts
+                  receipts={review.receipts}
+                  base={base}
+                  decision={review.decision}
+                />
                 <p className={s.muted}>
                   Keep this private link within your review group. People with
                   access can also compare earlier published versions while those
@@ -678,6 +733,10 @@ export default function ClientReview({ id }: { id: string }) {
                 </p>
               </section>
             </div>
+            <section className={`${s.panel} ${s.section}`}>
+              <ReviewActivity activity={review.activity} />
+              <ReviewEmailSettings base={base} decision={review.decision} />
+            </section>
             <section
               className={`${s.panel} ${s.section}`}
               aria-labelledby="history-title"

@@ -117,6 +117,8 @@ test('newsletter markup retains formatting but strips active content and disguis
 test('cron authentication rejects multibyte header values without a timing comparison exception', async () => {
   const route = load('app/api/mofolio/studio-cleanup/route.ts', {
     '@/lib/studio/service': {cleanupStudio() {assert.fail('must not run cleanup');}},
+    '@/lib/studio/engagement': {queueReviewReminders() {assert.fail('must not queue reminders');}},
+    '@/lib/studio/mail': {deliverReviewMail() {assert.fail('must not send mail');}},
     '@/lib/studio/security': {privateHeaders:{'Cache-Control':'no-store'}},
   }, {process:{env:{CRON_SECRET:'abcd'}}});
   assert.equal((await route.GET(new Request('https://example.test', {headers:{authorization:'Bearer éééé'}}))).status, 401);

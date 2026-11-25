@@ -87,7 +87,7 @@ export async function viewer(request: NextRequest, id: string) {
     401,
   );
   const { rows } = await studioQuery(
-    `SELECT v.* FROM stillbounds_versions v JOIN stillbounds_viewers s ON s.version_id=v.id
+    `SELECT v.*,s.token_hash AS viewer_token_hash,s.subscriber_id FROM stillbounds_versions v JOIN stillbounds_viewers s ON s.version_id=v.id
    WHERE v.id=$1 AND s.token_hash=$2 AND s.expires_at>NOW()`,
     [id, hash(token)],
   );
