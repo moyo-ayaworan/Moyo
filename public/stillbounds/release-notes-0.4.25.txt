@@ -1,0 +1,36 @@
+Stillbounds 0.4.25 — What's improved
+
+NEW LAYOUT CHOICES
+- New continuous mosaics, across-fold hero photos and restrained layered compositions let a design flow across both pages.
+- Automatic design compares these with separate-page layouts using photo proportions, crop retention, visible area and your hero choices. It does not force an overlap every few spreads.
+- Turn automatic cross-fold layouts or photo overlap on or off in Layout & spacing. Existing locks and kept compositions remain protected.
+- Centre a selected photograph across the fold or fill the whole spread directly from the crop tools.
+
+FASTER WAYS TO FIND AND CORRECT PHOTOS
+- Search replacement photos by filename, section or folder, filter to unused photos, and see filenames and usage labels.
+- Replacement and layout galleries load previews in smaller batches. Library filtering and asset lookups avoid repeated work while editing.
+- Correct story sections directly in AI results. Your labels take priority; deliberately reassemble when you want to apply changed grouping.
+- Unknown-category warnings remain visible even when face analysis has not run.
+
+CLEARER EXPORT CHECKS
+- The export window now includes an actionable checklist that jumps to affected spreads or missing originals.
+- Effective resolution warnings account for the image's crop and zoom.
+- Optional outer-edge pixel repetition fills bleed in PNG/JPEG and PDF exports without stretching the trimmed design. Inspect a proof and follow your printer's requirements; this is not CMYK or PDF/X certification.
+
+SEND APP FEEDBACK
+- Use Home, Help or the activation screen to send a bug report or suggestion, even before signing in.
+- Include an optional reply email and optionally share the app/macOS versions and processor architecture shown before sending. No photographs, projects, screenshots, file paths or logs are attached.
+- Failed sends keep your text for retry. Unsent reports are not saved after quitting the app.
+
+UPDATE NOTES AND DIALOGS
+- After installing, What’s new opens once for the new version. Read the bundled notes offline or reopen them from Home or Help.
+- Closing an update or feedback dialog on the activation screen returns keyboard focus to the control you used.
+
+BEFORE YOU UPDATE
+Save your book and quit Stillbounds, then replace the old app with the new one. Keep your original photo folders and saved projects. Back up projects when moving between app versions.
+
+Review faces, important details and overlaps before printing. Automatic subject checks are conservative and can miss details; real-album quality and time savings have not been established.
+
+Apple Silicon: macOS 26.2 or later. Intel: macOS 13.3 or later. The offline AI models remain included. Physical Intel hardware remains untested. These builds use local ad-hoc bundle seals, not Developer ID signing or Apple notarization.
+
+Users on 0.4.24 can use the update notice or App updates. Users still on 0.4.22 or 0.4.23 may need to download this release manually from the Stillbounds website because their updater is affected.

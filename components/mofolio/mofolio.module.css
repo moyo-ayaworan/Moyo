@@ -216,3 +216,13 @@
 .downloadNotice{border-left:3px solid var(--mf-red);padding:14px 18px;background:var(--surface)}.downloadNotice a{text-decoration:underline}
 .installSteps{max-width:780px;padding-left:24px;margin:28px 0;font-size:14px;line-height:1.8}.installSteps li{padding:5px 0 5px 8px}
 @media(max-width:700px){.downloadSection{padding-top:60px;padding-bottom:60px}.downloadCards{grid-template-columns:1fr;gap:16px}.downloadCard{padding:22px}.downloadCard dl>div{grid-template-columns:90px minmax(0,1fr)}}
+
+.releaseNotes{margin:0 0 40px;padding:22px 24px;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-size:1rem;line-height:1.65}
+.releaseNotes summary{font-weight:600;cursor:pointer;list-style-position:inside}
+.releaseNotes summary:focus-visible{outline:2px solid var(--mf-red);outline-offset:6px}
+.releaseNotes p{max-width:820px;color:var(--mf-muted);margin:20px 0}
+.releaseNotes ul{max-width:980px;padding-left:22px;margin:20px 0}
+.releaseNotes li{padding:0 0 14px 6px;color:var(--mf-muted)}
+.releaseNotes strong{color:var(--foreground)}
+.releaseNotes a{text-decoration:underline;text-underline-offset:3px}
+@media(max-width:700px){.releaseNotes{padding:20px}}

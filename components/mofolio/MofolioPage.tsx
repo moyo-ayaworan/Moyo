@@ -8,26 +8,27 @@ import { AlbumAssembly, BookReader, CompositionPlayground, EditorShowcase, Motio
 import { ArrowRight, ArrowUpRight, BookOpen, Check, Laptop, Layers, LockKeyhole, Palette, Type } from 'lucide-react';
 import styles from './mofolio.module.css';
 import ThemeToggle from '@/components/ThemeToggle';
+import releaseNotes from './release-notes.json';
 
 const downloads = [
   {
     "arch": "arm64",
     "name": "Apple Silicon",
-    "version": "0.4.19",
+    "version": "0.4.25",
     "minimumMacOS": "26.2",
     "downloadGB": "3.08",
     "installedGB": "4.52",
-    "sha256": "a38ecd10e094aeef85dff30da9391f7d6c654396c1c0c8ebbdad72c722522470",
+    "sha256": "c7bdaf8ac647ca1485117db2bc274452eea6a68f3716f86f98f647ec2922d773",
     "url": "https://stillbounds-downloads.mofolio.workers.dev/stillbounds/downloads/arm64"
   },
   {
     "arch": "x64",
     "name": "Intel",
-    "version": "0.4.19",
+    "version": "0.4.25",
     "minimumMacOS": "13.3",
-    "downloadGB": "3.29",
+    "downloadGB": "3.30",
     "installedGB": "4.71",
-    "sha256": "3bf89adb7577a91626110966b74d80aaf07a224a1f915f0cd5d1834cbb0f48a5",
+    "sha256": "ab01b139278a421bc4d7453221b612480ddeba7402f941fc9267dcc9dd2fe623",
     "url": "https://stillbounds-downloads.mofolio.workers.dev/stillbounds/downloads/x64"
   }
 ] as const;
@@ -95,9 +96,15 @@ export default function MofolioPage() {
         <div className={styles.downloadCards}>{downloads.map(release => <article className={styles.downloadCard} key={release.arch}>
           <Laptop size={26} aria-hidden="true" /><h3>{release.name}</h3>
           <p>{release.arch === 'arm64' ? 'For M1 and newer M-series Macs.' : 'For Macs with an Intel processor.'}</p>
-          <dl><div><dt>Requires</dt><dd>macOS {release.minimumMacOS} or later</dd></div><div><dt>ZIP download</dt><dd>{release.downloadGB} GB</dd></div><div><dt>Installed app</dt><dd>{release.installedGB} GB, plus room to unzip and store projects</dd></div></dl>
+          <dl><div><dt>Version</dt><dd>{release.version}</dd></div><div><dt>Requires</dt><dd>macOS {release.minimumMacOS} or later</dd></div><div><dt>ZIP download</dt><dd>{release.downloadGB} GB</dd></div><div><dt>Installed app</dt><dd>{release.installedGB} GB, plus room to unzip and store projects</dd></div></dl>
           <a className={styles.primary} href={release.url}>Download for {release.name} <ArrowRight size={18} aria-hidden="true" /></a>
         </article>)}</div>
+        <details className={styles.releaseNotes}>
+          <summary>What’s new in Stillbounds {releaseNotes.version}</summary>
+          <p>New layouts, easier corrections and clearer export checks. After you install, Stillbounds shows these improvements once; reopen them anytime from Help → What’s new.</p>
+          <ul>{releaseNotes.highlights.map(item => <li key={item.title}><strong>{item.title}.</strong> {item.description}</li>)}</ul>
+          <a href={`/stillbounds/release-notes-${releaseNotes.version}.txt`}>Read the full release notes and installation details</a>
+        </details>
         <h3 id="installation">Download and install, step by step</h3>
         <p>New to Mac? Follow these steps in order. <a href="/mofolio/Stillbounds-First-Time-Guide.txt" download>Save the complete first-time guide</a> for installation, your first book, editing, saving and export. From version 0.4.22, the same guide is also inside the ZIP beside the app.</p>
         <ol className={styles.installSteps}>
