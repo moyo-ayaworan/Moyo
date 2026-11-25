@@ -21,6 +21,7 @@ import {
   bodyJSON,
   boundedBody,
   MAX_UPLOAD,
+  commentPin,
   MAX_VERSION,
   MAX_WORKSPACE,
   encryptCode,
@@ -37,7 +38,12 @@ async function cleanup() {
     `DELETE FROM stillbounds_limits WHERE since<NOW()-INTERVAL '1 day'`,
   );
 }
-async function reviewRecords(ids: string[], origin: string, owner = false, workspace = OWNER) {
+async function reviewRecords(
+  ids: string[],
+  origin: string,
+  owner = false,
+  workspace = OWNER,
+) {
   if (!ids.length) return [];
   const [versions, media, comments] = await Promise.all([
     studioQuery(
@@ -52,7 +58,7 @@ async function reviewRecords(ids: string[], origin: string, owner = false, works
       [ids],
     ),
     studioQuery(
-      `SELECT version_id,id,spread_id AS "spreadId",text,created_at AS "createdAt",resolved
+      `SELECT version_id,id,spread_id AS "spreadId",text,created_at AS "createdAt",resolved,pin
        FROM stillbounds_comments WHERE version_id=ANY($1::uuid[]) ORDER BY created_at,id`,
       [ids],
     ),
@@ -90,6 +96,7 @@ async function reviewRecords(ids: string[], origin: string, owner = false, works
             text: c.text,
             createdAt: new Date(c.createdAt).toISOString(),
             resolved: c.resolved,
+            pin: c.pin ?? null,
           })),
         ...(owner
           ? {
@@ -100,7 +107,12 @@ async function reviewRecords(ids: string[], origin: string, owner = false, works
     ];
   });
 }
-export async function reviewRecord(id: string, origin: string, owner = false, workspace = OWNER) {
+export async function reviewRecord(
+  id: string,
+  origin: string,
+  owner = false,
+  workspace = OWNER,
+) {
   const records = await reviewRecords([id], origin, owner, workspace);
   assertStudio(records.length, "Review not found.", 404);
   return records[0];
@@ -114,11 +126,15 @@ async function ownerVersion(id: string, workspace = OWNER) {
   return rows[0];
 }
 
-export async function studioRequest(request: NextRequest, path: string[], accountOwner?: string) {
+export async function studioRequest(
+  request: NextRequest,
+  path: string[],
+  accountOwner?: string,
+) {
   let workspace = accountOwner ?? OWNER;
   const method = request.method,
     origin = studioOrigin(request);
-  assertStudio(path.length > 0 && path.length <= 5, "Route not found.", 404);
+  assertStudio(path.length > 0 && path.length <= 6, "Route not found.", 404);
   if (path[0] === "device" && path.length === 1 && method === "POST") {
     const input = await bodyJSON(request);
     assertStudio(input.client === "mofolio-desktop", "Unsupported device.");
@@ -259,13 +275,23 @@ export async function studioRequest(request: NextRequest, path: string[], accoun
         401,
       );
       const { rows } = await studioQuery(
-        `SELECT id FROM stillbounds_versions WHERE id=$1 AND code_hash=$2 AND state='published' AND expires_at>NOW()`,
+        `SELECT id,state,expires_at FROM stillbounds_versions WHERE id=$1 AND code_hash=$2`,
         [id, hash(input.code)],
       );
       assertStudio(
         rows.length,
         "Review unavailable or access code incorrect.",
         401,
+      );
+      assertStudio(
+        rows[0].state === "published",
+        "This review link has been withdrawn. Ask your photographer for a new link.",
+        410,
+      );
+      assertStudio(
+        new Date(rows[0].expires_at).getTime() > Date.now(),
+        "This review link has expired. Ask your photographer to share a new review.",
+        410,
       );
       const token = secret();
       await studioQuery(
@@ -285,6 +311,60 @@ export async function studioRequest(request: NextRequest, path: string[], accoun
     const version = await viewer(request, id);
     if (path.length === 2 && method === "GET")
       return json(await reviewRecord(id, origin, false, version.owner_id));
+    // A live viewer may inspect only earlier published versions of this book
+    // in this workspace. Never expose codes, drafts, revoked or expired media.
+    if (path[2] === "history" && method === "GET") {
+      const { rows } = await studioQuery(
+        `SELECT id FROM stillbounds_versions WHERE owner_id=$1 AND book_id=$2
+         AND version<$3 AND state='published' AND expires_at>NOW()
+         ORDER BY version DESC LIMIT 100`,
+        [version.owner_id, version.book_id, version.version],
+      );
+      if (path.length === 3) {
+        const records = await reviewRecords(
+          rows.map((row) => row.id),
+          origin,
+          false,
+          version.owner_id,
+        );
+        return json(
+          records.filter(
+            (record) =>
+              record.state === "published" && record.expiresAt > Date.now(),
+          ),
+        );
+      }
+      assertStudio(
+        path.length === 6 && path[4] === "media" && /^\d{1,3}$/.test(path[5]),
+        "Route not found.",
+        404,
+      );
+      assertStudio(
+        rows.some((row) => row.id === path[3]),
+        "This earlier version is unavailable.",
+        410,
+      );
+      const media = await studioQuery(
+        `SELECT m.jpeg FROM stillbounds_media m JOIN stillbounds_versions v ON v.id=m.version_id
+         WHERE m.version_id=$1 AND m.index=$2 AND v.owner_id=$3 AND v.book_id=$4
+         AND v.version<$5 AND v.state='published' AND v.expires_at>NOW()`,
+        [
+          path[3],
+          Number(path[5]),
+          version.owner_id,
+          version.book_id,
+          version.version,
+        ],
+      );
+      assertStudio(
+        media.rows.length,
+        "This earlier preview is unavailable.",
+        410,
+      );
+      return new Response(new Uint8Array(media.rows[0].jpeg), {
+        headers: { ...privateHeaders, "Content-Type": "image/jpeg" },
+      });
+    }
     if (path[2] === "media" && path.length === 4 && method === "GET") {
       assertStudio(/^\d{1,3}$/.test(path[3]), "Invalid spread.");
       const { rows } = await studioQuery(
@@ -316,6 +396,7 @@ export async function studioRequest(request: NextRequest, path: string[], accoun
             input.text.length <= 2000,
           "Comments must contain 1–2,000 characters.",
         );
+        const pin = commentPin(input.pin);
         await studioTransaction(async (db) => {
           const { rows } = await db.query(
             `SELECT id FROM stillbounds_versions WHERE id=$1 AND state='published' AND expires_at>NOW() FOR UPDATE`,
@@ -332,8 +413,14 @@ export async function studioRequest(request: NextRequest, path: string[], accoun
             409,
           );
           await db.query(
-            "INSERT INTO stillbounds_comments(id,version_id,spread_id,text) VALUES($1,$2,$3,$4)",
-            [randomUUID(), id, input.spreadId, input.text.trim()],
+            "INSERT INTO stillbounds_comments(id,version_id,spread_id,text,pin) VALUES($1,$2,$3,$4,$5)",
+            [
+              randomUUID(),
+              id,
+              input.spreadId,
+              input.text.trim(),
+              pin === null ? null : JSON.stringify(pin),
+            ],
           );
         });
         return json({ ok: true });
@@ -423,11 +510,15 @@ export async function studioRequest(request: NextRequest, path: string[], accoun
   const id = path[1];
   assertStudio(uuid.test(id || ""), "Invalid review.");
   const version = await ownerVersion(id, workspace);
-  if (path.length === 2 && method === "GET") return json(await reviewRecord(id, origin, true, workspace));
+  if (path.length === 2 && method === "GET")
+    return json(await reviewRecord(id, origin, true, workspace));
   if (path.length === 2 && method === "DELETE") {
     if (accountOwner) {
-      const removed = await studioQuery('DELETE FROM stillbounds_versions WHERE id=$1 AND owner_id=$2 RETURNING id', [id, workspace]);
-      assertStudio(removed.rows.length, 'Review not found.', 404);
+      const removed = await studioQuery(
+        "DELETE FROM stillbounds_versions WHERE id=$1 AND owner_id=$2 RETURNING id",
+        [id, workspace],
+      );
+      assertStudio(removed.rows.length, "Review not found.", 404);
     } else await revoke(id, workspace);
     return json({ ok: true });
   }
@@ -445,7 +536,7 @@ export async function studioRequest(request: NextRequest, path: string[], accoun
       request.headers.get("content-type")?.split(";")[0] === "image/jpeg",
       "Upload a flattened JPEG.",
     );
-    await limited(request, 'studio-media-'+workspace, 600, 3600);
+    await limited(request, "studio-media-" + workspace, 600, 3600);
     const data = await boundedBody(request, MAX_UPLOAD);
     let jpeg: Buffer, width: number, height: number;
     try {
@@ -488,8 +579,16 @@ export async function studioRequest(request: NextRequest, path: string[], accoun
       );
       const usage = total.rows[0];
       if (personal) {
-        const owned = await db.query(`SELECT COALESCE(SUM(octet_length(m.jpeg)),0) AS bytes FROM stillbounds_media m JOIN stillbounds_versions v ON v.id=m.version_id WHERE v.owner_id=$1`, [workspace]);
-        assertStudio(Number(owned.rows[0].bytes) - Number(usage.previous) + jpeg.length <= 50 * 1024 * 1024, 'Your 50 MiB review storage limit is reached. Delete older reviews to free space.', 413);
+        const owned = await db.query(
+          `SELECT COALESCE(SUM(octet_length(m.jpeg)),0) AS bytes FROM stillbounds_media m JOIN stillbounds_versions v ON v.id=m.version_id WHERE v.owner_id=$1`,
+          [workspace],
+        );
+        assertStudio(
+          Number(owned.rows[0].bytes) - Number(usage.previous) + jpeg.length <=
+            50 * 1024 * 1024,
+          "Your 50 MiB review storage limit is reached. Delete older reviews to free space.",
+          413,
+        );
       }
       assertStudio(
         Number(usage.bytes) - Number(usage.previous) + jpeg.length <=

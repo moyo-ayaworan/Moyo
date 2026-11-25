@@ -131,3 +131,25 @@ export async function bodyJSON(request: Request) {
     throw new StudioError("Invalid JSON.");
   }
 }
+
+/** Normalized coordinates within the actual image, independent of viewport. */
+export function commentPin(value: unknown): { x: number; y: number } | null {
+  if (value == null) return null;
+  assertStudio(
+    typeof value === "object" && !Array.isArray(value),
+    "Choose a point inside the page.",
+  );
+  const { x, y } = value as Record<string, unknown>;
+  assertStudio(
+    typeof x === "number" &&
+      Number.isFinite(x) &&
+      x >= 0 &&
+      x <= 1 &&
+      typeof y === "number" &&
+      Number.isFinite(y) &&
+      y >= 0 &&
+      y <= 1,
+    "Choose a point inside the page.",
+  );
+  return { x, y };
+}

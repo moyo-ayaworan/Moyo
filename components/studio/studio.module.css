@@ -411,3 +411,148 @@
     display: none;
   }
 }
+
+.overviewHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 20px;
+}
+.overviewHeader label {
+  min-width: 170px;
+  font-size: 13px;
+}
+.thumbnails {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 12px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 6px;
+}
+.thumbnail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #121212;
+  color: #fff;
+  padding: 10px;
+  border: 1px solid #555;
+  border-radius: 6px;
+  text-align: left;
+  cursor: pointer;
+}
+.thumbnail[aria-current] {
+  border-color: #ef6473;
+  box-shadow: 0 0 0 1px #ef6473;
+}
+.thumbnail img {
+  width: 100%;
+  height: 85px;
+  object-fit: contain;
+}
+.thumbnail small {
+  color: #b3b3b3;
+  line-height: 1.5;
+}
+.thumbnail:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 2px;
+}
+.pinLayer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: crosshair;
+  z-index: 3;
+}
+.pin {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #cf0015;
+  color: white;
+  border: 2px solid white;
+  box-shadow: 0 2px 8px #0009;
+  font:
+    bold 13px Arial,
+    sans-serif;
+}
+.draftPin {
+  background: #161616;
+  outline: 2px solid #ef6473;
+}
+.pinControls {
+  border: 1px solid #555;
+  border-radius: 6px;
+  padding: 14px;
+}
+.pinControls label {
+  display: block;
+  margin: 12px 0;
+  font-size: 13px;
+}
+.pinControls input {
+  display: block;
+  width: 100%;
+  margin: 8px 0;
+  accent-color: #ef6473;
+}
+.comparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-top: 24px;
+}
+.comparison > div {
+  min-width: 0;
+}
+.compareImage {
+  width: 100%;
+  height: 260px;
+  object-fit: contain;
+  background: #121212;
+  margin-top: 16px;
+}
+.approvalDialog {
+  max-width: min(560px, calc(100vw - 36px));
+  max-height: 85svh;
+  overflow-y: auto;
+  margin: auto;
+  background: #1b1b1b;
+  color: white;
+  border: 1px solid #555;
+  border-radius: 12px;
+  padding: 28px;
+  line-height: 1.7;
+}
+.approvalDialog h2 {
+  font-size: 24px;
+}
+.approvalDialog ul {
+  list-style: disc;
+  padding: 20px;
+}
+.approvalDialog::backdrop {
+  background: #000b;
+}
+@media (max-width: 700px) {
+  .overviewHeader {
+    flex-direction: column;
+  }
+  .overviewHeader label {
+    width: 100%;
+  }
+  .comparison {
+    grid-template-columns: 1fr;
+  }
+  .compareImage {
+    height: 210px;
+  }
+}

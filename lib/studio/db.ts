@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS stillbounds_comments (
  spread_id UUID NOT NULL, text TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
  resolved BOOLEAN NOT NULL DEFAULT FALSE
 );
+ALTER TABLE stillbounds_comments ADD COLUMN IF NOT EXISTS pin JSONB;
 CREATE TABLE IF NOT EXISTS stillbounds_viewers (
  token_hash TEXT PRIMARY KEY, version_id UUID NOT NULL REFERENCES stillbounds_versions(id) ON DELETE CASCADE,
  expires_at TIMESTAMPTZ NOT NULL

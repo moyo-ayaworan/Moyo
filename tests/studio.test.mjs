@@ -23,6 +23,7 @@ function load(file, mocks = {}) {
     Date,
     URL,
     Request,
+    Response,
     Uint8Array,
     Set,
     Number,
@@ -141,16 +142,25 @@ test("desktop bearer tokens are separate from admin cookies and scoped to their 
   let seen;
   const secure = security(async (sql, args) => {
     seen = { sql, args };
-    return { rows: [{ id: bookId, owner_id: "moyo" }] };
+    return {
+      rows: [
+        {
+          id: bookId,
+          owner_id: "moyo",
+          state: "published",
+          expires_at: new Date(Date.now() + 60000),
+        },
+      ],
+    };
   });
   const token = protocol.secret();
   const identity = await secure.device(
-      new Request("https://site.example", {
-        headers: { authorization: "Bearer " + token },
-      }),
-    );
+    new Request("https://site.example", {
+      headers: { authorization: "Bearer " + token },
+    }),
+  );
   assert.equal(identity.id, bookId);
-  assert.equal(identity.ownerId, 'moyo');
+  assert.equal(identity.ownerId, "moyo");
   assert.equal(seen.args[0], protocol.hash(token));
   assert.equal(seen.args.length, 1);
   assert.ok(
@@ -177,15 +187,21 @@ test("viewer sessions are version-specific and recheck published state, expiry a
   };
   const secure = security(async (sql, args) => {
     seen = { sql, args };
-    return { rows: [{ id: bookId, owner_id: "moyo" }] };
+    return {
+      rows: [
+        {
+          id: bookId,
+          owner_id: "moyo",
+          state: "published",
+          expires_at: new Date(Date.now() + 60000),
+        },
+      ],
+    };
   });
   assert.equal((await secure.viewer(request, bookId)).id, bookId);
   assert.equal(seen.args[0], bookId);
   assert.equal(seen.args[1], protocol.hash(token));
-  assert.ok(
-    seen.sql.includes("v.state='published'") &&
-      seen.sql.includes("v.expires_at>NOW()"),
-  );
+  assert.ok(seen.sql.includes("s.expires_at>NOW()"));
   await assert.rejects(
     secure.viewer(request, spreadId),
     (e) => e.status === 401,
@@ -207,4 +223,138 @@ test("studio uses the browser-facing Host rather than an internal standalone URL
     ),
     "https://moyo-roan.vercel.app",
   );
+});
+
+test("pins preserve normalized positions and reject malformed coordinates", () => {
+  assert.equal(protocol.commentPin(undefined), null);
+  assert.equal(protocol.commentPin(null), null);
+  for (const pin of [
+    { x: 0, y: 1 },
+    { x: 0.25, y: 0.75 },
+  ])
+    assert.equal(JSON.stringify(protocol.commentPin(pin)), JSON.stringify(pin));
+  for (const pin of [
+    [],
+    "point",
+    {},
+    { x: -0.1, y: 0 },
+    { x: 1.01, y: 0 },
+    { x: 0, y: NaN },
+    { x: Infinity, y: 1 },
+    { x: "0", y: 1 },
+  ])
+    assert.throws(
+      () => protocol.commentPin(pin),
+      (error) => error.status === 400,
+    );
+});
+
+test("known viewer sessions distinguish withdrawn and expired versions without exposing unauthenticated reviews", async () => {
+  const request = { cookies: { get: () => ({ value: protocol.secret() }) } };
+  for (const [state, expires_at, message] of [
+    ["revoked", new Date(Date.now() + 60000), /withdrawn/],
+    ["published", new Date(Date.now() - 60000), /expired/],
+  ]) {
+    await assert.rejects(
+      security(async () => ({ rows: [{ state, expires_at }] })).viewer(
+        request,
+        bookId,
+      ),
+      (error) => error.status === 410 && message.test(error.message),
+    );
+  }
+  await assert.rejects(
+    security(async () => ({ rows: [] })).viewer(request, bookId),
+    (error) => error.status === 401,
+  );
+});
+
+function service(query, version = {}) {
+  return load("lib/studio/service.ts", {
+    "./db": {
+      studioQuery: query,
+      studioTransaction: async (fn) => fn({ query }),
+    },
+    "./protocol": protocol,
+    "./security": {
+      studioOrigin: () => "https://site.example",
+      privateHeaders: { "Cache-Control": "private, no-store" },
+      viewer: async () => ({
+        id: bookId,
+        book_id: spreadId,
+        owner_id: "account:test",
+        version: 3,
+        spread_ids: [spreadId],
+        ...version,
+      }),
+      sameOrigin: () => {},
+      limited: async () => {},
+    },
+  });
+}
+
+test("history media rejects versions outside the authorized book history and rechecks live state", async () => {
+  const target = "00000000-0000-4000-8000-000000000003";
+  let queries = [];
+  const api = service(async (sql, args) => {
+    queries.push({ sql, args });
+    if (sql.includes("SELECT id FROM")) return { rows: [{ id: target }] };
+    return { rows: [{ jpeg: Buffer.from("preview") }] };
+  });
+  const response = await api.studioRequest(
+    new Request("https://site.example", { method: "GET" }),
+    ["reviews", bookId, "history", target, "media", "0"],
+  );
+  assert.equal(await response.text(), "preview");
+  assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  for (const { sql, args } of queries) {
+    assert.ok(
+      sql.includes("owner_id=$") &&
+        sql.includes("book_id=$") &&
+        sql.includes("version<"),
+    );
+    assert.ok(
+      sql.includes("state='published'") && sql.includes("expires_at>NOW()"),
+    );
+    assert.ok(args.includes("account:test"));
+  }
+  queries = [];
+  await assert.rejects(
+    api.studioRequest(new Request("https://site.example"), [
+      "reviews",
+      bookId,
+      "history",
+      spreadId,
+      "media",
+      "0",
+    ]),
+    (error) => error.status === 410,
+  );
+  assert.equal(queries.length, 1);
+});
+
+test("comments store a validated pin and keep legacy unpinned comments working", async () => {
+  let inserted;
+  const api = service(async (sql, args) => {
+    if (sql.includes("INSERT INTO stillbounds_comments")) {
+      inserted = args;
+      return { rows: [] };
+    }
+    if (sql.includes("COUNT(*)")) return { rows: [{ count: 0 }] };
+    return { rows: [{ id: bookId }] };
+  });
+  const send = (pin) =>
+    api.studioRequest(
+      new Request("https://site.example", {
+        method: "POST",
+        body: JSON.stringify({ spreadId, text: "  Adjust crop  ", pin }),
+      }),
+      ["reviews", bookId, "comments"],
+    );
+  await send({ x: 0.2, y: 0.8 });
+  assert.equal(inserted[3], "Adjust crop");
+  assert.equal(inserted[4], '{"x":0.2,"y":0.8}');
+  await send(undefined);
+  assert.equal(inserted[4], null);
+  await assert.rejects(send({ x: 2, y: 0 }), (error) => error.status === 400);
 });

@@ -88,9 +88,23 @@ export async function viewer(request: NextRequest, id: string) {
   );
   const { rows } = await studioQuery(
     `SELECT v.* FROM stillbounds_versions v JOIN stillbounds_viewers s ON s.version_id=v.id
-   WHERE v.id=$1 AND s.token_hash=$2 AND s.expires_at>NOW() AND v.state='published' AND v.expires_at>NOW()`,
+   WHERE v.id=$1 AND s.token_hash=$2 AND s.expires_at>NOW()`,
     [id, hash(token)],
   );
-  assertStudio(rows.length, "This review is unavailable or has expired.", 401);
+  assertStudio(
+    rows.length,
+    "Your review session has ended. Enter the access code again.",
+    401,
+  );
+  assertStudio(
+    rows[0].state === "published",
+    "This review link has been withdrawn. Ask your photographer for a new link.",
+    410,
+  );
+  assertStudio(
+    new Date(rows[0].expires_at).getTime() > Date.now(),
+    "This review link has expired. Ask your photographer to share a new review.",
+    410,
+  );
   return rows[0];
 }
