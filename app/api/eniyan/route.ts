@@ -112,12 +112,12 @@ function buildProductSupportReply(messages: unknown, page?: PageContext): string
       return 'Your photos and editable books stay on your Mac. Stillbounds sign-in does not back them up or sync them between devices. Keep your own backup of your local work. Account and activation help: /stillbounds/account.';
     }
     if (/\b(activat\w*|licen[cs]e|devices?|trial|sign\s?in)\b/.test(latest)) {
-      return 'Open /stillbounds/account to sign in, check trial eligibility and manage device activation. I cannot view your licence or activate a device. If activation fails, contact ijabikenm@gmail.com; never paste activation codes or passwords here.';
+      return 'Open /stillbounds/account to sign in, check trial eligibility and manage device activation. I cannot view your licence or activate a device. If activation fails, contact moyoayaworan@gmail.com; never paste activation codes or passwords here.';
     }
     if (/\b(price|cost|offer)\b/.test(latest)) {
-      return 'The current Stillbounds offer is shown at /stillbounds/account. Check it before purchasing; I cannot verify your account eligibility or payment. If you were charged and the result is uncertain, do not pay again; contact ijabikenm@gmail.com.';
+      return 'The current Stillbounds offer is shown at /stillbounds/account. Check it before purchasing; I cannot verify your account eligibility or payment. If you were charged and the result is uncertain, do not pay again; contact moyoayaworan@gmail.com.';
     }
-    return 'Stillbounds is the Mac book-design app at /stillbounds. Open /stillbounds/account for the current offer, sign-in, trial eligibility and device activation. Your photos and editable books stay on your Mac; signing in does not back them up or sync them. I cannot view your account, verify a purchase or activate a device. For a payment issue, do not pay again while its status is uncertain; contact ijabikenm@gmail.com.';
+    return 'Stillbounds is the Mac book-design app at /stillbounds. Open /stillbounds/account for the current offer, sign-in, trial eligibility and device activation. Your photos and editable books stay on your Mac; signing in does not back them up or sync them. I cannot view your account, verify a purchase or activate a device. For a payment issue, do not pay again while its status is uncertain; contact moyoayaworan@gmail.com.';
   }
   const productContext = /\b(melatone|presets?|luts?|capture one|digital products?|digital downloads?|digital editions?|digital art)\b/.test(latest + ' ' + prior)
     || (typeof page?.path === 'string' && ['/photography/shop', '/art/shop', '/photography/shop/payment', '/art/shop/payment'].includes(page.path));
@@ -125,7 +125,7 @@ function buildProductSupportReply(messages: unknown, page?: PageContext): string
     const artPurchase = /\b(art|artwork|painting|edition)\b/.test(latest) || (typeof page?.path === 'string' && page.path.startsWith('/art/shop') && !/\b(melatone|presets?|luts?|capture one|photography)\b/.test(latest));
     const recovery = artPurchase ? '/art/shop/payment' : '/photography/shop/payment';
     if (SUPPORT_COPY[language]) return `${SUPPORT_COPY[language].purchase} ${recovery}`;
-    return `For a paid digital product, open ${recovery} and use “Recover a paid purchase”. Enter the checkout email in that form, not this chat. Check your inbox and spam folder. If you were charged, do not pay again while delivery is uncertain. I cannot verify or refund payments; contact ijabikenm@gmail.com if recovery does not resolve it. Physical artwork inquiries are handled by the studio.`;
+    return `For a paid digital product, open ${recovery} and use “Recover a paid purchase”. Enter the checkout email in that form, not this chat. Check your inbox and spam folder. If you were charged, do not pay again while delivery is uncertain. I cannot verify or refund payments; contact moyoayaworan@gmail.com if recovery does not resolve it. Physical artwork inquiries are handled by the studio.`;
   }
   if ((!language || language === 'EN') && /\b(recover|lost|receipt|charged|paid|refund)\b/.test(latest) && /\b(purchase|download|order|checkout|link)\b/.test(latest) && !/\b(booking|appointment|session|gallery|commission)\b/.test(latest)) {
     return 'Which needs recovery: a photography digital product, a fine-art digital purchase, or Stillbounds? Open “Account & purchase help” to choose the matching form. Keep purchase emails and private links out of chat. If a charge is uncertain, do not pay again before checking it.';
@@ -152,13 +152,13 @@ function buildFallbackReply(messages: unknown, page?: PageContext) {
   const productSupport = buildProductSupportReply(messages, page);
   if (productSupport) return productSupport;
   if (/\b(invoice|receipt|contract|refund|cancel|reschedule|paid|payment status)\b/.test(latest)) {
-    return 'I cannot view or change bookings, documents, or payments. For your invoice, contract, or receipt, use the private booking link in your studio email. To cancel, reschedule, or query a payment, contact ijabikenm@gmail.com. Do not paste your private link or payment details here.';
+    return 'I cannot view or change bookings, documents, or payments. For your invoice, contract, or receipt, use the private booking link in your studio email. To cancel, reschedule, or query a payment, contact moyoayaworan@gmail.com. Do not paste your private link or payment details here.';
   }
   if (!/\b(art|artwork|painting|commission)\b/.test(latest) && (/\b(melatone|luts?|presets?)\b/.test(latest + ' ' + prior) || (/\b(digital products?|digital tools?)\b/.test(latest) && ((typeof page?.path === 'string' && page.path.startsWith('/photography')) || /\b(photography|photo)\b/.test(latest + ' ' + prior))))) {
     return `Photography presets, LUTs and MELATONE are in ${ENIYAN_GUIDED_LINKS.photographyShop}. That collection is separate from the fine-art shop. Prices and secure Paystack checkout are on the product page; paid downloads unlock only after verification.`;
   }
   if (/\b(gallery|galleries|download|selection|access code)\b/.test(latest)) {
-    return `Open ${ENIYAN_GUIDED_LINKS.clientGallery} and enter your access details there, not in this chat. Preview your photographs and approve your favourites. Finished files are available once the studio has uploaded them and verified payment. Lost your access details? Contact ijabikenm@gmail.com.`;
+    return `Open ${ENIYAN_GUIDED_LINKS.clientGallery} and enter your access details there, not in this chat. Preview your photographs and approve your favourites. Finished files are available once the studio has uploaded them and verified payment. Lost your access details? Contact moyoayaworan@gmail.com.`;
   }
   if (/\b(commission|custom|gift|painting|drawn|drawing)\b/.test(latest)) {
     return `For a custom artwork, visit ${ENIYAN_GUIDED_LINKS.artCommissions}. The collector form records size, medium, budget, story, deadline, delivery destination, framing and references, then emails a private tracking link. The studio confirms scope, price, shipping and timing.`;
@@ -186,7 +186,7 @@ function buildFallbackReply(messages: unknown, page?: PageContext) {
     return artContext ? `Browse the art archive at ${ENIYAN_GUIDED_LINKS.artWorks}. To inquire about available pieces, visit ${ENIYAN_GUIDED_LINKS.artShop}.`
       : `Browse photography at ${ENIYAN_GUIDED_LINKS.photographyPortfolio} or fine art at ${ENIYAN_GUIDED_LINKS.artWorks}.`;
   }
-  if (/\b(contact|email|phone|call|human|person)\b/.test(latest)) return 'You can reach the studio at ijabikenm@gmail.com or +2348148192201. I am an AI guide, not a member of the studio team.';
+  if (/\b(contact|email|phone|call|human|person)\b/.test(latest)) return 'You can reach the studio at moyoayaworan@gmail.com or +2348148192201. I am an AI guide, not a member of the studio team.';
   if (/\b(hi|hello|hey|thanks|thank you)\b/.test(latest)) return 'Mo ki o! I am Ẹnìyàn, the AI studio guide. Would you like help with photography, artwork, or an existing client gallery?';
   return 'I can help with photography, fine art, and finding your way around the studio site. Are you looking to book photography, commission artwork, or view an existing client gallery?';
 }
@@ -232,7 +232,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Send a message for Eniyan to answer.' }, { status: 400 });
     }
 
-    const privateNotice = () => replyJson('Please keep personal contact details, access codes, passwords, private booking links, and payment details out of this chat. Use /photography/bookings or /art/commissions for contact details; enter gallery details only at /photography/client-gallery. For account or payment help, contact ijabikenm@gmail.com. I have not sent this message to the AI provider.');
+    const privateNotice = () => replyJson('Please keep personal contact details, access codes, passwords, private booking links, and payment details out of this chat. Use /photography/bookings or /art/commissions for contact details; enter gallery details only at /photography/client-gallery. For account or payment help, contact moyoayaworan@gmail.com. I have not sent this message to the AI provider.');
     if (containsPrivateDetails(contents.at(-1)!.parts[0].text)) return privateNotice();
     for (const message of contents) {
       if (message && containsPrivateDetails(message.parts[0].text)) message.parts[0].text = '[Private details removed]';
@@ -326,7 +326,7 @@ export async function POST(req: Request) {
     // generated conversation. Sources are navigation aids, not proof of accuracy.
     if (!answer || answer.length > 1300 || !isSafeEniyanReply(answer) ||
       /\d|[₦$€£]|\b(?:naira|dollars?|percent|refund\w*|cancel\w*|reschedul\w*|trial|polic\w*|licen[cs]\w*|activat\w*|deposit\w*|installments?|payment\w*|checkout|shipping|delivery|guarantee\w*|discount\w*|promo code)\b|(?:one|two|three|four|five|six|seven|eight|nine|ten|hundred|thousand)\s+(?:images?|outfits?|photos?|days?|hours?|weeks?|months?)|rembours|reembols|erstatt|退款|政策|激活|استرداد|سياسة/i.test(answer) ||
-      containsPrivateDetails(answer.replaceAll('ijabikenm@gmail.com', '').replaceAll('+2348148192201', ''))) return fallback();
+      containsPrivateDetails(answer.replaceAll('moyoayaworan@gmail.com', '').replaceAll('+2348148192201', ''))) return fallback();
     const sources = [...new Set(grounded.sources as string[])];
     const linked = new Set(getEniyanLinks(answer));
     const missing = sources.filter(path => !linked.has(path));

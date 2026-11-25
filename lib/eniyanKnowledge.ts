@@ -53,7 +53,7 @@ Fine art:
 - Visitors asking where to see shows, public work, or exhibition history should be guided to /art/exhibitions.
 
 Contact:
-- Main email: ijabikenm@gmail.com
+- Main email: moyoayaworan@gmail.com
 - Studio phone: +2348148192201
 - For booking or project inquiries, prefer guiding visitors to the matching form/page first, then mention email as a backup.
 

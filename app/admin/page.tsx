@@ -473,7 +473,7 @@ function DocumentPreview({ gallery, form }: { gallery: Gallery; form: GalleryDoc
         <div className="flex flex-wrap items-start justify-between gap-6 pb-3">
           <div>
             <p className="text-sm font-semibold">MOYO AYAWORAN<span className="text-[#d44958]">.</span></p>
-            <p className="mt-2 text-[11px] leading-relaxed" style={{ color: palette.muted }}>Photography & Fine Art<br />ijabikenm@gmail.com</p>
+            <p className="mt-2 text-[11px] leading-relaxed" style={{ color: palette.muted }}>Photography & Fine Art<br />moyoayaworan@gmail.com</p>
           </div>
           <div className="text-right">
             <p className="text-2xl font-light tracking-[0.18em] sm:text-3xl">{label}</p>

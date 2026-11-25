@@ -16,7 +16,7 @@ function createAuth() {
   const email = async (to: string, subject: string, link: string) => {
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) throw new Error('Account email is not configured.');
     const transport = nodemailer.createTransport({ service: 'gmail', auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS } });
-    await transport.sendMail({ from: process.env.EMAIL_USER, to, subject, text: `${subject}\n\n${link}\n\nIf you did not request this, ignore this email.` });
+    await transport.sendMail({ from: process.env.EMAIL_USER, replyTo: process.env.SMTP_REPLY_TO || process.env.CONTACT_EMAIL || 'moyoayaworan@gmail.com', to, subject, text: `${subject}\n\n${link}\n\nIf you did not request this, ignore this email.` });
   };
   return createStillboundsAuth({ origin, key, email, database: new Pool({ connectionString: url.toString(), ssl: { rejectUnauthorized: true }, max: 3 }) });
 }

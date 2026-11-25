@@ -5,7 +5,7 @@ import { requireAdmin } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 
-const CONTACT_EMAIL = process.env.CONTACT_EMAIL || 'ijabikenm@gmail.com';
+const CONTACT_EMAIL = process.env.CONTACT_EMAIL || 'moyoayaworan@gmail.com';
 const STUDIO_TIMEZONE = 'Africa/Lagos';
 
 type ReminderKind = '24h' | 'day';

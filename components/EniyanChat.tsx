@@ -479,7 +479,7 @@ export default function EniyanChat({ hidden = false }: { hidden?: boolean }) {
                   <p className="text-sm leading-relaxed opacity-75">These are secure site forms. Ẹnìyàn cannot see your account, verify a payment, activate a device or issue a refund. Enter private details only in the matching form. If a charge is uncertain, check it before paying again.</p>
                   <div className="grid gap-2">{['/stillbounds/account', '/photography/shop/payment', '/art/shop/payment', '/photography/client-gallery', '/art/commissions'].map(path => <Link key={path} href={path} onClick={closeChat} className="min-h-11 rounded-lg border border-current/25 px-3 py-3 text-sm">{ENIYAN_LINK_ROUTES[path]} <ArrowRight className="inline size-4" aria-hidden="true" /></Link>)}</div>
                   <button type="button" onClick={() => { setSupportOpen(false); setTrackingOpen(true); }} className="min-h-11 rounded-lg border border-current/25 px-3 py-2 text-sm">{controls[1]}</button>
-                  <p className="text-sm">Need the studio? <a href="mailto:ijabikenm@gmail.com" className="underline">ijabikenm@gmail.com</a></p>
+                  <p className="text-sm">Need the studio? <a href="mailto:moyoayaworan@gmail.com" className="underline">moyoayaworan@gmail.com</a></p>
                 </section> : trackingOpen ? <section className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
                   <button type="button" onClick={() => setTrackingOpen(false)} className="mb-4 min-h-11 rounded-lg border border-current/25 px-3 py-2 text-xs">{controls[3]}</button>
                   <h3 ref={trackingHeading} tabIndex={-1} className="sr-only">Recover your booking link</h3>

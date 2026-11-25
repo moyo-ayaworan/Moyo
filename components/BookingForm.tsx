@@ -67,7 +67,7 @@ export default function BookingForm({ embedded = false }: BookingFormProps) {
     const [availabilityRetry, setAvailabilityRetry] = useState(0);
     const [status, setStatus] = useState<BookingStatus>('idle');
     const [notice, setNotice] = useState('');
-    const [contact, setContact] = useState({ email: 'ijabikenm@gmail.com', phone: '+2348148192201' });
+    const [contact, setContact] = useState({ email: 'moyoayaworan@gmail.com', phone: '+2348148192201' });
     const { language } = useLanguage();
     const { t, translateText } = useTranslate(language);
     const settings = useSiteSettings();
@@ -92,7 +92,7 @@ export default function BookingForm({ embedded = false }: BookingFormProps) {
             .then((res) => res.json())
             .then((data) => {
                 setContact({
-                    email: data.contact?.email || 'ijabikenm@gmail.com',
+                    email: data.contact?.email || 'moyoayaworan@gmail.com',
                     phone: data.contact?.phone || '+2348148192201',
                 });
             })

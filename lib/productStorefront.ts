@@ -11,5 +11,5 @@ export const getStoreProduct=cache(async(section:ProductSection,id:number):Promi
 export async function getRelatedProducts(section:ProductSection,id:number):Promise<StoreProduct[]> {
   return (await query(`SELECT ${publicProductFields} FROM digital_products WHERE section=$1 AND id<>$2 AND is_active=TRUE ORDER BY display_order,created_at DESC LIMIT 3`,[section,id])).rows.map(publicStoreProduct);
 }
-export async function storeContact() {return (await query('SELECT email FROM contact WHERE id=1')).rows[0]?.email||'ijabikenm@gmail.com';}
+export async function storeContact() {return (await query('SELECT email FROM contact WHERE id=1')).rows[0]?.email||'moyoayaworan@gmail.com';}
 export const storeCheckoutEnabled=()=>Boolean(process.env.PAYSTACK_SECRET_KEY&&(process.env.VERCEL_ENV!=='production'||process.env.PAYSTACK_WEBHOOK_SECRET));

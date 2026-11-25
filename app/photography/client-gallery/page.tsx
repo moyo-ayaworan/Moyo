@@ -391,7 +391,7 @@ export default function ClientGalleryPage() {
                                 </button>
                             </form>
 
-                            <a href="mailto:ijabikenm@gmail.com?subject=Client%20gallery%20access" className="inline-flex items-center gap-2 text-[10px] text-white/60 tracking-widest uppercase hover:text-accent transition-colors">
+                            <a href="mailto:moyoayaworan@gmail.com?subject=Client%20gallery%20access" className="inline-flex items-center gap-2 text-[10px] text-white/60 tracking-widest uppercase hover:text-accent transition-colors">
                                 <Mail className="h-3 w-3" /> {t('clientGallery.lostCode')}
                             </a>
                         </GlareHover>

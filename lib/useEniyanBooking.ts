@@ -117,7 +117,7 @@ export function useEniyanBooking() {
       }
       if (response.status === 429 && !uncertain) {
         submission.current = null;
-        setError('The request limit has been reached. Nothing was saved by this attempt. Try later or contact ijabikenm@gmail.com.'); return;
+        setError('The request limit has been reached. Nothing was saved by this attempt. Try later or contact moyoayaworan@gmail.com.'); return;
       }
       if (response.status === 400) {
         setUncertain(false); submission.current = null; setStep('details');
