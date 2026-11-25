@@ -1,0 +1,1 @@
+export function isPrivatePage(path:string){return /^\/(admin|client|collector|payments)(\/|$)/.test(path)||/^\/(stillbounds|mofolio)\/(account|review)(\/|$)/.test(path)||/^\/(photography|art)\/shop\/payment(\/|$)/.test(path)||path==='/newsletter/preferences';}

@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
+import NewsletterJobs from '@/components/NewsletterJobs';
 import Footer from '@/components/Footer';
 import { FiCheckCircle, FiMail, FiRefreshCw, FiSend, FiXCircle } from 'react-icons/fi';
 
@@ -90,34 +91,8 @@ export default function NewsletterAdminPage() {
 
   const verifyAdminKey = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const submittedKey = adminKey.trim();
-    setNotice(null);
-
-    if (!submittedKey) {
-      setNotice({ text: 'Enter the admin password.', type: 'error' });
-      return;
-    }
-
-    setAuthChecking(true);
-    try {
-      const res = await fetch('/api/admin/verify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-key': submittedKey,
-        },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Invalid admin password.');
-      setAdminKey('');
-      setIsAuthed(true);
-      setNotice({ text: 'Newsletter admin unlocked.', type: 'success' });
-    } catch (error) {
-      setIsAuthed(false);
-      setNotice({ text: error instanceof Error ? error.message : 'Invalid admin password.', type: 'error' });
-    } finally {
-      setAuthChecking(false);
-    }
+    setAdminKey('');
+    window.location.assign('/admin/login?next=/admin/newsletter');
   };
 
   useEffect(() => {
@@ -165,6 +140,10 @@ export default function NewsletterAdminPage() {
       return;
     }
 
+    const draft=JSON.stringify({listType,subject:campaign.subject,previewText:campaign.previewText,body,bodyHtml});
+    const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(draft)))).map(v=>v.toString(16).padStart(2,'0')).join('');
+    let requestKey=crypto.randomUUID();
+    try{const saved=JSON.parse(sessionStorage.getItem('moyo-newsletter-pending')||'null');if(saved?.fingerprint===fingerprint)requestKey=saved.requestKey;sessionStorage.setItem('moyo-newsletter-pending',JSON.stringify({fingerprint,requestKey}));}catch{}
     setSending(true);
     setNotice(null);
 
@@ -172,11 +151,12 @@ export default function NewsletterAdminPage() {
       const res = await fetch('/api/newsletter/admin', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ listType, subject: campaign.subject, previewText: campaign.previewText, body, bodyHtml }),
+        body: JSON.stringify({ requestKey, listType, subject: campaign.subject, previewText: campaign.previewText, body, bodyHtml }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Unable to send newsletter.');
-      setNotice({ text: 'Newsletter sent to ' + data.sentCount + ' subscriber' + (data.sentCount === 1 ? '' : 's') + '.', type: 'success' });
+      try { sessionStorage.removeItem('moyo-newsletter-pending'); } catch {}
+      setNotice({ text: data.message || 'Campaign saved for delivery.', type: 'success' });
       setCampaign({ subject: '', previewText: '', body: '', bodyHtml: '' });
       if (editorRef.current) editorRef.current.innerHTML = '';
       await loadSubscribers(listType, false);
@@ -204,6 +184,7 @@ export default function NewsletterAdminPage() {
           </Link>
         </div>
 
+        {isAuthed && <NewsletterJobs />}
         {!isAuthed ? (
           <form onSubmit={verifyAdminKey} className={panelClass + ' mx-auto max-w-md space-y-6'}>
             <div className="space-y-2 text-center">

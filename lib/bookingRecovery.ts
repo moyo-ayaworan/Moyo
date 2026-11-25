@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomBytes, createHash, randomUUID } from 'node:crypto';
 import nodemailer from 'nodemailer';
 import { query, transaction } from './db';
 import { bookingOrigin } from './bookingOrigin';
@@ -46,7 +46,7 @@ export async function deliverBookingRecovery(options: { limit?: number; deadline
       });
       if (!job) return summary;
       try {
-        const booking = (await query(`SELECT id,email,manage_token FROM bookings WHERE id=$1 AND LOWER(email)=$2 LIMIT 1`, [job.booking_reference, job.email])).rows[0];
+        let booking = (await query(`SELECT id,email,manage_token,portal_expires_at FROM bookings WHERE id=$1 AND LOWER(email)=$2 AND portal_revoked_at IS NULL LIMIT 1`, [job.booking_reference, job.email])).rows[0];
         if (!booking) {
           await query('UPDATE booking_recovery_outbox SET discarded=TRUE,lease=NULL WHERE id=$1 AND lease=$2', [job.id, job.lease]);
           continue;
@@ -67,6 +67,11 @@ export async function deliverBookingRecovery(options: { limit?: number; deadline
             await query('UPDATE booking_recovery_outbox SET discarded=TRUE,lease=NULL WHERE id=$1 AND lease=$2', [job.id, job.lease]);
             continue;
           }
+        }
+        if (booking.portal_expires_at && new Date(booking.portal_expires_at).getTime()<=Date.now()) {
+          const renewed=await query(`UPDATE bookings SET manage_token=$3,portal_expires_at=NOW()+INTERVAL '180 days' WHERE id=$1 AND LOWER(email)=$2 AND portal_revoked_at IS NULL AND portal_expires_at<=NOW() RETURNING id,email,manage_token`,[booking.id,job.email,randomBytes(24).toString('hex')]);
+          booking=renewed.rows[0]||(await query('SELECT id,email,manage_token FROM bookings WHERE id=$1 AND LOWER(email)=$2 AND portal_revoked_at IS NULL AND portal_expires_at>NOW()',[booking.id,job.email])).rows[0];
+          if(!booking)throw Error('Private link could not be renewed.');
         }
         const result = await config.mail.sendMail({ from: config.from, replyTo: process.env.SMTP_REPLY_TO || process.env.CONTACT_EMAIL || 'moyoayaworan@gmail.com', to: { address: booking.email, name: '' },
           subject: `Your booking tracking link - #${booking.id}`, messageId: `<booking-recovery-${job.id}@${new URL(bookingOrigin()).hostname}>`,

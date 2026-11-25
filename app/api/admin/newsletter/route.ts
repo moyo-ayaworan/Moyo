@@ -3,7 +3,7 @@ import { requireAdmin } from '@/lib/auth';
 import { query } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
-  const unauthorized = requireAdmin(req);
+  const unauthorized = await requireAdmin(req);
   if (unauthorized) return unauthorized;
 
   const { rows } = await query(

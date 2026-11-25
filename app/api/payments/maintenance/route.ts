@@ -5,6 +5,7 @@ import { query } from '@/lib/db';
 import { verifyOrder, payments, privateHeaders } from '@/lib/payments/server';
 import { deliverPaymentNotifications } from '@/lib/payments/notifications';
 import { deliverBookingRecovery } from '@/lib/bookingRecovery';
+import {deliverNewsletterCampaigns} from '@/lib/newsletter/queue';
 import type { PaymentOrder } from '@/lib/payments/policy';
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -12,7 +13,7 @@ export async function GET(req: NextRequest) {
   const expected = process.env.CRON_SECRET ? `Bearer ${process.env.CRON_SECRET}` : '';
   const actual = req.headers.get('authorization') || '';
   const cron = !!expected && Buffer.byteLength(expected) === Buffer.byteLength(actual) && timingSafeEqual(Buffer.from(expected), Buffer.from(actual));
-  if (!cron) { const unauthorized = requireAdmin(req, true); if (unauthorized) return unauthorized; }
+  if (!cron) { const unauthorized = await requireAdmin(req, true); if (unauthorized) return unauthorized; }
   // Keep unresolved orders eligible until reconciled; paid audits have their own quota.
   const deadline = Date.now() + 120000;
   let checked = 0, failed = 0;
@@ -35,6 +36,7 @@ export async function GET(req: NextRequest) {
     await deliverPaymentNotifications({ limit: 100, deadline: Date.now() + 40000 });
     const bookingRecovery = await deliverBookingRecovery({ limit: 20, deadline: Date.now() + 25000 });
     failed += bookingRecovery?.deferred || 0;
+    const campaigns=await deliverNewsletterCampaigns({limit:10,deadline:Date.now()+20000});failed+=campaigns.deferred;
     const backlog = await query("SELECT COUNT(*)::int AS pending FROM payment_notifications WHERE sent_at IS NULL");
     await query(`INSERT INTO operations_runs(name,completed_at,failed) VALUES ('payments',NOW(),$1)
       ON CONFLICT(name) DO UPDATE SET completed_at=EXCLUDED.completed_at,failed=EXCLUDED.failed`, [failed]);

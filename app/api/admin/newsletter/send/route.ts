@@ -1,6 +1,7 @@
 import { readJsonRequest } from '@/lib/requestBody';
 import { sendNewsletterCampaign } from '@/lib/newsletter/server';
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
+import {deliverNewsletterCampaigns} from '@/lib/newsletter/queue';
 import { requireAdmin } from '@/lib/auth';
 
 export const maxDuration = 60;
@@ -28,12 +29,14 @@ function formatBody(body: string) {
 }
 
 export async function POST(req: NextRequest) {
-  const unauthorized = requireAdmin(req);
+  const unauthorized = await requireAdmin(req);
   if (unauthorized) return unauthorized;
 
   const parsed = await readJsonRequest(req, 100_000);
   if (parsed.response) return parsed.response;
   const body = parsed.body;
+  const requestKey=typeof body.requestKey==='string'?body.requestKey:'';
+  if(!/^[a-f0-9-]{36}$/i.test(requestKey))return NextResponse.json({error:'Reload the newsletter editor before sending.'},{status:400});
   const listType = normalize(body.listType) || 'all';
   const subject = normalize(body.subject);
   const message = normalize(body.message);
@@ -61,7 +64,8 @@ export async function POST(req: NextRequest) {
   `;
 
   try {
-    const result = await sendNewsletterCampaign({listType,subject,text:message,html});
+    const result = await sendNewsletterCampaign({requestKey,listType,subject,text:message,html});
+    if(result.queuedCount){after(()=>deliverNewsletterCampaigns({limit:3}));return NextResponse.json({...result,message:`Campaign saved for ${result.queuedCount} recipients. Delivery continues in the background.`},{status:202,headers:{'Cache-Control':'no-store'}});}
     if (!result.sentCount && !result.failedCount) return NextResponse.json({error:'No active subscribers for this list.'},{status:400});
     return NextResponse.json({...result,sent:result.sentCount,message:`Sent to ${result.sentCount} recipients.${result.failedCount ? ` ${result.failedCount} deliveries could not be confirmed.` : ''}`},{status:result.sentCount ? 200 : 502});
   } catch { return NextResponse.json({error:'Newsletter delivery is unavailable.'},{status:503}); }

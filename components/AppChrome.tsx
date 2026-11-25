@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import {isPrivatePage} from '@/lib/privatePaths';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ProfileProvider } from '@/context/ProfileContext';
@@ -15,7 +16,12 @@ const EniyanChat = dynamic(() => import('@/components/EniyanChat'), { ssr: false
 
 export default function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const privateWorkspace = pathname === '/admin/stillbounds' || pathname.startsWith('/admin/stillbounds/');
+  useEffect(()=>{
+    // Enter private pages as a fresh document so their stricter CSP takes effect.
+    if(isPrivatePage(pathname)&&!document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce)
+      window.location.replace(window.location.href);
+  },[pathname]);
+  const privateWorkspace = pathname === '/admin' || pathname.startsWith('/admin/');
   const productPage = pathname === '/stillbounds' || pathname.startsWith('/stillbounds/') || privateWorkspace;
   const purchasePage = /\/shop\/(?:products\/|payment)/.test(pathname);
   const [enablePointerEffects, setEnablePointerEffects] = useState(false);

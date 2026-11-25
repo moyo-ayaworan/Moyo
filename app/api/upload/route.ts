@@ -102,7 +102,7 @@ async function uploadFile(file: File, privateAsset: boolean) {
 }
 
 export async function POST(req: NextRequest) {
-  const unauthorized = requireAdmin(req);
+  const unauthorized = await requireAdmin(req);
   if (unauthorized) return unauthorized;
 
   try {

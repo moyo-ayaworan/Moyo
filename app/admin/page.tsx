@@ -1,4 +1,5 @@
 'use client';
+import AdminPortalLinkControls from '@/components/AdminPortalLinkControls';
 import ProductStoryEditor from '@/components/admin/ProductStoryEditor';
 import ProductAssetsEditor from '@/components/admin/ProductAssetsEditor';
 import { emptyProductStory, readProductStory, productPath, type ProductStory } from '@/lib/productStory';
@@ -207,7 +208,7 @@ type Content = {
 type Contact = { phone: string; email: string; address: string };
 type Social = { id: number; platform: string; url: string; icon?: string };
 type Order = { id: number; items: unknown[]; total_price: number; status: string; customer_email: string };
-type ArtInquiry = { id: number; inquiry_type: string; artwork_id: number | null; artwork_title?: string; name: string; email: string; phone: string; details: Record<string, string>; status: string; manage_token: string; gallery_id: number | null; client_notes: string; internal_notes: string; created_at: string };
+type ArtInquiry = { id: number; inquiry_type: string; artwork_id: number | null; artwork_title?: string; name: string; email: string; phone: string; details: Record<string, string>; status: string; manage_token: string; portal_expires_at?: string; portal_revoked_at?: string | null; gallery_id: number | null; client_notes: string; internal_notes: string; created_at: string };
 type Booking = {
   id: number;
   name: string;
@@ -225,7 +226,7 @@ type Booking = {
   scheduled_at: string;
   timezone: string;
   status: string;
-  manage_token: string;
+  manage_token: string; portal_expires_at?: string; portal_revoked_at?: string | null;
   client_notes: string;
   internal_notes: string;
   gallery_id: number | null;
@@ -1059,42 +1060,10 @@ export default function AdminPage() {
     return () => controller.abort();
   }, [fetchAll]);
 
-  const verifyAdminKey = async (keyToVerify: string) => {
-    const submittedKey = keyToVerify.trim();
-    setAuthError(null);
-    setMessage(null);
-
-    if (!submittedKey) {
-      setIsAuthed(false);
-      setAuthError('Enter the admin password');
-      return false;
-    }
-
-    setAuthChecking(true);
-    try {
-      const res = await fetch('/api/admin/verify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-key': submittedKey,
-        },
-      });
-      if (!res.ok) {
-        setIsAuthed(false);
-        setAuthError('Invalid admin password');
-        return false;
-      }
-      setAdminKey('');
-      setIsAuthed(true);
-      setMessage({ text: 'Admin unlocked', type: 'success' });
-      return true;
-    } catch {
-      setIsAuthed(false);
-      setAuthError('Unable to verify password');
-      return false;
-    } finally {
-      setAuthChecking(false);
-    }
+  const verifyAdminKey = async (_keyToVerify: string) => {
+    setAdminKey('');
+    window.location.assign('/admin/login?next='+encodeURIComponent('/admin'));
+    return false;
   };
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
@@ -2775,6 +2744,7 @@ export default function AdminPage() {
                 setIsAuthed(false);
               }}
             />
+            <Link href="/admin/security" className="px-3 py-2 text-sm underline">Sessions & security</Link>
             <button
               onClick={async () => {
                 await fetch('/api/admin/logout', { method: 'POST' }).catch(() => null);
@@ -2921,6 +2891,7 @@ export default function AdminPage() {
                 return (
                   <div key={booking.id} className="grid gap-5 border border-white/10 bg-black/20 p-4 md:p-5 xl:grid-cols-[0.85fr_1.15fr]">
                     <div className="min-w-0 space-y-4">
+                      <AdminPortalLinkControls kind="booking" id={booking.id} expires={booking.portal_expires_at} revoked={booking.portal_revoked_at} onChange={link=>setBookings(current=>current.map(item=>item.id===booking.id?{...item,...link}:item))}/>
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="font-heading text-2xl italic text-white [overflow-wrap:anywhere]">{booking.name}</p>
@@ -3095,7 +3066,7 @@ export default function AdminPage() {
                 {artInquiries.length === 0 && <p className="text-sm text-white/40">No collector inquiries yet.</p>}
                 {artInquiries.map(inquiry => { const draft = artInquiryEdits[inquiry.id]; if (!draft) return null; return <div key={inquiry.id} className="space-y-3 border border-white/10 bg-black/20 p-4">
                   <div className="flex flex-wrap justify-between gap-3"><div><p className="text-white">{inquiry.name} · ART-{inquiry.id}</p><p className="text-xs text-white/45">{inquiry.artwork_title || inquiry.inquiry_type} · {inquiry.email} {inquiry.phone}</p></div><a target="_blank" rel="noreferrer" href={`/collector/${inquiry.manage_token}`} className="text-xs text-accent underline">Open portal</a></div>
-                  <p className="text-xs leading-relaxed text-white/55">{Object.entries(inquiry.details || {}).filter(([, value]) => value).map(([key, value]) => `${key}: ${value}`).join(' · ')}</p>
+                  <AdminPortalLinkControls kind="collector" id={inquiry.id} expires={inquiry.portal_expires_at} revoked={inquiry.portal_revoked_at} onChange={link=>setArtInquiries(current=>current.map(item=>item.id===inquiry.id?{...item,...link}:item))}/><p className="text-xs leading-relaxed text-white/55">{Object.entries(inquiry.details || {}).filter(([, value]) => value).map(([key, value]) => `${key}: ${value}`).join(' · ')}</p>
                   <div className="grid gap-3 sm:grid-cols-2"><select className={inputClass} value={draft.status} onChange={e => setArtInquiryEdits(current => ({ ...current, [inquiry.id]: { ...draft, status: e.target.value } }))}>{['received','consultation','quoted','reserved','deposit-paid','in-progress','ready','delivered','closed'].map(status => <option key={status} value={status}>{status.replace('-', ' ')}</option>)}</select><select className={inputClass} value={draft.galleryId} onChange={e => setArtInquiryEdits(current => ({ ...current, [inquiry.id]: { ...draft, galleryId: e.target.value } }))}><option value="">No financial/gallery record</option>{galleries.map(gallery => <option key={gallery.id} value={gallery.id}>{gallery.client_name} / {gallery.slug}</option>)}</select></div>
                   <textarea className={inputClass} rows={2} placeholder="Collector-visible progress, shipping, framing or delivery update" value={draft.clientNotes} onChange={e => setArtInquiryEdits(current => ({ ...current, [inquiry.id]: { ...draft, clientNotes: e.target.value } }))} />
                   <textarea className={inputClass} rows={2} placeholder="Private studio notes" value={draft.internalNotes} onChange={e => setArtInquiryEdits(current => ({ ...current, [inquiry.id]: { ...draft, internalNotes: e.target.value } }))} />

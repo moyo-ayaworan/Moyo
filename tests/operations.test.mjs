@@ -57,6 +57,7 @@ function maintenance(query, verifyOrder = async () => {}) {
     '@/lib/auth': { requireAdmin: () => null },
     '@/lib/db': { query },
     '@/lib/payments/server': { verifyOrder, payments: { transact: async work => work({ query: async () => ({ rows: [] }) }) }, privateHeaders: {} },
+    '@/lib/newsletter/queue': { deliverNewsletterCampaigns: async () => ({ delivered: 0, deferred: 0 }) },
     '@/lib/bookingRecovery': { deliverBookingRecovery: async () => {} },
     '@/lib/payments/notifications': { deliverPaymentNotifications: async () => {} },
   };
@@ -121,6 +122,7 @@ test('deferred booking recovery delivery makes maintenance unhealthy instead of 
     '@/lib/auth': { requireAdmin: () => null }, '@/lib/db': { query: async (sql, params) => { if (sql.includes('operations_runs')) heartbeat = params; return { rows: [] }; } },
     '@/lib/payments/server': { verifyOrder: async () => {}, payments: {}, privateHeaders: {} },
     '@/lib/payments/notifications': { deliverPaymentNotifications: async () => {} },
+    '@/lib/newsletter/queue': { deliverNewsletterCampaigns: async () => ({ delivered: 0, deferred: 0 }) },
     '@/lib/bookingRecovery': { deliverBookingRecovery: async () => ({ delivered: 0, deferred: 1 }) },
   });
   const response = await route.GET({ headers: new Headers() });

@@ -15,7 +15,7 @@ async function state() {
   return { environment, url, endpoint };
 }
 export async function GET(req: NextRequest) {
-  const unauthorized = requireAdmin(req); if (unauthorized) return unauthorized;
+  const unauthorized = await requireAdmin(req); if (unauthorized) return unauthorized;
   try {
     const result = await state();
     return NextResponse.json({ environment: result.environment, webhookUrl: result.url, webhookEnabled: !!result.endpoint?.enabled,
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   } catch (error) { return paymentFailure(error); }
 }
 export async function POST(req: NextRequest) {
-  const unauthorized = requireAdmin(req); if (unauthorized) return unauthorized;
+  const unauthorized = await requireAdmin(req); if (unauthorized) return unauthorized;
   try {
     requirePaymentOrigin(req);
     const result = await state();

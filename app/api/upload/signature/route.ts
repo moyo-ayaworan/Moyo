@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 const uploadFolder = 'moyo-admin';
 
 export async function POST(req: NextRequest) {
-  const unauthorized = requireAdmin(req);
+  const unauthorized = await requireAdmin(req);
   if (unauthorized) return unauthorized;
 
   const body = await req.json().catch(() => null);

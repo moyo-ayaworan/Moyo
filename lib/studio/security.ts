@@ -37,8 +37,8 @@ export function sameOrigin(request: Request) {
     403,
   );
 }
-export function admin(request: NextRequest, mutate = false) {
-  const denied = requireAdmin(request);
+export async function admin(request: NextRequest, mutate = false) {
+  const denied = await requireAdmin(request);
   assertStudio(!denied, "Sign in to Moyo admin first.", denied?.status || 401);
   if (mutate) sameOrigin(request);
 }

@@ -19,6 +19,10 @@ try {
     headers: { Authorization: `Bearer ${process.env.OPERATIONS_MONITOR_SECRET}` }, redirect: 'error', signal: AbortSignal.timeout(20000),
   });
   if (!health.ok) process.exitCode = 1;
+  if(health.ok){
+    const retry=await fetch('https://moyoayaworan.com/api/operations/email-retry',{method:'POST',headers:{Authorization:`Bearer ${process.env.OPERATIONS_MONITOR_SECRET}`},redirect:'error',signal:AbortSignal.timeout(45000)});
+    if(!retry.ok)process.exitCode=1;
+  }
   if (!process.exitCode) {
     const heartbeat = await fetch('https://moyoayaworan.com/api/operations/health', { method: 'POST', headers: { Authorization: `Bearer ${process.env.OPERATIONS_MONITOR_SECRET}` }, redirect: 'error', signal: AbortSignal.timeout(20000) });
     if (!heartbeat.ok) process.exitCode = 1;

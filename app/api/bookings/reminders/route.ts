@@ -103,14 +103,14 @@ async function sendReminder(booking: BookingReminder, kind: ReminderKind) {
   });
 }
 
-function authorize(req: NextRequest) {
+async function authorize(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret && req.headers.get('authorization') === `Bearer ${cronSecret}`) return null;
   return requireAdmin(req, true);
 }
 
 export async function GET(req: NextRequest) {
-  const unauthorized = authorize(req);
+  const unauthorized = await authorize(req);
   if (unauthorized) return unauthorized;
 
   const { rows: tomorrowRows } = await query(
