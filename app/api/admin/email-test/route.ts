@@ -9,11 +9,11 @@ const headers = { 'Cache-Control': 'private, no-store' };
 const email = 'moyoayaworan@gmail.com';
 function settings() { const env = { ...process.env }; return applyStudioMailEnvironment(env) ? env : null; }
 export async function GET(request: NextRequest) {
-  const denied = requireAdmin(request); if (denied) return denied;
+  const denied = await requireAdmin(request); if (denied) return denied;
   return NextResponse.json({ newSenderConfigured: Boolean(settings()), sender: email, replyTo: email }, { headers });
 }
 export async function POST(request: NextRequest) {
-  const denied = requireAdmin(request, true); if (denied) return denied;
+  const denied = await requireAdmin(request, true); if (denied) return denied;
   const env = settings();
   if (!env) return NextResponse.json({ error: 'The new Gmail app password is not configured.' }, { status: 409, headers });
   const limited = await rateLimit(request, 'studio-email-test', 2, 300); if (limited) return limited;

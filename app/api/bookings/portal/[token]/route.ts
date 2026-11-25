@@ -23,12 +23,12 @@ export async function GET(req: NextRequest, context: RouteContext) {
               timezone, status, client_notes, gallery_id, confirmation_sent_at::text, reminder_24h_sent_at::text,
               reminder_day_sent_at::text, created_at::text
        FROM bookings
-       WHERE manage_token = $1
+       WHERE manage_token = $1 AND portal_expires_at>NOW() AND portal_revoked_at IS NULL
        LIMIT 1`,
       [cleanToken]
     );
 
-    if (!rows[0]) return NextResponse.json({ error: 'Booking not found.' }, { status: 404, headers: privateHeaders });
+    if (!rows[0]) return NextResponse.json({ error: 'This private link has expired or is unavailable. Request a fresh tracking link.' }, { status: 404, headers: privateHeaders });
     const booking = rows[0];
     const galleryId = Number(booking.gallery_id || 0);
     const [galleryResult, documentResult] = galleryId

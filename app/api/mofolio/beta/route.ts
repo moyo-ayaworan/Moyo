@@ -40,7 +40,7 @@ export async function POST(request:Request) {
   } catch {return NextResponse.json({error:'We could not save your request. Please try again later.'},{status:503,headers});}
 }
 export async function GET(request:NextRequest) {
-  const denied = requireAdmin(request);
+  const denied = await requireAdmin(request);
   if(denied) return denied;
   try {
     await ensureList();

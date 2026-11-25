@@ -1,6 +1,7 @@
 import { readJsonRequest } from '@/lib/requestBody';
 import { sanitizeNewsletterHtml } from '@/lib/newsletterHtml';
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
+import {deliverNewsletterCampaigns} from '@/lib/newsletter/queue';
 import { sendNewsletterCampaign } from '@/lib/newsletter/server';
 import { requireAdmin } from '@/lib/auth';
 import { query } from '@/lib/db';
@@ -85,7 +86,7 @@ async function getRecipients(listType: ListType) {
 }
 
 export async function GET(req: NextRequest) {
-  const unauthorized = requireAdmin(req);
+  const unauthorized = await requireAdmin(req);
   if (unauthorized) return unauthorized;
 
   const listType = normalizeList(req.nextUrl.searchParams.get('listType'));
@@ -103,12 +104,14 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const unauthorized = requireAdmin(req);
+  const unauthorized = await requireAdmin(req);
   if (unauthorized) return unauthorized;
 
   const parsed = await readJsonRequest(req, 100_000);
   if (parsed.response) return parsed.response;
   const body = parsed.body;
+  const requestKey=typeof body.requestKey==='string'?body.requestKey:'';
+  if(!/^[a-f0-9-]{36}$/i.test(requestKey))return NextResponse.json({error:'Reload the newsletter editor before sending.'},{status:400});
   if (body.listType !== undefined && !validLists.has(body.listType)) return NextResponse.json({error:'Choose a valid newsletter list.'},{status:400});
   const listType = normalizeList(body.listType);
   const subject = typeof body.subject === 'string' ? body.subject.trim() : '';
@@ -123,7 +126,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Newsletter body is required.' }, { status: 400 });
   }
   try {
-    const result = await sendNewsletterCampaign({listType,subject,text:bodyText || fallbackText,html:bodyHtml ? wrapEmailHtml(bodyHtml,previewText) : textToEmailHtml(bodyText,previewText)});
+    const result = await sendNewsletterCampaign({requestKey,listType,subject,text:bodyText || fallbackText,html:bodyHtml ? wrapEmailHtml(bodyHtml,previewText) : textToEmailHtml(bodyText,previewText)});
+    if(result.queuedCount){after(()=>deliverNewsletterCampaigns({limit:3}));return NextResponse.json({...result,message:`Campaign saved for ${result.queuedCount} recipients. Delivery continues in the background.`},{status:202,headers:{'Cache-Control':'no-store'}});}
     if (!result.sentCount && !result.failedCount) return NextResponse.json({error:'No active subscribers found for this list.'},{status:400});
     return NextResponse.json({...result,message:`Sent to ${result.sentCount} recipients.${result.failedCount ? ` ${result.failedCount} deliveries could not be confirmed.` : ''}`},{status:result.sentCount ? 200 : 502});
   } catch { return NextResponse.json({error:'Newsletter delivery is unavailable.'},{status:503}); }

@@ -495,7 +495,7 @@ export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('token') || '';
   if (id && format === 'pdf') {
     if (!token) {
-      const unauthorized = requireAdmin(req);
+      const unauthorized = await requireAdmin(req);
       if (unauthorized) return unauthorized;
     }
     if (!normalizeId(id)) return NextResponse.json({ error: 'Invalid document id.' }, { status: 400 });
@@ -506,9 +506,9 @@ export async function GET(req: NextRequest) {
          FROM gallery_documents d
          JOIN galleries g ON g.id = d.gallery_id
          WHERE d.id = $2 AND EXISTS (
-           SELECT 1 FROM bookings b WHERE b.manage_token = $1 AND b.gallery_id = d.gallery_id
+           SELECT 1 FROM bookings b WHERE b.manage_token = $1 AND b.portal_expires_at>NOW() AND b.portal_revoked_at IS NULL AND b.gallery_id = d.gallery_id
            UNION ALL
-           SELECT 1 FROM art_inquiries i WHERE i.manage_token = $1 AND i.gallery_id = d.gallery_id
+           SELECT 1 FROM art_inquiries i WHERE i.manage_token = $1 AND i.portal_expires_at>NOW() AND i.portal_revoked_at IS NULL AND i.gallery_id = d.gallery_id
          )
          LIMIT 1`,
         [token, id]
@@ -531,7 +531,7 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const unauthorized = requireAdmin(req);
+  const unauthorized = await requireAdmin(req);
   if (unauthorized) return unauthorized;
 
   const galleryId = req.nextUrl.searchParams.get('galleryId');
@@ -550,7 +550,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const unauthorized = requireAdmin(req);
+  const unauthorized = await requireAdmin(req);
   if (unauthorized) return unauthorized;
 
   try {
@@ -724,7 +724,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const unauthorized = requireAdmin(req);
+  const unauthorized = await requireAdmin(req);
   if (unauthorized) return unauthorized;
 
   try {
@@ -853,7 +853,7 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const unauthorized = requireAdmin(req);
+  const unauthorized = await requireAdmin(req);
   if (unauthorized) return unauthorized;
 
   try {

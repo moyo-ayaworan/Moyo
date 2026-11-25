@@ -2,6 +2,9 @@ import { Pool, type PoolClient } from 'pg';
 import { newsletterSchema } from './newsletter/schema';
 import { paymentSchema } from './payments/schema';
 import { bookingRecoverySchema } from './bookingRecoverySchema';
+import { adminSecuritySchema } from './adminSecuritySchema';
+import { portalLinkSchema } from './portalLinkSchema';
+import { newsletterQueueSchema } from './newsletterQueueSchema';
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -63,6 +66,7 @@ async function initializeSafely() {
 }
 
 async function initializeTables(connection: PoolClient) {
+  await connection.query(adminSecuritySchema);
 
   await connection.query(`
     CREATE TABLE IF NOT EXISTS artworks (
@@ -406,8 +410,10 @@ async function initializeTables(connection: PoolClient) {
 
   await connection.query("ALTER TABLE digital_products ADD COLUMN IF NOT EXISTS storefront JSONB NOT NULL DEFAULT '{}'::jsonb");
   await connection.query(bookingRecoverySchema);
+  await connection.query(portalLinkSchema);
   await connection.query(paymentSchema);
   await connection.query(newsletterSchema);
+  await connection.query(newsletterQueueSchema);
   await connection.query(`INSERT INTO content (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);
   await connection.query(`INSERT INTO contact (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);
 }

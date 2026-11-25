@@ -20,7 +20,7 @@ type DigitalProductUpdateKey =
   | 'isActive';
 
 export async function GET(req: NextRequest) {
-  const isAdmin = !requireAdmin(req);
+  const isAdmin = !(await requireAdmin(req));
   const requestedSection = req.nextUrl.searchParams.get('section');
   const section = requestedSection || 'photography';
   if (!isProductSection(section)) return NextResponse.json({ error: 'Unknown product collection.' }, { status: 400 });
@@ -46,7 +46,7 @@ function normalizeProductUrl(value: unknown) {
 }
 
 export async function POST(req: NextRequest) {
-  const unauthorized = requireAdmin(req);
+  const unauthorized = await requireAdmin(req);
   if (unauthorized) return unauthorized;
 
   const parsed = await readJsonRequest(req, 131072);
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const unauthorized = requireAdmin(req);
+  const unauthorized = await requireAdmin(req);
   if (unauthorized) return unauthorized;
 
   const parsed = await readJsonRequest(req, 131072);
@@ -138,7 +138,7 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const unauthorized = requireAdmin(req);
+  const unauthorized = await requireAdmin(req);
   if (unauthorized) return unauthorized;
 
   const { searchParams } = new URL(req.url);

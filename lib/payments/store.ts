@@ -43,8 +43,8 @@ export class PaymentStore {
   }
   async invoiceForToken(c: PoolClient, id: number, token: string, lock = false) {
     const row = (await c.query<Invoice>(`SELECT d.* FROM gallery_documents d WHERE d.id=$1 AND d.document_type='invoice' AND (
-      EXISTS(SELECT 1 FROM bookings b WHERE b.gallery_id=d.gallery_id AND b.manage_token=$2 AND b.status <> 'cancelled') OR
-      EXISTS(SELECT 1 FROM art_inquiries a WHERE a.gallery_id=d.gallery_id AND a.manage_token=$2 AND a.status <> 'closed')) ${lock ? 'FOR UPDATE OF d' : ''}`, [id, token])).rows[0];
+      EXISTS(SELECT 1 FROM bookings b WHERE b.gallery_id=d.gallery_id AND b.manage_token=$2 AND b.portal_expires_at>NOW() AND b.portal_revoked_at IS NULL AND b.status <> 'cancelled') OR
+      EXISTS(SELECT 1 FROM art_inquiries a WHERE a.gallery_id=d.gallery_id AND a.manage_token=$2 AND a.portal_expires_at>NOW() AND a.portal_revoked_at IS NULL AND a.status <> 'closed')) ${lock ? 'FOR UPDATE OF d' : ''}`, [id, token])).rows[0];
     if (!row) throw new PaymentError('Invoice not found for this client link.', 404);
     return row;
   }

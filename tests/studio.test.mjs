@@ -102,12 +102,12 @@ function security(
     "@/lib/auth": { requireAdmin: () => (isAdmin ? null : { status: 401 }) },
   });
 }
-test("owner mutations require an authenticated admin and same-origin browser request", () => {
-  assert.throws(
+test("owner mutations require an authenticated admin and same-origin browser request", async () => {
+  await assert.rejects(
     () => security().admin(new Request("https://site.example"), true),
     (e) => e.status === 401,
   );
-  assert.throws(
+  await assert.rejects(
     () =>
       security(undefined, true).admin(
         new Request("https://site.example", {
@@ -117,7 +117,7 @@ test("owner mutations require an authenticated admin and same-origin browser req
       ),
     (e) => e.status === 403,
   );
-  assert.doesNotThrow(() =>
+  await assert.doesNotReject(() =>
     security(undefined, true).admin(
       new Request("https://site.example", {
         headers: {

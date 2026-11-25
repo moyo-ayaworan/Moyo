@@ -1,0 +1,4 @@
+export const portalLinkSchema = `
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS portal_expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW()+INTERVAL '180 days'), ADD COLUMN IF NOT EXISTS portal_revoked_at TIMESTAMPTZ;
+ALTER TABLE art_inquiries ADD COLUMN IF NOT EXISTS portal_expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW()+INTERVAL '180 days'), ADD COLUMN IF NOT EXISTS portal_revoked_at TIMESTAMPTZ;
+`;

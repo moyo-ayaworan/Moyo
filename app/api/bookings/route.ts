@@ -177,11 +177,11 @@ export async function GET(req: NextRequest) {
 
   if (view === 'admin') {
     try {
-      const unauthorized = requireAdmin(req);
+      const unauthorized = await requireAdmin(req);
       if (unauthorized) return unauthorized;
       const { rows } = await query(
         `SELECT id, name, email, phone, service, package_id, booking_options, base_price, estimated_total, quote_required, message, booking_date::text, booking_time, scheduled_at::text, timezone, status,
-                manage_token, client_notes, internal_notes, gallery_id, confirmation_sent_at::text, reminder_24h_sent_at::text, reminder_day_sent_at::text, created_at::text, updated_at::text
+                manage_token, portal_expires_at::text, portal_revoked_at::text, client_notes, internal_notes, gallery_id, confirmation_sent_at::text, reminder_24h_sent_at::text, reminder_day_sent_at::text, created_at::text, updated_at::text
          FROM bookings
          ORDER BY scheduled_at DESC
          LIMIT 100`
@@ -308,7 +308,7 @@ export async function POST(req: NextRequest) {
       `INSERT INTO bookings (name, email, phone, service, package_id, booking_options, base_price, estimated_total, quote_required, message, booking_date, booking_time, scheduled_at, timezone, manage_token, client_notes, internal_notes, creation_key, request_hash)
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11::date, $12, $13, $14, $15, $16, $17, $18, $19)
        RETURNING id, name, email, phone, service, package_id, booking_options, base_price, estimated_total, quote_required, message, booking_date::text, booking_time, scheduled_at::text, timezone, status,
-                 manage_token, client_notes, internal_notes, gallery_id, confirmation_sent_at::text, reminder_24h_sent_at::text, reminder_day_sent_at::text, created_at::text`,
+                 manage_token, portal_expires_at::text, portal_revoked_at::text, client_notes, internal_notes, gallery_id, confirmation_sent_at::text, reminder_24h_sent_at::text, reminder_day_sent_at::text, created_at::text`,
       [name, email, phone, service, packageId, JSON.stringify(estimate.options), estimate.basePrice, estimate.estimatedTotal, estimate.quoteRequired, message, bookingDate, bookingTime, scheduledAt.toISOString(), STUDIO_TIMEZONE, createManageToken(), clientNotes, internalNotes, creationKey || null, requestHash || null]
     );
 
@@ -342,7 +342,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const unauthorized = requireAdmin(req);
+  const unauthorized = await requireAdmin(req);
   if (unauthorized) return unauthorized;
 
   try {
@@ -352,7 +352,7 @@ export async function PUT(req: NextRequest) {
       if (!Number.isInteger(id) || id <= 0) return NextResponse.json({ error: 'Missing booking id.' }, { status: 400 });
       const { rows } = await query(
         `SELECT id, name, email, phone, service, message, booking_date::text, booking_time, scheduled_at::text, timezone, status,
-                manage_token, client_notes, internal_notes, gallery_id, confirmation_sent_at::text, reminder_24h_sent_at::text, reminder_day_sent_at::text, created_at::text
+                manage_token, portal_expires_at::text, portal_revoked_at::text, client_notes, internal_notes, gallery_id, confirmation_sent_at::text, reminder_24h_sent_at::text, reminder_day_sent_at::text, created_at::text
          FROM bookings WHERE id = $1 LIMIT 1`,
         [id]
       );
@@ -363,7 +363,7 @@ export async function PUT(req: NextRequest) {
       const updated = await query(
         `UPDATE bookings SET confirmation_sent_at = NOW(), updated_at = NOW() WHERE id = $1
          RETURNING id, name, email, phone, service, message, booking_date::text, booking_time, scheduled_at::text, timezone, status,
-                   manage_token, client_notes, internal_notes, gallery_id, confirmation_sent_at::text, reminder_24h_sent_at::text, reminder_day_sent_at::text, created_at::text, updated_at::text`,
+                   manage_token, portal_expires_at::text, portal_revoked_at::text, client_notes, internal_notes, gallery_id, confirmation_sent_at::text, reminder_24h_sent_at::text, reminder_day_sent_at::text, created_at::text, updated_at::text`,
         [id]
       );
       return NextResponse.json({ booking: updated.rows[0], message: `Tracking details sent to ${booking.email}.` });
@@ -391,7 +391,7 @@ export async function PUT(req: NextRequest) {
            updated_at = NOW()
        WHERE id = $5
        RETURNING id, name, email, phone, service, message, booking_date::text, booking_time, scheduled_at::text, timezone, status,
-                 manage_token, client_notes, internal_notes, gallery_id, confirmation_sent_at::text, reminder_24h_sent_at::text, reminder_day_sent_at::text, created_at::text, updated_at::text`,
+                 manage_token, portal_expires_at::text, portal_revoked_at::text, client_notes, internal_notes, gallery_id, confirmation_sent_at::text, reminder_24h_sent_at::text, reminder_day_sent_at::text, created_at::text, updated_at::text`,
       [status, clientNotes, internalNotes, galleryId, id]
     );
 

@@ -181,7 +181,7 @@ export async function studioRequest(request: NextRequest, path: string[], accoun
     });
   }
   if (path[0] === "owner") {
-    admin(request, method !== "GET");
+    await admin(request, method !== "GET");
     if (path.length === 1 && method === "GET") {
       await cleanup();
       const devices = await studioQuery(

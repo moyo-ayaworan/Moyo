@@ -1,5 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
+import { adminSessionActive } from './adminSessions';
 
 export const ADMIN_COOKIE = 'moyo-admin-session';
 export const ADMIN_SESSION_SECONDS = 60 * 60 * 4;
@@ -51,11 +52,14 @@ export function adminRequestOriginAllowed(req: Request, requireOrigin = !['GET',
   } catch { return false; }
 }
 
-export function requireAdmin(req: NextRequest, requireOrigin?: boolean) {
+export async function requireAdmin(req: NextRequest, requireOrigin?: boolean) {
   if (!signingKey()) return NextResponse.json({ error: 'Admin access is not configured.' }, { status: 503 });
   if (!hasAdminSession(req.cookies.get(ADMIN_COOKIE)?.value)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   if (!adminRequestOriginAllowed(req, requireOrigin)) return NextResponse.json({ error: 'Request origin rejected.' }, { status: 403, headers: { 'Cache-Control': 'no-store' } });
+  try {
+    if (!await adminSessionActive(req.cookies.get(ADMIN_COOKIE)!.value)) return NextResponse.json({ error: 'Sign in again.' }, { status: 401, headers: { 'Cache-Control': 'no-store' } });
+  } catch { return NextResponse.json({ error: 'Admin access is temporarily unavailable.' }, { status: 503, headers: { 'Cache-Control': 'no-store' } }); }
   return null;
 }

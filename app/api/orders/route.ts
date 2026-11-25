@@ -3,7 +3,7 @@ import { query } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
-  const unauthorized = requireAdmin(req);
+  const unauthorized = await requireAdmin(req);
   if (unauthorized) return unauthorized;
 
   const { rows } = await query('SELECT * FROM orders ORDER BY created_at DESC');
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const unauthorized = requireAdmin(req);
+  const unauthorized = await requireAdmin(req);
   if (unauthorized) return unauthorized;
 
   const body = await req.json().catch(() => null);

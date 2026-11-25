@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
     if (!order || order.kind !== 'invoice' || order.document_id !== id) throw new PaymentError('Payment not found for this invoice.', 403);
     const saved = await verifyOrder(order);
     after(() => deliverPaymentNotifications());
-    const booking = (await query('SELECT 1 FROM bookings WHERE manage_token=$1', [token])).rows[0];
+    const booking = (await query('SELECT 1 FROM bookings WHERE manage_token=$1 AND portal_expires_at>NOW() AND portal_revoked_at IS NULL', [token])).rows[0];
     const portalUrl = galleryCode ? `/photography/client-gallery?code=${encodeURIComponent(galleryCode)}` : booking ? `/client/booking/${token}` : `/collector/${token}`;
     return NextResponse.json({ paid: saved.status === 'paid', status: saved.status, invoiceId: id, portalUrl }, { headers: privateHeaders });
   } catch (error) { return paymentFailure(error); }

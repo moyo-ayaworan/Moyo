@@ -34,7 +34,7 @@ async function sendReceived(inquiry: Record<string, unknown>, origin: string) {
 }
 
 export async function GET(req: NextRequest) {
-  const unauthorized = requireAdmin(req); if (unauthorized) return unauthorized;
+  const unauthorized = await requireAdmin(req); if (unauthorized) return unauthorized;
   const { rows } = await query(`SELECT i.*, a.title AS artwork_title FROM art_inquiries i LEFT JOIN artworks a ON a.id=i.artwork_id ORDER BY i.created_at DESC`);
   return NextResponse.json({ inquiries: rows }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const unauthorized = requireAdmin(req); if (unauthorized) return unauthorized;
+  const unauthorized = await requireAdmin(req); if (unauthorized) return unauthorized;
   const body = await req.json().catch(() => null) as Record<string, unknown> | null;
   const id = Number(body?.id); const status = clean(body?.status, 30); const galleryId = body?.galleryId ? Number(body.galleryId) : null;
   if (!Number.isInteger(id) || !statuses.has(status) || (galleryId !== null && !Number.isInteger(galleryId))) return NextResponse.json({ error: 'Valid inquiry, stage, and gallery are required.' }, { status: 400 });

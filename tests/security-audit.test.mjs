@@ -9,6 +9,7 @@ const next = { NextResponse: class extends Response {
   static json(value, options) { return new this(JSON.stringify(value), options); }
 } };
 function load(file, mocks = {}, extra = {}) {
+  if (file === 'lib/auth.ts') mocks = {'./adminSessions':{adminSessionActive:async()=>true},...mocks};
   if (file !== 'lib/galleryPreview.ts') mocks = { '@/lib/galleryPreview': load('lib/galleryPreview.ts'), ...mocks };
   const compiledModule = { exports: {} };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
@@ -141,16 +142,16 @@ test('patched development glob matcher retains the API used by TypeScript ESLint
   assert.equal(matcher.minimatch('src/page.ts','src/*.ts',{dot:true}),true);
   assert.equal(matcher.minimatch('src/page.tsx','src/*.ts',{dot:true}),false);
 });
-test('admin sessions cannot authorize changes submitted from another origin', () => {
+test('admin sessions cannot authorize changes submitted from another origin', async () => {
   const auth=load('lib/auth.ts',{}, {process:{env:{ADMIN_SESSION_SECRET:'isolated-admin-key-for-origin-tests'}}});
   const cookie=auth.createAdminSession();
   const request=(origin,site='same-origin',method='POST')=>({url:'https://studio.example.test/api/galleries',method,headers:new Headers({...origin?{origin}:{},'sec-fetch-site':site}),cookies:{get:()=>({value:cookie})}});
-  assert.equal(auth.requireAdmin(request('https://studio.example.test')),null);
-  for(const origin of ['https://other.example.test','https://attacker.test','null',undefined]) assert.equal(auth.requireAdmin(request(origin,'same-site'))?.status,403);
-  assert.equal(auth.requireAdmin(request(undefined,'cross-site','GET'))?.status,403);
-  assert.equal(auth.requireAdmin(request(undefined,'same-origin','GET'),true)?.status,403);
-  assert.equal(auth.requireAdmin(request('https://studio.example.test','same-origin','GET'),true),null);
-  const standalone=request('https://studio.example.test');standalone.url='http://localhost:3000/api/galleries';standalone.headers.set('host','studio.example.test');standalone.headers.set('x-forwarded-proto','https');assert.equal(auth.requireAdmin(standalone),null);
+  assert.equal(await auth.requireAdmin(request('https://studio.example.test')),null);
+  for(const origin of ['https://other.example.test','https://attacker.test','null',undefined]) assert.equal((await auth.requireAdmin(request(origin,'same-site')))?.status,403);
+  assert.equal((await auth.requireAdmin(request(undefined,'cross-site','GET')))?.status,403);
+  assert.equal((await auth.requireAdmin(request(undefined,'same-origin','GET'),true))?.status,403);
+  assert.equal(await auth.requireAdmin(request('https://studio.example.test','same-origin','GET'),true),null);
+  const standalone=request('https://studio.example.test');standalone.url='http://localhost:3000/api/galleries';standalone.headers.set('host','studio.example.test');standalone.headers.set('x-forwarded-proto','https');assert.equal(await auth.requireAdmin(standalone),null);
 });
 test('gallery preview signing never exposes raw/video originals and rasterizes image previews', () => {
   const calls=[];
@@ -166,7 +167,7 @@ test('gallery preview signing never exposes raw/video originals and rasterizes i
 });
 test('logout rejects another origin before changing any cookie', async () => {
   const auth=load('lib/auth.ts',{}, {process:{env:{ADMIN_SESSION_SECRET:'isolated-admin-key-for-origin-tests'}}});
-  const route=load('app/api/admin/logout/route.ts',{'@/lib/auth':auth});
+  const route=load('app/api/admin/logout/route.ts',{'@/lib/auth':auth,'@/lib/adminSessions':{revokeAdminSession:async()=>{}}});
   const response=await route.POST(new Request('https://studio.example.test/api/admin/logout',{method:'POST',headers:{origin:'https://other.example.test','sec-fetch-site':'same-site'}}));
   assert.equal(response.status,403);
 });

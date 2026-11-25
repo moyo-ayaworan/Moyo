@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   const actual = request.headers.get('authorization') || '';
   const headers = { 'Cache-Control': 'private, no-store' };
   const cron = !!expected && Buffer.byteLength(expected) === Buffer.byteLength(actual) && timingSafeEqual(Buffer.from(expected), Buffer.from(actual));
-  if (!cron) { const unauthorized = requireAdmin(request, true); if (unauthorized) return unauthorized; }
+  if (!cron) { const unauthorized = await requireAdmin(request, true); if (unauthorized) return unauthorized; }
   try {
     const { rows } = await query("SELECT 1 FROM operations_runs WHERE name='external-monitor' AND completed_at > NOW()-INTERVAL '26 hours' AND failed=0");
     if (rows.length) return Response.json({ healthy: true }, { headers });

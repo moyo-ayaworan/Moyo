@@ -8,9 +8,9 @@ export const runtime = 'nodejs';
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('token')?.trim() || '';
   if (token.length < 24) return NextResponse.json({ error: 'Invalid collector link.' }, { status: 400 });
-  const { rows } = await query(`SELECT i.id, i.name, i.status, i.details, i.gallery_id, a.title, a.year, a.medium, a.dimensions FROM art_inquiries i LEFT JOIN artworks a ON a.id=i.artwork_id WHERE i.manage_token=$1 LIMIT 1`, [token]);
+  const { rows } = await query(`SELECT i.id, i.name, i.status, i.details, i.gallery_id, a.title, a.year, a.medium, a.dimensions FROM art_inquiries i LEFT JOIN artworks a ON a.id=i.artwork_id WHERE i.manage_token=$1 AND i.portal_expires_at>NOW() AND i.portal_revoked_at IS NULL LIMIT 1`, [token]);
   const inquiry = rows[0];
-  if (!inquiry) return NextResponse.json({ error: 'Collector record not found.' }, { status: 404 });
+  if (!inquiry) return NextResponse.json({ error: 'This private link has expired or is unavailable. Contact the studio for a fresh link.' }, { status: 404 });
   if (inquiry.status !== 'delivered') return NextResponse.json({ error: 'The certificate becomes available after delivery.' }, { status: 403 });
   const invoice = inquiry.gallery_id ? (await query(`SELECT amount, paid_at, payments FROM gallery_documents WHERE gallery_id=$1 AND document_type='invoice' ORDER BY created_at DESC LIMIT 1`, [inquiry.gallery_id])).rows[0] : null;
   const paid = invoice?.payments?.length ? invoice.payments.reduce((sum: number, payment: { amount: number }) => sum + Number(payment.amount), 0) : invoice?.paid_at ? Number(invoice.amount) : 0;
