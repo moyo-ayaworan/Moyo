@@ -14,6 +14,11 @@ export default function ClientBookPreview({
   onNavigate,
   onError,
   disabled = false,
+  pinMode = false,
+  pins = [],
+  selectedPin,
+  onPin,
+  onViewed,
 }: {
   base: string;
   spreads: Surface[];
@@ -21,15 +26,41 @@ export default function ClientBookPreview({
   onNavigate: (index: number) => void;
   onError: () => void;
   disabled?: boolean;
+  pinMode?: boolean;
+  pins?: { id: string; x: number; y: number; label: string }[];
+  selectedPin?: { x: number; y: number } | null;
+  onPin?: (pin: { x: number; y: number }) => void;
+  onViewed?: (index: number) => void;
 }) {
   const [turn, setTurn] = useState<Turn | null>(null),
     [loading, setLoading] = useState(false),
-    [reduced, setReduced] = useState(false);
+    [reduced, setReduced] = useState(false),
+    [loadedSource, setLoadedSource] = useState("");
+  const book = useRef<HTMLDivElement>(null);
   const leaf = useRef<HTMLDivElement>(null),
     pointer = useRef<{ id: number; x: number; y: number } | null>(null),
     request = useRef(0),
     locked = useRef(false);
   const source = (i: number) => `${base}/media/${i}`;
+  useEffect(() => {
+    if (!book.current || loadedSource !== `${base}/media/${index}` || !onViewed)
+      return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries.some(
+            (entry) => entry.isIntersecting && entry.intersectionRatio >= 0.5,
+          )
+        ) {
+          onViewed(index);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.5 },
+    );
+    observer.observe(book.current);
+    return () => observer.disconnect();
+  }, [base, index, loadedSource, onViewed]);
   useEffect(() => {
     const query = matchMedia("(prefers-reduced-motion: reduce)");
     const update = () => setReduced(query.matches);
@@ -44,7 +75,10 @@ export default function ClientBookPreview({
     [],
   );
   useLayoutEffect(() => {
-    if (!turn || reduced || turn.to !== index || !leaf.current) { locked.current = false; return; }
+    if (!turn || reduced || turn.to !== index || !leaf.current) {
+      locked.current = false;
+      return;
+    }
     locked.current = true;
     const animation = leaf.current.animate(
       [
@@ -59,7 +93,7 @@ export default function ClientBookPreview({
     );
     animation.oncancel = () => {
       locked.current = false;
-      setTurn(current => current === turn ? null : current);
+      setTurn((current) => (current === turn ? null : current));
     };
     animation.onfinish = () => {
       locked.current = false;
@@ -110,7 +144,15 @@ export default function ClientBookPreview({
   // ratio inside the same book surface rather than stretching them to a spread.
   const ratio = Math.max(...spreads.map((v) => v.width / v.height));
   const picture = (i: number) => (
-    <Image unoptimized width={spreads[i].width} height={spreads[i].height} src={source(i)} alt="" draggable={false} className={s.bookImage} />
+    <Image
+      unoptimized
+      width={spreads[i].width}
+      height={spreads[i].height}
+      src={source(i)}
+      alt=""
+      draggable={false}
+      className={s.bookImage}
+    />
   );
   const face = (i: number, side: "left" | "right") => (
     <div
@@ -132,6 +174,7 @@ export default function ClientBookPreview({
       <div className={s.bookStage}>
         <div
           className={s.book}
+          ref={book}
           style={{
             aspectRatio: ratio,
             maxWidth: `min(100%, calc(70svh * ${ratio}))`,
@@ -142,7 +185,8 @@ export default function ClientBookPreview({
           aria-label={`Book preview ${index + 1} of ${spreads.length}. Use arrow keys to turn pages.`}
           aria-busy={loading}
           onPointerDown={(event) => {
-            if (event.button !== 0 || locked.current || disabled) return;
+            if (pinMode || event.button !== 0 || locked.current || disabled)
+              return;
             pointer.current = {
               id: event.pointerId,
               x: event.clientX,
@@ -182,8 +226,56 @@ export default function ClientBookPreview({
               draggable={false}
               className={s.bookImage}
               onError={onError}
+              onLoad={() => setLoadedSource(source(index))}
             />
           </div>
+          {!turning && (
+            <div
+              className={s.pinLayer}
+              style={{
+                width: `${(spread.width / spread.height / ratio) * 100}%`,
+                pointerEvents: pinMode ? "auto" : "none",
+              }}
+              onClick={(event) => {
+                if (!pinMode || disabled) return;
+                const bounds = event.currentTarget.getBoundingClientRect();
+                onPin?.({
+                  x: Math.max(
+                    0,
+                    Math.min(1, (event.clientX - bounds.left) / bounds.width),
+                  ),
+                  y: Math.max(
+                    0,
+                    Math.min(1, (event.clientY - bounds.top) / bounds.height),
+                  ),
+                });
+              }}
+            >
+              {pins.map((pin, i) => (
+                <span
+                  key={pin.id}
+                  className={s.pin}
+                  style={{ left: `${pin.x * 100}%`, top: `${pin.y * 100}%` }}
+                  title={pin.label}
+                  aria-label={pin.label}
+                >
+                  {i + 1}
+                </span>
+              ))}
+              {selectedPin && (
+                <span
+                  className={`${s.pin} ${s.draftPin}`}
+                  style={{
+                    left: `${selectedPin.x * 100}%`,
+                    top: `${selectedPin.y * 100}%`,
+                  }}
+                  aria-label="New feedback location"
+                >
+                  +
+                </span>
+              )}
+            </div>
+          )}
           {turn && !reduced && turn.to === index && (
             <div className={s.turnLayers} aria-hidden="true">
               <div
