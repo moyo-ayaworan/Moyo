@@ -1,6 +1,6 @@
 // Server startup only. Never import this module into client components.
 export function applyStudioMailEnvironment(env: Record<string, string | undefined>): boolean {
-  const password = env.MOYO_GMAIL_APP_PASSWORD?.replace(/\s/g, '');
+  const password = (env.MOYO_GMAIL_APP_PASSWORD || env.OYO_GMAIL_APP_PASSWORD)?.replace(/\s/g, '');
   if (!password || !/^[a-zA-Z0-9]{16}$/.test(password)) return false;
   const email = 'moyoayaworan@gmail.com';
   for (const key of ['SMTP_USER', 'EMAIL_SERVER_USER', 'EMAIL_USER', 'MAIL_USER', 'SMTP_FROM', 'MAIL_FROM', 'EMAIL_FROM', 'SMTP_REPLY_TO', 'CONTACT_EMAIL', 'OPERATIONS_ALERT_TO']) env[key] = email;

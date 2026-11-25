@@ -4,7 +4,7 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     const { applyStudioMailEnvironment } = await import('./lib/studioMail');
     const configured = applyStudioMailEnvironment(process.env);
-    if (process.env.MOYO_GMAIL_APP_PASSWORD?.trim() && !configured)
+    if ((process.env.MOYO_GMAIL_APP_PASSWORD || process.env.OYO_GMAIL_APP_PASSWORD)?.trim() && !configured)
       console.error('Studio Gmail app password has an invalid format; existing mail authentication retained.');
   }
 }

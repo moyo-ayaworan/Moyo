@@ -21,3 +21,9 @@ test('one new Gmail credential switches every legacy mail transport together',()
  for(const key of ['SMTP_PORT','EMAIL_PORT','MAIL_PORT','EMAIL_SERVER_PORT'])assert.equal(env[key],'465');
  assert.equal(env.UNRELATED,'keep');
 });
+
+test('the existing protected credential key is supported without reading it back',()=>{
+ const env={OYO_GMAIL_APP_PASSWORD:'abcd efgh ijkl mnop'};
+ assert.equal(applyStudioMailEnvironment(env),true);
+ assert.equal(env.EMAIL_USER,'moyoayaworan@gmail.com');assert.equal(env.EMAIL_PASS,'abcdefghijklmnop');
+});
