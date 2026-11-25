@@ -73,7 +73,7 @@ export default function EniyanBooking({ flow, isLight }: { flow: EniyanBookingFl
         {flow.saving && <p role="status" className="text-sm">Checking and saving your request. Please wait.</p>}
       </> : <div role="status" className="space-y-3 text-sm leading-relaxed">
         <p>Your request is saved. Reference: <strong>#{flow.result?.id}</strong>. Status: {flow.result?.status}. The studio will confirm the final arrangements; this is not a payment confirmation.</p>
-        <p>{flow.result?.emailSent ? `The booking email was sent to ${draft.email}. Check your inbox and spam folder for the private booking link.` : 'Email delivery has not been confirmed. Please contact ijabikenm@gmail.com with your reference number; do not create another request for this session.'}</p>
+        <p>{flow.result?.emailSent ? `The booking email was sent to ${draft.email}. Check your inbox and spam folder for the private booking link.` : 'Email delivery has not been confirmed. Please contact moyoayaworan@gmail.com with your reference number; do not create another request for this session.'}</p>
         <button type="button" className={primary} onClick={flow.cancel}>Return to chat</button>
       </div>}
     </div>}

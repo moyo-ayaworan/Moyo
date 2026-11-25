@@ -150,7 +150,7 @@ export async function buildDocumentPdf(doc: Document, calculation: Calculation |
   write('Thank you for creating with Moyo Ayaworan.', 10, true);
   write('Ijabiken Moyosoreoluwa');
   write('Creative Director, MOYO AYAWORAN');
-  write('ijabikenm@gmail.com / +2348148192201');
+  write('moyoayaworan@gmail.com / +2348148192201');
   pdf.end();
   return result;
 }

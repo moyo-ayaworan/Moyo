@@ -12,7 +12,7 @@ import { bookingOrigin } from '@/lib/bookingOrigin';
 
 export const runtime = 'nodejs';
 
-const CONTACT_EMAIL = process.env.CONTACT_EMAIL || 'ijabikenm@gmail.com';
+const CONTACT_EMAIL = process.env.CONTACT_EMAIL || 'moyoayaworan@gmail.com';
 const STUDIO_TIMEZONE = 'Africa/Lagos';
 const SLOT_TIMES = new Set(BOOKING_TIMES);
 

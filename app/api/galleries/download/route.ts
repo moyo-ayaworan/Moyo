@@ -13,7 +13,7 @@ async function notifyDownload(clientName: string, galleryId: number, fileName: s
   const host = process.env.SMTP_HOST || process.env.EMAIL_SERVER_HOST || process.env.EMAIL_HOST || process.env.MAIL_HOST;
   const port = Number(process.env.SMTP_PORT || process.env.EMAIL_SERVER_PORT || process.env.EMAIL_PORT || process.env.MAIL_PORT || 587);
   const from = process.env.SMTP_FROM || process.env.MAIL_FROM || process.env.EMAIL_FROM || user;
-  const to = process.env.CONTACT_EMAIL || 'ijabikenm@gmail.com';
+  const to = process.env.CONTACT_EMAIL || 'moyoayaworan@gmail.com';
   const transporter = nodemailer.createTransport(host
     ? { host, port, secure: (process.env.SMTP_SECURE || process.env.EMAIL_SECURE || process.env.MAIL_SECURE)?.toLowerCase() === 'true' || port === 465, auth: { user, pass }, connectionTimeout: 5000, greetingTimeout: 5000, socketTimeout: 10000 }
     : { service: 'gmail', auth: { user, pass }, connectionTimeout: 5000, greetingTimeout: 5000, socketTimeout: 10000 });

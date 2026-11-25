@@ -49,7 +49,7 @@ export async function deliverPaymentNotifications(options: { limit?: number; dea
           text += `\nYour protected download (link valid for 30 days):\n${paymentOrigin()}${productShopPath(order.shop_section || 'photography')}/payment?reference=${encodeURIComponent(order.reference)}#access=${token}\n`;
         } else if (order.status === 'paid') text += '\nYour invoice and payment receipt are available in your private client portal. A deposit does not unlock final gallery downloads.\n';
         else text += '\nThe studio will review this payment. Please do not pay again until the studio confirms the next step.\n';
-        const studio = process.env.CONTACT_EMAIL || 'ijabikenm@gmail.com';
+        const studio = process.env.CONTACT_EMAIL || 'moyoayaworan@gmail.com';
         // SMTP failure never rolls back a verified payment. The durable outbox retries it.
         const result = await config.mail.sendMail({ from: config.from, to: { address: order.email, name: '' }, replyTo: { address: studio, name: '' },
           subject: `${order.status === 'paid' ? 'Payment receipt' : 'Payment update'} · ${order.title}`,

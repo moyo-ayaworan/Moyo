@@ -118,7 +118,7 @@ export default function MofolioPage() {
           <li><strong>Start a practice book.</strong> Keep your original photographs in their folders. Use a small set to try creating, editing and saving a book; the complete guide walks you through each step. After installation works, you can remove the downloaded ZIP and extra extracted app copy. Keep the app in Applications, your photographs and your saved projects.</li>
         </ol>
         <p className={styles.downloadNotice}>If macOS says the app is damaged or will damage your computer, or Open Anyway is unavailable, keep the exact message and contact support before continuing. The Open Anyway steps above apply to an unverified-developer warning. <a href="https://support.apple.com/en-us/102445" target="_blank" rel="noopener noreferrer">Read Apple’s instructions</a>.</p>
-        <p>Keep your Mac awake while downloading and allow space for both the ZIP and extracted app. Need a hand? <a href="mailto:ijabikenm@gmail.com?subject=Stillbounds%20installation">Contact support</a>.</p>
+        <p>Keep your Mac awake while downloading and allow space for both the ZIP and extracted app. Need a hand? <a href="mailto:moyoayaworan@gmail.com?subject=Stillbounds%20installation">Contact support</a>.</p>
       </section>
       <section className={styles.faq} id="questions"><div><span className={styles.eyebrow}>Before you begin</span><h2>A few good<br /><em>questions.</em></h2></div><div>{[
         ['Which computers does it support?','Separate Mac builds are available: Intel requires macOS Ventura 13.3 or later; M-series requires macOS 26.2 or later. Windows is not available.'],
@@ -132,6 +132,6 @@ export default function MofolioPage() {
       ].map(([q,a])=><details key={String(q)}><summary>{q}<span aria-hidden="true">+</span></summary><p>{a}</p></details>)}</div></section>
 
     </main>
-    <footer className={styles.footer}><Link href="/stillbounds" className={styles.logo}>Stillbounds<span>.</span></Link><span>by Moyo Ayaworan.</span><div><Link href="/photography">Photography <ArrowUpRight size={14} /></Link><Link href="/stillbounds/terms">Terms</Link><Link href="/stillbounds/privacy">Privacy</Link><a href="mailto:ijabikenm@gmail.com?subject=Stillbounds%20beta">Contact</a></div></footer><div className={styles.footerWordmark} aria-hidden="true">Stillbounds<span>.</span></div>
+    <footer className={styles.footer}><Link href="/stillbounds" className={styles.logo}>Stillbounds<span>.</span></Link><span>by Moyo Ayaworan.</span><div><Link href="/photography">Photography <ArrowUpRight size={14} /></Link><Link href="/stillbounds/terms">Terms</Link><Link href="/stillbounds/privacy">Privacy</Link><a href="mailto:moyoayaworan@gmail.com?subject=Stillbounds%20beta">Contact</a></div></footer><div className={styles.footerWordmark} aria-hidden="true">Stillbounds<span>.</span></div>
   </div>;
 }

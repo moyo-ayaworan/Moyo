@@ -39,7 +39,7 @@ export async function requestNewsletterConfirmation(email: string, list: string)
   if (reserved===null) return;
   // A fragment keeps this bearer token out of HTTP access logs and referrers.
   const link = `${origin()}/newsletter/preferences#confirm=${token}`;
-  const result = await config.mail.sendMail({from:config.from,to:{address:email,name:''},subject:`Confirm your ${list} newsletter subscription`,
+  const result = await config.mail.sendMail({from:config.from,replyTo:process.env.SMTP_REPLY_TO || process.env.CONTACT_EMAIL || 'moyoayaworan@gmail.com',to:{address:email,name:''},subject:`Confirm your ${list} newsletter subscription`,
     messageId:`<newsletter-confirm-${hash}@${new URL(origin()).hostname}>`,
     text:`Confirm that you want ${list} updates from Ijabiken Moyo:\n${link}\n\nThis link expires in 24 hours. Open it and press Confirm subscription. If you did not request this, ignore this email; your subscription will not be activated.`,
   });
@@ -81,7 +81,7 @@ export async function sendNewsletterCampaign(input: {listType:string;subject:str
     const footer=links.map(link=>`Unsubscribe from ${link.list}: ${link.url}`).join('\n');
     const htmlFooter='<p style="font-size:12px;line-height:1.6">'+links.map(link=>`<a href="${link.url}">Unsubscribe from ${link.list}</a>`).join('<br>')+'</p>';
     const html=/<\/body>/i.test(input.html)?input.html.replace(/<\/body>/i,htmlFooter+'</body>'):input.html+htmlFooter;
-      const result=await config.mail.sendMail({from:config.from,to:{address:email,name:''},subject:input.subject,text:input.text+'\n\n'+footer,html,
+      const result=await config.mail.sendMail({from:config.from,replyTo:process.env.SMTP_REPLY_TO || process.env.CONTACT_EMAIL || 'moyoayaworan@gmail.com',to:{address:email,name:''},subject:input.subject,text:input.text+'\n\n'+footer,html,
         headers:{'List-Unsubscribe':links.map(link=>`<${link.url}>`).join(', ')}});
       if(!result.accepted?.length||result.rejected?.length)throw Error('Mail not accepted');
       await query("UPDATE newsletter_subscribers SET last_emailed_at=NOW() WHERE id=ANY($1::int[]) AND status='active'",[current.map(s=>s.id)]);sentCount++;

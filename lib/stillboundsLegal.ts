@@ -4,7 +4,7 @@ export const termsSections: LegalSection[] = [
   [
     "Who we are and what these terms cover",
     [
-      "Stillbounds is provided by Moyo Ayaworan, based in Nigeria. Contact: ijabikenm@gmail.com. These terms cover the Stillbounds product website, beta-access requests and any beta software supplied under these terms. Separate photography, artwork, bookings and shop services have their own terms.",
+      "Stillbounds is provided by Moyo Ayaworan, based in Nigeria. Contact: moyoayaworan@gmail.com. These terms cover the Stillbounds product website, beta-access requests and any beta software supplied under these terms. Separate photography, artwork, bookings and shop services have their own terms.",
       "You must be at least 18, or otherwise have legal capacity to enter this agreement. If you act for a studio or another organisation, you must be authorised to do so. Agreement to these terms is requested when you join the beta list; a software invitation may include additional release-specific terms for you to review before installation.",
     ],
   ],
@@ -81,7 +81,7 @@ export const termsSections: LegalSection[] = [
   [
     "Complaints, law and changes",
     [
-      "For complaints, email ijabikenm@gmail.com with the issue and the outcome you seek. We will first try to resolve it directly. These terms are governed by Nigerian law, subject to any mandatory protections applicable to you. They do not prevent complaints to a regulator or access to a court with jurisdiction; there is no mandatory arbitration or class-action waiver.",
+      "For complaints, email moyoayaworan@gmail.com with the issue and the outcome you seek. We will first try to resolve it directly. These terms are governed by Nigerian law, subject to any mandatory protections applicable to you. They do not prevent complaints to a regulator or access to a court with jurisdiction; there is no mandatory arbitration or class-action waiver.",
       "We will date revisions and notify active participants of material changes where reasonably practicable. We will seek fresh agreement where required, and we will not use a policy change to treat previous marketing opt-outs as consent. If one term is unenforceable, the remaining terms continue to apply to the extent lawful.",
     ],
   ],
@@ -93,13 +93,13 @@ export const privacySections: LegalSection[] = [
     "Payments use Paystack’s hosted checkout. We retain the order reference, account/email, amount, currency, provider transaction ID and verified payment/refund/dispute status. Card numbers and card security codes are not collected by the Stillbounds application or website checkout form. Paystack processes payment details under its own policies.",
     "Registration and activation do not upload your photographs, face-analysis results or book files. Those remain local unless you explicitly choose a separate sharing or support action. A desktop session token, device private key and signed activation are stored using macOS-protected encryption. No API secret or database credential is included in the app’s licence interface.",
     "Paid activations refresh periodically and can work offline for up to 90 days, with a seven-day outage grace period. Deactivating a laptop is enforced when it next checks access or its offline certificate expires. Sign-out clears the local session and activation; it does not delete your photographs or projects.",
-    "Account, payment and activation records are accessible only to the operator and authorised service administrators and the providers required to run them: Vercel hosting, the PostgreSQL database provider, account email delivery and Paystack. Contact ijabikenm@gmail.com for access, correction, export or deletion requests. Payment/dispute records and the minimal trial-abuse-prevention record may need to be retained where necessary for a legitimate purpose or legal obligation; local project files remain under your control.",
+    "Account, payment and activation records are accessible only to the operator and authorised service administrators and the providers required to run them: Vercel hosting, the PostgreSQL database provider, account email delivery and Paystack. Contact moyoayaworan@gmail.com for access, correction, export or deletion requests. Payment/dispute records and the minimal trial-abuse-prevention record may need to be retained where necessary for a legitimate purpose or legal obligation; local project files remain under your control.",
   ]],
   [
     "Shared website and desktop accounts",
     [
       "Creating a Stillbounds account stores your name, email address, a password hash, email-verification status and account timestamps in this website’s database. Authentication also stores session tokens, expiry times, device-approval codes, and technical session information such as IP address and browser or app details. Verification and password-reset messages are sent through the website’s configured email provider. Account registration does not subscribe you to marketing emails or grant a paid subscription.",
-      "The website uses an essential HttpOnly session cookie. The Mac app stores its session using macOS Keychain-backed encryption. Device-approval codes expire after ten minutes; account sessions expire after thirty days unless renewed or revoked. Sign out on a Mac to remove its local account, or use Sign out other devices on the website to revoke other sessions. Account sign-in does not upload or synchronise your photographs or editable books. Account records remain until deletion is requested and handled by the operator; contact ijabikenm@gmail.com for deletion or correction. Security records and backups follow the retention limitations described below.",
+      "The website uses an essential HttpOnly session cookie. The Mac app stores its session using macOS Keychain-backed encryption. Device-approval codes expire after ten minutes; account sessions expire after thirty days unless renewed or revoked. Sign out on a Mac to remove its local account, or use Sign out other devices on the website to revoke other sessions. Account sign-in does not upload or synchronise your photographs or editable books. Account records remain until deletion is requested and handled by the operator; contact moyoayaworan@gmail.com for deletion or correction. Security records and backups follow the retention limitations described below.",
     ],
   ],
   [
@@ -108,14 +108,14 @@ export const privacySections: LegalSection[] = [
       "Moyo Studio is a private connection for Moyo Ayaworan’s own Stillbounds desktop app. It is not an account or website connection for general beta users. Only devices approved through Moyo’s admin area can publish previews. Device access expires after 30 days and can be revoked sooner.",
       "When Moyo deliberately publishes a review, this website stores flattened JPEG previews, the book title, version and spread identifiers, expiry settings, and any watermark choice. It does not receive editable projects, source-photo files or print exports through this connector. If you review a book, we store the comments and approval or change request you submit for that fixed version, with timestamps. We use this information to provide the requested client-review service and protect it from unauthorised access; review activity is not added to the beta or marketing lists.",
       "Anyone given the private access link can view that version and submit feedback. Share links only with the intended review group. The link’s access code is carried in a browser fragment, exchanged for a review-specific HttpOnly cookie, and removed from the address bar. The cookie lasts up to eight hours; the review’s expiry or revocation can end access sooner. Studio and review pages do not run this website’s session-notification tracker.",
-      "Published reviews expire after the period Moyo chooses, between 1 and 30 days. Expired previews, comments and review-access sessions are removed by the next daily cleanup or studio cleanup request. Unfinished uploads expire after 24 hours. Revoking a review removes its uploaded previews and access sessions immediately; its status and comments remain until its original expiry. Minimal book identifiers and version counters remain so later versions are numbered consistently. Hosting logs and provider backups follow their separate retention cycles. Contact ijabikenm@gmail.com about access, correction or deletion.",
+      "Published reviews expire after the period Moyo chooses, between 1 and 30 days. Expired previews, comments and review-access sessions are removed by the next daily cleanup or studio cleanup request. Unfinished uploads expire after 24 hours. Revoking a review removes its uploaded previews and access sessions immediately; its status and comments remain until its original expiry. Minimal book identifiers and version counters remain so later versions are numbered consistently. Hosting logs and provider backups follow their separate retention cycles. Contact moyoayaworan@gmail.com about access, correction or deletion.",
       "Review records and previews use this website’s PostgreSQL database and Vercel hosting, with the provider and international-processing limitations described below. Review previews may contain identifiable people, so Moyo must have appropriate permission to share them. Watermarks and access controls cannot prevent screenshots or copying by an authorised viewer.",
     ],
   ],
   [
     "Scope and contact",
     [
-      "This notice covers the Stillbounds website at /stillbounds, its legal pages, its beta-access list and the private Moyo Studio book-review service. Moyo Ayaworan, based in Nigeria, is responsible for this processing. Contact ijabikenm@gmail.com for privacy questions, withdrawal or requests concerning your data.",
+      "This notice covers the Stillbounds website at /stillbounds, its legal pages, its beta-access list and the private Moyo Studio book-review service. Moyo Ayaworan, based in Nigeria, is responsible for this processing. Contact moyoayaworan@gmail.com for privacy questions, withdrawal or requests concerning your data.",
       "The photography, art, bookings, galleries and shop sections of this wider website have separate practices described in the general website Privacy Policy. This notice is not a claim that every desktop or future online feature has been audited: release-specific privacy information will be supplied before beta installation or activation of an online service.",
     ],
   ],
@@ -171,7 +171,7 @@ export const privacySections: LegalSection[] = [
   [
     "Your choices and rights",
     [
-      "You can withdraw marketing consent without withdrawing your beta request. You can also withdraw the request itself. Email ijabikenm@gmail.com with “Stillbounds privacy” and tell us which action you want. Withdrawal does not affect the lawfulness of processing before it was withdrawn.",
+      "You can withdraw marketing consent without withdrawing your beta request. You can also withdraw the request itself. Email moyoayaworan@gmail.com with “Stillbounds privacy” and tell us which action you want. Withdrawal does not affect the lawfulness of processing before it was withdrawn.",
       "Subject to applicable law and its exceptions, you may request access, correction, erasure, restriction, portability or object to processing based on legitimate interests. We may ask for proportionate evidence to verify your identity and protect other people’s data. We will respond within applicable legal time limits and explain any lawful reason we cannot fulfil a request.",
     ],
   ],

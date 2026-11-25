@@ -359,7 +359,7 @@ function emailHtml(doc: GalleryDocument) {
                       <td valign="top" width="48%" align="right" style="padding:0 0 34px 20px;color:#a5a5ab;font-size:13px;line-height:1.65;">
                         <strong style="color:#eeeae5;">MOYO AYAWORAN</strong><br/>
                         Photography & Fine Art<br/>
-                        ijabikenm@gmail.com
+                        moyoayaworan@gmail.com
                       </td>
                     </tr>
                   </table>
@@ -813,7 +813,7 @@ export async function PUT(req: NextRequest) {
       const logoAttachment = getLogoAttachment();
       const delivery = await transporter.sendMail({
         from: config.from,
-        replyTo: process.env.SMTP_REPLY_TO || config.user,
+        replyTo: process.env.SMTP_REPLY_TO || process.env.CONTACT_EMAIL || 'moyoayaworan@gmail.com',
         to: doc.client_email,
         subject: `${label}: ${doc.title}`,
         text: usePaymentEmail ? bodyText : documentText(doc),

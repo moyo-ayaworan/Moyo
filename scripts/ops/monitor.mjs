@@ -30,9 +30,9 @@ try {
   await pool.end();
   if (process.exitCode || process.env.OPERATIONS_ALERT_TEST === '1') {
     try {
-      if (!process.env.SMTP_USER || !process.env.SMTP_PASS || !process.env.OPERATIONS_ALERT_TO) throw Error('Missing alert configuration');
+      if (!process.env.SMTP_USER || !process.env.SMTP_PASS) throw Error('Missing alert configuration');
       const mail = nodemailer.createTransport({ service: 'gmail', auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }, connectionTimeout: 10000, socketTimeout: 15000 });
-      const result = await mail.sendMail({ from: process.env.SMTP_USER, to: process.env.OPERATIONS_ALERT_TO,
+      const result = await mail.sendMail({ from: process.env.SMTP_USER, to: process.env.OPERATIONS_ALERT_TO || 'moyoayaworan@gmail.com',
         subject: process.env.OPERATIONS_ALERT_TEST === '1' ? 'Moyo operations: alert delivery test' : 'Moyo operations: reliability check needs attention',
         text: `An operations check needs review. Open the private repository's Actions run for aggregate results: https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}\nNo customer records or credentials are included in this message.` });
       if (!result.accepted?.length || result.rejected?.length) throw Error('Mail not accepted');

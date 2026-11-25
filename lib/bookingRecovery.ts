@@ -68,7 +68,7 @@ export async function deliverBookingRecovery(options: { limit?: number; deadline
             continue;
           }
         }
-        const result = await config.mail.sendMail({ from: config.from, to: { address: booking.email, name: '' },
+        const result = await config.mail.sendMail({ from: config.from, replyTo: process.env.SMTP_REPLY_TO || process.env.CONTACT_EMAIL || 'moyoayaworan@gmail.com', to: { address: booking.email, name: '' },
           subject: `Your booking tracking link - #${booking.id}`, messageId: `<booking-recovery-${job.id}@${new URL(bookingOrigin()).hostname}>`,
           text: `Use this private link to track booking #${booking.id}: ${bookingOrigin()}/client/booking/${booking.manage_token}\n\nDo not share this link. If you did not request this email, you can ignore it.` });
         if (!result.accepted?.length || result.rejected?.length) throw Error('Mail not accepted');

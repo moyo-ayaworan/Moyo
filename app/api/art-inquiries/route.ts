@@ -7,7 +7,7 @@ import { requireAdmin } from '@/lib/auth';
 import { rateLimit } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
-const CONTACT_EMAIL = process.env.CONTACT_EMAIL || 'ijabikenm@gmail.com';
+const CONTACT_EMAIL = process.env.CONTACT_EMAIL || 'moyoayaworan@gmail.com';
 const statuses = new Set(['received', 'consultation', 'quoted', 'reserved', 'deposit-paid', 'in-progress', 'ready', 'delivered', 'closed']);
 const types = new Set(['commission', 'artwork', 'private-viewing']);
 const clean = (value: unknown, max = 3000) => typeof value === 'string' ? value.trim().slice(0, max) : '';
