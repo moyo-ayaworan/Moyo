@@ -40,7 +40,7 @@ export async function initializeOrder(order: PaymentOrder, callback: string) {
     if (!current || !['pending', 'failed'].includes(current.status)) throw new PaymentError('Check the original payment before paying again.');
     if (current.checkout_url) return checkoutAddress(current.checkout_url);
     if (process.env.VERCEL_ENV === 'production' && !process.env.PAYSTACK_WEBHOOK_SECRET) throw new PaymentError('Payments are awaiting webhook configuration. Please contact the studio.', 503);
-    if (current.kind === 'digital' && !parseAuthenticatedAsset(current.delivery_url || '')) throw new PaymentError('This delivery file needs private storage.', 503);
+    if (current.kind === 'digital' && current.fulfillment_kind!=='physical' && !parseAuthenticatedAsset(current.delivery_url || '')) throw new PaymentError('This delivery file needs private storage.', 503);
     const result = await paystackRequest('/transaction/initialize', {
       email: current.email, amount: Number(current.amount_kobo), currency: current.currency, reference: current.reference,
       callback_url: `${paymentOrigin()}${callback}`, metadata: current.metadata,

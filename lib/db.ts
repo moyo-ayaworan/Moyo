@@ -1,4 +1,5 @@
 import { Pool, type PoolClient } from 'pg';
+import { commerceSchema, shippingSchema } from './commerceSchema';
 import { newsletterSchema } from './newsletter/schema';
 import { paymentSchema } from './payments/schema';
 import { bookingRecoverySchema } from './bookingRecoverySchema';
@@ -412,6 +413,8 @@ async function initializeTables(connection: PoolClient) {
   await connection.query(bookingRecoverySchema);
   await connection.query(portalLinkSchema);
   await connection.query(paymentSchema);
+  await connection.query(commerceSchema);
+  await connection.query(shippingSchema);
   await connection.query(newsletterSchema);
   await connection.query(newsletterQueueSchema);
   await connection.query(`INSERT INTO content (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);

@@ -68,9 +68,9 @@ export function formatProductPrice(value: string) {
   if (!/^(?:\d+|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2})?$/.test(amount)) return value;
   return `₦${Number(amount.replaceAll(',', '')).toLocaleString('en-NG', { maximumFractionDigits: 2 })}`;
 }
-export type StoreProduct={id:number;title:string;price:string;details:string;image:string;section:ProductSection;has_delivery_file:boolean;storefront:ProductStory};
+export type StoreProduct={id:number;title:string;price:string;details:string;image:string;section:ProductSection;has_delivery_file:boolean;kind?:'digital'|'physical';stock?:number;storefront:ProductStory};
 // Explicit projection keeps paid delivery URLs and future admin-only fields off public pages.
 export function publicStoreProduct(row:Record<string,unknown>):StoreProduct {
   const image=typeof row.image==='string'?row.image:'';
-  return {id:Number(row.id),title:String(row.title||''),price:formatProductPrice(String(row.price||'')),details:String(row.details||''),image:publicProductImage(image)?image:'/image-placeholder.svg',section:row.section==='art'?'art':'photography',has_delivery_file:row.has_delivery_file===true,storefront:readProductStory(row.storefront)};
+  return {id:Number(row.id),title:String(row.title||''),price:formatProductPrice(String(row.price||'')),details:String(row.details||''),image:publicProductImage(image)?image:'/image-placeholder.svg',section:row.section==='art'?'art':'photography',stock:row.product_kind==='physical'?Number(row.stock_available||0):undefined,kind:row.product_kind==='physical'?'physical':'digital',has_delivery_file:row.product_kind!=='physical'&&row.has_delivery_file===true,storefront:readProductStory(row.storefront)};
 }

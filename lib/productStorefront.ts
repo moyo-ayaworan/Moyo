@@ -3,7 +3,7 @@ import { query } from './db';
 import { publicStoreProduct, type StoreProduct } from './productStory';
 import type { ProductSection } from './productSections';
 
-export const publicProductFields='id,title,price,details,image,section,storefront,(product_url <> \'\') AS has_delivery_file';
+export const publicProductFields='id,title,price,details,image,section,product_kind,storefront,(product_url <> \'\') AS has_delivery_file, (SELECT GREATEST(0,i.stock_on_hand-COALESCE((SELECT SUM(r.quantity) FROM shop_stock_reservations r WHERE r.product_id=i.product_id AND r.state=\'held\' AND r.expires_at>NOW()),0)) FROM shop_inventory i WHERE i.product_id=digital_products.id) AS stock_available';
 export const getStoreProduct=cache(async(section:ProductSection,id:number):Promise<StoreProduct|null>=>{
   const row=(await query(`SELECT ${publicProductFields} FROM digital_products WHERE id=$1 AND section=$2 AND is_active=TRUE`,[id,section])).rows[0];
   return row?publicStoreProduct(row):null;

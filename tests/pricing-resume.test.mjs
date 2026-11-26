@@ -1,3 +1,4 @@
+import * as checkoutInput from '../lib/checkoutInput.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -17,6 +18,7 @@ const config={enabled:true,checkoutEnabled:true,mode:'test',origin:'https://fixt
 function loadInitialize(order){
  let initialized=0,body;
  const mocks={
+  '@/lib/checkoutInput':checkoutInput,
   '@/lib/pricingSnapshot':snapshot,'@/lib/regionalPricing':pricing,'@/lib/productSections':sections,'node:crypto':{randomUUID},
   'next/server':{NextResponse:{json:(body,options)=>({body,options})}},'@/lib/rateLimit':{rateLimit:async()=>null},'@/lib/purchaseAccess':{setPurchaseCookie:()=>{}},
   '@/lib/paystack':{paystackSecret:()=> 'sk_test_fixture',PaymentReferenceMissing:class extends Error{}},'@/lib/payments/policy':policy,
@@ -32,7 +34,7 @@ test('shop requests explicit confirmation for a saved price and resumes only its
  assert.equal(offered.body.confirmationRequired,true);assert.equal(offered.body.resumeQuote.amountMinor,old.amount_kobo);
  assert.equal(offered.body.checkoutUrl,undefined);assert.equal(route.initialized(),0);
  const wrong=await route.call({resumeReference:reference,resumeAmount:1});assert.equal(wrong.body.confirmationRequired,true);
- const other=await route.call({resumeReference:'another-reference',resumeAmount:old.amount_kobo});assert.equal(other.body.confirmationRequired,true);
+ const other=await route.call({resumeReference:'another-reference',resumeAmount:old.amount_kobo});assert.equal(other.options.status,400);
  const resumed=await route.call({resumeReference:reference,resumeAmount:old.amount_kobo});
  assert.equal(resumed.body.checkoutUrl,'https://checkout.paystack.com/original');assert.equal(resumed.body.reference,reference);assert.equal(resumed.body.amount,old.amount_kobo/100);assert.equal(route.initialized(),1);
 });
