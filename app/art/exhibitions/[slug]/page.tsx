@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { createPageMetadata } from '@/lib/seo';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
@@ -15,7 +16,7 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const exhibition = getExhibition((await params).slug);
   if (!exhibition) return {};
-  return { title: `${exhibition.title} | Moyo Ayaworan`, description: `${exhibition.context} ${exhibition.venue}, ${exhibition.city}.` };
+  return createPageMetadata({title:exhibition.title,description:`${exhibition.context} ${exhibition.venue}, ${exhibition.city}.`,path:`/art/exhibitions/${exhibition.slug}`});
 }
 
 export default async function ExhibitionDetailPage({ params }: PageProps) {

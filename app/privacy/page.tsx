@@ -14,6 +14,7 @@ export default function PrivacyPage() {
           <p>
             This website receives information submitted through booking, contact, newsletter and private gallery forms. Outside the Stillbounds product pages, it also sends the visited path, browser user agent and visit timestamp to the studio’s session-notification service. Hosting services may process request and security logs.
           </p>
+          <p>Public pages also record page views, approximate country, device category, referring domain, and Stillbounds download requests for first-party analytics. No analytics cookies, full IP addresses, raw browser identifiers, query strings or private page paths are stored. A daily rotating hash estimates visitors, so visits across days or devices can count again. Do Not Track and Global Privacy Control requests are respected. Traffic records are kept for up to 90 days; verified shop transactions are reported from payment records. Download requests do not confirm completed downloads or installations.</p>
           <p>
             Submitted details are used to respond to enquiries, manage client galleries, process studio communication, and maintain requested subscriptions.
           </p>

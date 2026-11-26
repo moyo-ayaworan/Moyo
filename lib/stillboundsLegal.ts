@@ -136,7 +136,7 @@ export const privacySections: LegalSection[] = [
     "Technical information and browser storage",
     [
       "Hosting infrastructure receives ordinary request information such as IP address, browser information, requested URL and time. Signup abuse prevention uses a hashed key derived from the IP address, the request category and a request count. This is pseudonymous security information, not a promise of anonymity.",
-      "These product pages do not use the site’s automatic visit-email notification or its chatbot. The website may remember appearance and language preferences in browser storage. We do not add advertising cookies or behavioural analytics to these product pages. Following links to other website sections or external services brings their own notices and practices into scope.",
+      "These product pages do not use the site’s automatic visit-email notification or its chatbot. The website may remember appearance and language preferences in browser storage. We do not add advertising cookies. First-party traffic analytics record public page views, approximate country, device category, referring domain and download requests. A daily rotating hash estimates visitors without storing full IP addresses or raw browser identifiers. Do Not Track and Global Privacy Control are respected. Private account and review pages are excluded. Traffic records are retained for up to 90 days. Download requests do not confirm finished downloads or installations. Following links to other website sections or external services brings their own notices and practices into scope.",
     ],
   ],
   [

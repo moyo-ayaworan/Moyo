@@ -1,3 +1,4 @@
+import { createPageMetadata } from '@/lib/seo';
 import type { Metadata } from 'next';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { getStoreProduct, getRelatedProducts, storeContact, storeCheckoutEnabled } from '@/lib/productStorefront';
@@ -7,7 +8,7 @@ import ProductDetail from './ProductDetail';
 export async function productMetadata(section:ProductSection,segment:string):Promise<Metadata> {
   const id=productIdFromPath(segment),product=id?await getStoreProduct(section,id):null;
   if(!product)return {title:'Product not found',robots:{index:false,follow:false}};
-  return {title:product.title,description:product.storefront.tagline||product.details||`${product.title} — a digital product from Ijabiken Moyo.`,alternates:{canonical:productPath(section,product)},openGraph:{title:product.title,description:product.storefront.tagline||product.details,images:[{url:product.image,alt:product.title}]}};
+  return createPageMetadata({title:product.title,description:product.storefront.tagline||product.details||`${product.title} — a digital product from Ijabiken Moyo.`,path:productPath(section,product),image:product.image});
 }
 export default async function ProductPage({section,segment}:{section:ProductSection;segment:string}) {
   const id=productIdFromPath(segment);if(!id)notFound();

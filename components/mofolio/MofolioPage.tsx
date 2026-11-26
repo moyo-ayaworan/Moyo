@@ -19,7 +19,7 @@ const downloads = [
     "downloadGB": "3.08",
     "installedGB": "4.52",
     "sha256": "c7bdaf8ac647ca1485117db2bc274452eea6a68f3716f86f98f647ec2922d773",
-    "url": "https://stillbounds-downloads.mofolio.workers.dev/stillbounds/downloads/arm64"
+    "url": "/api/stillbounds/download/arm64"
   },
   {
     "arch": "x64",
@@ -29,7 +29,7 @@ const downloads = [
     "downloadGB": "3.30",
     "installedGB": "4.71",
     "sha256": "ab01b139278a421bc4d7453221b612480ddeba7402f941fc9267dcc9dd2fe623",
-    "url": "https://stillbounds-downloads.mofolio.workers.dev/stillbounds/downloads/x64"
+    "url": "/api/stillbounds/download/x64"
   }
 ] as const;
 

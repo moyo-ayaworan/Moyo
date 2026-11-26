@@ -9,6 +9,7 @@ import { LanguageProvider } from '@/context/LanguageContext';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { RegionalPricingProvider } from '@/components/RegionalPricing';
 import ClickSpark from '@/components/ClickSpark';
+import AnalyticsTracker from '@/components/AnalyticsTracker';
 
 const SessionTracker = dynamic(() => import('@/components/SessionTracker'), { ssr: false });
 const SocialLinks = dynamic(() => import('@/components/SocialLinks'), { ssr: false });
@@ -62,6 +63,7 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
     >
       <LanguageProvider>
         <ProfileProvider>
+          <AnalyticsTracker />
           {!productPage && <SessionTracker />}
           {enablePointerEffects && !privateWorkspace ? (
             <>
