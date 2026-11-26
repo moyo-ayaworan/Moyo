@@ -1,3 +1,4 @@
+import { commerceSchema, shippingSchema } from '../../lib/commerceSchema.ts';
 // Synthetic data only. Refuse any database outside this runner's loopback host.
 import assert from 'node:assert/strict';
 import pg from 'pg';
@@ -17,6 +18,7 @@ try {
     CREATE TABLE digital_products(id SERIAL PRIMARY KEY,title TEXT,price TEXT,product_url TEXT,is_active BOOLEAN DEFAULT TRUE);
     CREATE TABLE digital_orders(reference TEXT,product_id INTEGER,customer_email TEXT,amount_kobo BIGINT,currency TEXT,status TEXT,provider_reference TEXT,paid_at TIMESTAMPTZ,created_at TIMESTAMPTZ DEFAULT NOW());`);
   await pool.query(paymentSchema);
+  await pool.query(commerceSchema);await pool.query(shippingSchema);
   await pool.query("INSERT INTO digital_products(title,price,product_url) SELECT 'Synthetic product '||n,'₦20,000','https://example.test/private' FROM generate_series(1,1000) n");
   const store = new PaymentStore(tx), key = randomUUID();
   const start = performance.now();
@@ -26,6 +28,20 @@ try {
   await Promise.all(Array.from({ length: 200 }, () => timed(() => pool.query('SELECT id,title,price FROM digital_products WHERE section=$1 AND is_active=TRUE ORDER BY id LIMIT 24', ['photography']))));
   const count = (await pool.query('SELECT COUNT(*)::int AS n FROM payment_orders')).rows[0].n;
   assert.equal(count, 121);
+  // Different buyers compete for a single coupon slot under independent pool transactions.
+  const couponId=randomUUID();await pool.query("INSERT INTO shop_coupons(id,code,kind,value,max_uses) VALUES($1,'CONCURRENCY10','percent',10,1)",[couponId]);
+  const couponAttempts=await Promise.allSettled(Array.from({length:20},(_,i)=>store.createDigital(1,`coupon-${i}@example.test`,'test',randomUUID(),'photography','NG','NGN',1800000,'CONCURRENCY10')));
+  assert.equal(couponAttempts.filter(r=>r.status==='fulfilled').length,1);
+  const shippingId=randomUUID();await pool.query("INSERT INTO shop_shipping_regions(id,label,country,fee_kobo,pickup) VALUES($1,'Synthetic pickup','NG',0,TRUE)",[shippingId]);
+  const physical=(await pool.query("INSERT INTO digital_products(title,price,product_url,product_kind) VALUES('One remaining physical item','20000','','physical') RETURNING id")).rows[0].id;
+  await pool.query('INSERT INTO shop_inventory(product_id,stock_on_hand) VALUES($1,1)',[physical]);
+  const stockAttempts=await Promise.allSettled(Array.from({length:20},(_,i)=>store.createDigital(physical,`stock-${i}@example.test`,'test',randomUUID(),'photography','NG','NGN',2000000,'',{quantity:1,shippingRateId:shippingId,shippingDetails:{name:'Synthetic customer',phone:'+2348000000000'}})));
+  const winners=stockAttempts.filter(r=>r.status==='fulfilled');assert.equal(winners.length,1);
+  const paid=winners[0].value;
+  const evidencePayment={status:'success',reference:paid.reference,domain:'test',amount:Number(paid.amount_kobo),currency:'NGN',customer:{email:paid.email},metadata:paid.metadata,id:90001};
+  await Promise.all(Array.from({length:12},()=>store.fulfill(paid.reference,evidencePayment)));
+  assert.equal((await pool.query('SELECT stock_on_hand FROM shop_inventory WHERE product_id=$1',[physical])).rows[0].stock_on_hand,0);
+
   await Promise.all(Array.from({ length: 24 }, () => timed(async () => {
     const body = await boundedBody(new Request('http://localhost/upload-fixture', { method: 'POST', body: Buffer.alloc(1024 * 1024) }), 4 * 1024 * 1024);
     assert.equal(body.length, 1024 * 1024);
@@ -33,7 +49,7 @@ try {
   await assert.rejects(boundedBody(new Request('http://localhost/upload-fixture', { method: 'POST', body: Buffer.alloc(4 * 1024 * 1024 + 1) }), 4 * 1024 * 1024), error => error.status === 413);
   const plan = await pool.query("EXPLAIN (FORMAT JSON) SELECT id,title FROM digital_products WHERE section='photography' AND is_active=TRUE ORDER BY id LIMIT 24");
   times.sort((a,b) => a-b);
-  const evidence = { syntheticOnly: true, productionTraffic: false, databaseHost: 'loopback', operations: times.length, poolLimit: 4, uniqueOrders: count, duplicateAttempts: 40, duplicateOrders: 1, elapsedMs: Math.round(performance.now()-start), p50Ms: Math.round(times[Math.floor(times.length*.5)]), p95Ms: Math.round(times[Math.floor(times.length*.95)]), p99Ms: Math.round(times[Math.floor(times.length*.99)]), catalogPlan: plan.rows[0]['QUERY PLAN'][0].Plan['Node Type'] };
+  const evidence = { syntheticOnly: true, productionTraffic: false, databaseHost: 'loopback', operations: times.length, poolLimit: 4, uniqueOrders: count, duplicateAttempts: 40, duplicateOrders: 1, couponAttempts:20,couponWinners:1,stockAttempts:20,stockWinners:1,repeatedSettlements:12,elapsedMs: Math.round(performance.now()-start), p50Ms: Math.round(times[Math.floor(times.length*.5)]), p95Ms: Math.round(times[Math.floor(times.length*.95)]), p99Ms: Math.round(times[Math.floor(times.length*.99)]), catalogPlan: plan.rows[0]['QUERY PLAN'][0].Plan['Node Type'] };
   console.log(JSON.stringify(evidence));
   if (process.env.LOAD_REPORT_PATH) await writeFile(process.env.LOAD_REPORT_PATH, JSON.stringify(evidence, null, 2));
 } finally { await pool.end(); }

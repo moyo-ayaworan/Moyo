@@ -16,7 +16,7 @@ export default function PrivacyPage() {
           </p>
           <p>Public pages also record page views, approximate country, device category, referring domain, and Stillbounds download requests for first-party analytics. No analytics cookies, full IP addresses, raw browser identifiers, query strings or private page paths are stored. A daily rotating hash estimates visitors, so visits across days or devices can count again. Do Not Track and Global Privacy Control requests are respected. Traffic records are kept for up to 90 days; verified shop transactions are reported from payment records. Download requests do not confirm completed downloads or installations.</p>
           <p>
-            Submitted details are used to respond to enquiries, manage client galleries, process studio communication, and maintain requested subscriptions.
+            Physical orders also collect recipient contact and delivery details, your chosen shipping rule and fulfilment status. These are used to prepare and deliver your order and are retained with transaction records. Coupon usage is associated with the checkout email to enforce limits; delivery addresses are not sent to the analytics service. Submitted details are used to respond to enquiries, manage client galleries, process studio communication, and maintain requested subscriptions.
           </p>
           <p>
             General messages to Eniyan may be processed by Google Gemini. Do not share passwords, gallery access codes or payment details in chat.

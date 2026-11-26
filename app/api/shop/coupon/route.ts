@@ -1,0 +1,30 @@
+import { stockQuantity } from '@/lib/inventory';
+import { shippingQuote, physicalSubtotal } from '@/lib/shipping';
+import { NextRequest,NextResponse } from 'next/server';
+import { requirePaymentOrigin,requestBody,paymentFailure,privateHeaders } from '@/lib/payments/server';
+import { normalizeCouponCode,validateCheckoutInput } from '@/lib/checkoutInput';
+import { PaymentError,isPaymentEmail,priceToKobo,paymentMode } from '@/lib/payments/policy';
+import { isProductSection } from '@/lib/productSections';
+import { isDisplayCurrency } from '@/lib/regionalPricing';
+import { pricingSnapshot } from '@/lib/pricingSnapshot';
+import { exchangeRates } from '@/lib/exchangeRates';
+import { transaction } from '@/lib/db';
+import { applyCoupon } from '@/lib/coupons';
+import { rateLimit } from '@/lib/rateLimit';
+import { paystackSecret } from '@/lib/paystack';
+export async function POST(req:NextRequest){try{
+ requirePaymentOrigin(req);const body=await requestBody(req);validateCheckoutInput(body);
+ const limited=await rateLimit(req,'coupon-preview',15,900);if(limited)return limited;
+ const productId=body.productId,email=typeof body.email==='string'?body.email.trim().toLowerCase():'',section=body.section??'photography',currency=body.displayCurrency??'NGN',code=normalizeCouponCode(body.couponCode);
+ if(!Number.isSafeInteger(productId)||Number(productId)<=0||!isPaymentEmail(email)||!isProductSection(section)||!isDisplayCurrency(currency)||!code)throw new PaymentError('Enter your email and a valid coupon.',400);
+ const mode=paymentMode(paystackSecret());
+ const current=currency==='NGN'?{rates:{NGN:1},asOf:null}:await exchangeRates();
+ const result=await transaction(async c=>{const p=(await c.query(`SELECT price,product_kind FROM digital_products WHERE id=$1 AND section=$2 AND is_active=TRUE`,[productId,section])).rows[0];if(!p)throw new PaymentError('This product is unavailable.',404);
+ const quote=pricingSnapshot(priceToKobo(p.price),req.headers.get('x-vercel-ip-country')||'',currency,current.rates,current.asOf);
+ const physical=p.product_kind==='physical';if(!physical&&('quantity' in body||'shippingRateId' in body||'shippingDetails' in body))throw new PaymentError('Digital checkout does not accept quantity or shipping fields.',400);
+ const quantity=physical?stockQuantity(body.quantity):1,shipping=physical?await shippingQuote(c,body.shippingRateId,body.shippingDetails):null;
+ const subtotal=physicalSubtotal(quote.amountMinor,quantity);
+ const applied=await applyCoupon(c,{code,productId:Number(productId),email,section,amount:subtotal,mode});
+ return {code:applied.coupon.code,subtotal,shipping:shipping?.fee||0,discount:applied.discount,amount:applied.amount+(shipping?.fee||0),currency:'NGN'};});
+ return NextResponse.json(result,{headers:privateHeaders});
+ }catch(e){return paymentFailure(e);}}

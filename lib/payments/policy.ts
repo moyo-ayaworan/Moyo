@@ -8,12 +8,14 @@ export type PaymentOrder = {
   shop_section?: 'photography' | 'art';
   metadata: Record<string, unknown>; provider_id?: string | null; title: string; delivery_url?: string;
   pricing?: PricingSnapshot | null;
+  fulfillment_kind?:'digital'|'physical';quantity?:number;stock_reservation_id?:string|null;shipping_kobo?:number|string;shipping_details?:Record<string,unknown>|null;fulfillment_status?:string;tracking_number?:string;
+  coupon_id?:string|null;coupon_code?:string|null;discount_kobo?:string|number;subtotal_kobo?:string|number;coupon_reserved_until?:Date|string|null;
   retry?: boolean;
   checkout_url?: string | null; document_id?: number | null; paid_at?: Date | null;
 };
 export class PaymentError extends Error {
-  status: number;
-  constructor(message: string, status = 409) { super(message); this.status = status; }
+  status: number;code?:string;reference?:string;
+  constructor(message: string, status = 409, code?:string, reference?:string) { super(message); this.status = status; this.code=code;this.reference=reference; }
 }
 // Never extract digits from a foreign-currency or malformed price.
 export function priceToKobo(value: string) {

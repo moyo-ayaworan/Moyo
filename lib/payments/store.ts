@@ -1,3 +1,7 @@
+import { reserveStock, commitStock, stockQuantity } from '../inventory.ts';
+import { shippingQuote, physicalSubtotal } from '../shipping.ts';
+import { applyCoupon, couponCanFulfill } from '../coupons.ts';
+import { normalizeCouponCode } from '../checkoutInput.ts';
 import { pricingSnapshot } from '../pricingSnapshot.ts';
 import { exchangeRates } from '../exchangeRates.ts';
 import { regionalMultiplier, isRoundedCurrency, type DisplayCurrency } from '../regionalPricing.ts';
@@ -12,18 +16,27 @@ export class PaymentStore {
   transact: Transaction;
   constructor(transact: Transaction) { this.transact = transact; }
   async order(reference: string) { return this.transact(async c => (await c.query<PaymentOrder>('SELECT * FROM payment_orders WHERE reference=$1', [reference])).rows[0] || null); }
-  async createDigital(productId: number, email: string, mode: PaymentMode, requestKey: string, section: 'photography' | 'art' = 'photography', country = '', displayCurrency: DisplayCurrency = 'NGN', expectedAmount?: number) {
+  async createDigital(productId: number, email: string, mode: PaymentMode, requestKey: string, section: 'photography' | 'art' = 'photography', country = '', displayCurrency: DisplayCurrency = 'NGN', expectedAmount?: number, couponCode = '', physical?:{quantity?:number;shippingRateId?:unknown;shippingDetails?:unknown}) {
     return this.transact(async c => {
+      couponCode=normalizeCouponCode(couponCode);
       // Serialize retries of one browser action, including after a lost HTTP response.
       await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['payment:' + requestKey]);
       const existing = (await c.query<PaymentOrder>('SELECT * FROM payment_orders WHERE request_key=$1', [requestKey])).rows[0];
       if (existing) {
-        if (existing.kind !== 'digital' || existing.target_id !== productId || existing.email !== email || existing.mode !== mode || existing.shop_section !== section) throw new PaymentError('Checkout request belongs to different purchase details.');
+        if(existing.fulfillment_kind!=='physical'&&physical)throw new PaymentError('Digital checkout does not accept quantity or shipping fields.',400);
+        if (existing.kind !== 'digital' || existing.target_id !== productId || existing.email !== email || existing.mode !== mode || existing.shop_section !== section || (existing.coupon_code || '') !== couponCode) throw new PaymentError('Checkout request belongs to different purchase details.');
         if (!['pending', 'failed', 'paid'].includes(existing.status)) throw new PaymentError('This payment needs studio review.');
+        if((existing.fulfillment_kind==='physical')&&(!physical||existing.quantity!==physical.quantity||JSON.stringify(existing.shipping_details)!==JSON.stringify((await shippingQuote(c,physical.shippingRateId,physical.shippingDetails)).details)))throw new PaymentError('Checkout request belongs to different delivery details.',409);
+        if(existing.fulfillment_kind==='physical'){const held=(await c.query('SELECT state,expires_at FROM shop_stock_reservations WHERE id=$1',[existing.stock_reservation_id])).rows[0];if(existing.status!=='paid'&&(!held||held.state!=='held'||new Date(held.expires_at).getTime()<=Date.now()))throw new PaymentError('The stock reservation expired. Check the original payment before starting again.',409,'checkout_expired',existing.reference);}
+        if(existing.coupon_id&&existing.status!=='paid'&&(!existing.coupon_reserved_until||new Date(existing.coupon_reserved_until).getTime()<=Date.now()))throw new PaymentError('The coupon reservation expired. Check the original payment before starting again.',409,'checkout_expired',existing.reference);
         return { ...existing, retry: true };
       }
-      const product = (await c.query('SELECT id,title,price,product_url,section FROM digital_products WHERE id=$1 AND section=$2 AND is_active=TRUE FOR SHARE', [productId, section])).rows[0];
-      if (!product?.product_url) throw new PaymentError('This product is not available for checkout.', 404);
+      const product = (await c.query('SELECT id,title,price,product_url,section,product_kind FROM digital_products WHERE id=$1 AND section=$2 AND is_active=TRUE FOR SHARE', [productId, section])).rows[0];
+      const isPhysical=product?.product_kind==='physical';
+      if(!isPhysical&&physical)throw new PaymentError('Digital checkout does not accept quantity or shipping fields.',400);
+      const quantity=isPhysical?stockQuantity(physical?.quantity):1;
+      const shipping=isPhysical?await shippingQuote(c,physical?.shippingRateId,physical?.shippingDetails):null;
+      if (!product||(!isPhysical&&!product.product_url)) throw new PaymentError('This product is not available for checkout.', 404);
       if (isRoundedCurrency(displayCurrency) && !Number.isSafeInteger(expectedAmount)) throw new PaymentError('Refresh this page to get a valid price quote.', 400);
       let rates: Partial<Record<DisplayCurrency, number>> = { NGN: 1 }, asOf: number | null = null;
       if (displayCurrency !== 'NGN') {
@@ -33,12 +46,20 @@ export class PaymentStore {
       let pricing;
       try { pricing = pricingSnapshot(priceToKobo(product.price), country, displayCurrency, rates, asOf); }
       catch { throw new PaymentError('Currency pricing is temporarily unavailable. Refresh before checkout.', 503); }
-      const amount = pricing.amountMinor;
+      const subtotal=physicalSubtotal(pricing.amountMinor,quantity);
+      const applied=couponCode?await applyCoupon(c,{code:couponCode,productId,section,email,amount:subtotal,mode}):null;
+      const amount = (applied?.amount ?? subtotal)+(shipping?.fee||0);
+      if(!Number.isSafeInteger(amount))throw new PaymentError('Purchase total is too large.',400);
       if (typeof expectedAmount === 'number' && amount !== expectedAmount) throw new PaymentError('The price quote changed. Refresh this page before paying.', 409);
       const order = (await c.query<PaymentOrder>(`INSERT INTO payment_orders(reference,mode,kind,target_id,email,amount_kobo,currency,title,delivery_url,metadata,request_key,shop_section,pricing)
         VALUES($1,$2,'digital',$3,$4,$5,'NGN',$6,$7,$8::jsonb,$9,$10,$11::jsonb) RETURNING *`,
-      [`moyo-${productId}-${randomUUID()}`, mode, productId, email, amount, product.title, product.product_url, JSON.stringify({ product_id: productId, payment_kind: 'digital', product_section: section, pricing_multiplier: regionalMultiplier(country), display_currency: displayCurrency, usd_price: displayCurrency === 'USD' ? pricing.sellingAmount : null }), requestKey, section, JSON.stringify(pricing)])).rows[0];
-      return order;
+      [`moyo-${productId}-${randomUUID()}`, mode, productId, email, amount, product.title, product.product_url, JSON.stringify({ product_id: productId, payment_kind: 'digital', product_section: section, pricing_multiplier: regionalMultiplier(country), display_currency: displayCurrency, ...(isPhysical?{product_kind:'physical',quantity}:{}), ...(applied?{coupon_code:applied.coupon.code,discount_kobo:applied.discount,subtotal_kobo:subtotal}:{}), usd_price: displayCurrency === 'USD' ? pricing.sellingAmount : null }), requestKey, section, JSON.stringify(pricing)])).rows[0];
+      if(isPhysical){const reservation=await reserveStock(c,productId,quantity);await c.query(`UPDATE payment_orders SET fulfillment_kind='physical',quantity=$2,stock_reservation_id=$3,shipping_kobo=$4,shipping_details=$5::jsonb,subtotal_kobo=$6 WHERE reference=$1`,[order.reference,quantity,reservation.id,shipping!.fee,JSON.stringify(shipping!.details),subtotal]);}
+      if(applied){
+        const saved=(await c.query<PaymentOrder>(`UPDATE payment_orders SET coupon_id=$2,coupon_code=$3,discount_kobo=$4,subtotal_kobo=$5,coupon_reserved_until=NOW()+INTERVAL '30 minutes' WHERE reference=$1 RETURNING *`,[order.reference,applied.coupon.id,applied.coupon.code,applied.discount,subtotal])).rows[0];
+        return saved;
+      }
+      return isPhysical?(await c.query<PaymentOrder>('SELECT * FROM payment_orders WHERE reference=$1',[order.reference])).rows[0]:order;
     });
   }
   async invoiceForToken(c: PoolClient, id: number, token: string, lock = false) {
@@ -83,7 +104,8 @@ export class PaymentStore {
       if (order.status === 'paid') return order;
       const p = payment as { id: number | string; paid_at?: unknown };
       const paidAt = typeof p.paid_at === 'string' && Number.isFinite(Date.parse(p.paid_at)) ? new Date(p.paid_at) : new Date();
-      let status = 'paid';
+      let status = await couponCanFulfill(c,order) ? 'paid' : 'review';
+      if(order.fulfillment_kind==='physical'&&status==='paid'){try{await commitStock(c,order.stock_reservation_id!);}catch(e){if(e instanceof PaymentError)status='review';else throw e;}}
       if (order.kind === 'invoice') {
         const doc = (await c.query<Invoice>('SELECT * FROM gallery_documents WHERE id=$1 FOR UPDATE', [order.document_id])).rows[0];
         const amount = Number(order.amount_kobo) / 100;

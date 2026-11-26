@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   if (!isProductSection(section)) return NextResponse.json({ error: 'Unknown product collection.' }, { status: 400 });
   const allSections = isAdmin && !requestedSection;
   const { rows } = await query(`
-    SELECT ${isAdmin ? '*' : 'id,title,price,details,image,display_order,is_active,section,storefront,(product_url <> \'\') AS has_delivery_file'} FROM digital_products
+    SELECT ${isAdmin ? '*' : 'id,title,price,details,image,display_order,is_active,section,product_kind,storefront,(product_url <> \'\') AS has_delivery_file'} FROM digital_products
     ${allSections ? '' : `WHERE section=$1 ${isAdmin ? '' : 'AND is_active=TRUE'}`}
     ORDER BY is_active DESC, display_order ASC, created_at DESC
   `, allSections ? [] : [section]);
@@ -145,6 +145,8 @@ export async function DELETE(req: NextRequest) {
   const id = searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'Missing product id.' }, { status: 400 });
 
+  const existing=(await query('SELECT product_kind FROM digital_products WHERE id=$1',[id])).rows[0];
+  if(existing?.product_kind==='physical')return NextResponse.json({error:'Unpublish this physical product from Inventory to preserve its stock and order history.'},{status:409});
   await query('DELETE FROM digital_products WHERE id = $1', [id]);
   return NextResponse.json({ success: true });
 }

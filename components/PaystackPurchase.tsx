@@ -1,58 +1,56 @@
 'use client';
 import ResumeCheckout from '@/components/ResumeCheckout';
 import { parseSavedCheckoutQuote, type SavedCheckoutQuote } from '@/lib/pricingSnapshot';
-import { RegionalCharge, useCheckoutPricing } from '@/components/RegionalPricing';
+import { useCheckoutPricing } from '@/components/RegionalPricing';
 import type { ProductSection } from '@/lib/productSections';
 import { getStorageItem, setStorageItem } from '@/lib/browserStorage';
 import { productShopPath } from '@/lib/productSections';
-import { useRef, useState } from 'react';
-import { ArrowUpRight, LoaderCircle } from 'lucide-react';
-export default function PaystackPurchase({productId,title,section,price}:{productId:number;title:string;section:ProductSection;price?:string}) {
-  const { ready: pricingReady, currency, quote } = useCheckoutPricing(price || '');
-  const request=useRef<{email:string;key:string}|null>(null),pending=useRef(false);
-  const [email,setEmail]=useState(''),[error,setError]=useState(''),[loading,setLoading]=useState(false),[paymentPath,setPaymentPath]=useState('');
-  const [resumeQuote,setResumeQuote]=useState<SavedCheckoutQuote|null>(null);
-  const startCheckout=async(resume?:SavedCheckoutQuote)=>{
-    if(pending.current)return;
-    pending.current=true;setLoading(true);setError('');
-    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),25000);
-    try{
-      const normalizedEmail=email.trim().toLowerCase();
-      const storageKey=`shop-checkout:${section}:${productId}:${normalizedEmail}`;
-      if(!request.current||request.current.email!==normalizedEmail) {
-        const stored=getStorageItem('local',storageKey);
-        const key=stored&&/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(stored)?stored:crypto.randomUUID();
-        request.current={email:normalizedEmail,key};
-        setStorageItem('local',storageKey,key);
-      }
-      const response=await fetch('/api/paystack/initialize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({productId,email:normalizedEmail,section,requestKey:request.current.key,displayCurrency:currency,expectedAmount:quote?.amountMinor,resumeReference:resume?.reference,resumeAmount:resume?.amountMinor}),signal:controller.signal});
-      const data=await response.json().catch(()=>({}));
-      if(typeof data.paymentPath==='string'&&data.paymentPath.startsWith(`${productShopPath(section)}/payment?reference=`))setPaymentPath(data.paymentPath);
-      if(response.ok&&data.confirmationRequired) {
-        const saved = parseSavedCheckoutQuote(data.resumeQuote);
-        if(!saved) throw Error('The saved checkout could not be verified. Please contact the studio.');
-        setResumeQuote(saved); pending.current=false; setLoading(false); return;
-      }
-      if(response.ok&&data.paymentPath) {
-        const path=`${productShopPath(section)}/payment?reference=`;
-        if(typeof data.paymentPath!=='string'||!data.paymentPath.startsWith(path))throw Error('Invalid payment return address.');
-        window.location.assign(data.paymentPath);return;
-      }
-      if(!response.ok||!data.checkoutUrl)throw Error(data.error||'We could not open checkout. Please try again.');
-      const checkout=new URL(data.checkoutUrl);
-      if(checkout.protocol!=='https:'||checkout.hostname!=='checkout.paystack.com'||checkout.username||checkout.password||checkout.port||checkout.search||checkout.hash||!/^\/[A-Za-z0-9_-]+\/?$/.test(checkout.pathname))throw Error('Checkout could not be verified. Please contact the studio.');
-      window.location.assign(checkout.href);
-    }catch(checkoutError){
-      setError(controller.signal.aborted?'Checkout is taking longer than expected. Retry with the same email; do not open another payment while you are unsure of its status.':checkoutError instanceof Error?checkoutError.message:'Unable to start checkout.');
-      pending.current=false;setLoading(false);
-    }finally{clearTimeout(timeout);}
-  };
-  return <form onSubmit={event=>{event.preventDefault();void startCheckout();}} className="space-y-4" aria-busy={loading}>
-    <div className="space-y-2"><label className="block text-xs text-foreground/75" htmlFor={`paystack-email-${productId}`}>Your email address</label><input id={`paystack-email-${productId}`} type="email" required inputMode="email" maxLength={254} autoComplete="email" autoCapitalize="none" spellCheck={false} disabled={loading} value={email} onChange={event=>{setEmail(event.target.value);setResumeQuote(null);}} placeholder="you@example.com" aria-describedby={`paystack-help-${productId}`} className="min-h-13 w-full border border-foreground/30 bg-transparent px-4 text-base text-foreground outline-none placeholder:text-foreground/35 focus:border-accent disabled:opacity-60"/><p id={`paystack-help-${productId}`} className="text-[11px] leading-relaxed text-foreground/55">Your receipt and {title} download link will be sent here.</p></div>
-    <p className="text-xs text-foreground/65">{price ? <>Paystack will charge <RegionalCharge value={price}/> in NGN. Your bank may apply conversion fees.</> : 'Paystack charges in NGN.'}</p>
-    {resumeQuote&&<ResumeCheckout quote={resumeQuote} busy={loading} onResume={()=>void startCheckout(resumeQuote)}/>}
-    {!resumeQuote&&<button type="submit" disabled={loading || !pricingReady} className="inline-flex min-h-13 w-full items-center justify-between gap-3 border border-accent bg-accent px-5 py-4 text-xs font-medium text-white transition-opacity hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent disabled:opacity-60">{loading?'Opening secure checkout…':'Continue to payment'}{loading?<LoaderCircle size={17} className="motion-safe:animate-spin" aria-hidden="true"/>:<ArrowUpRight size={17} aria-hidden="true"/>}</button>}
-    {paymentPath&&<a href={paymentPath} className="block text-sm underline">Check original payment</a>}
-    {error&&<p role="alert" className="border-l-2 border-red-400 pl-3 text-sm leading-relaxed text-red-400">{error}</p>}
-  </form>;
+import { useEffect,useRef,useState } from 'react';
+import { ArrowUpRight,LoaderCircle } from 'lucide-react';
+type Rate={id:string;label:string;country:string;region:string;fee_kobo:string|number;pickup:boolean};
+type CouponQuote={code:string;subtotal:number;discount:number;amount:number;shipping:number;identity:string};
+const money=(n:number)=>new Intl.NumberFormat('en-NG',{style:'currency',currency:'NGN'}).format(n/100);
+const inputClass='min-h-12 w-full border border-foreground/25 bg-background px-4 text-sm text-foreground outline-none focus:border-accent disabled:opacity-60';
+export default function PaystackPurchase({productId,title,section,price,physical=false,stock}:{productId:number;title:string;section:ProductSection;price?:string;physical?:boolean;stock?:number}){
+ const {ready:pricingReady,currency,quote}=useCheckoutPricing(price||'');
+ const request=useRef<{identity:string;key:string;storageKey:string}|null>(null),pending=useRef(false);
+ const [email,setEmail]=useState(''),[error,setError]=useState(''),[loading,setLoading]=useState(false),[paymentPath,setPaymentPath]=useState(''),[resumeQuote,setResumeQuote]=useState<SavedCheckoutQuote|null>(null),[restartRequired,setRestartRequired]=useState(false);
+ const [coupon,setCoupon]=useState(''),[applied,setApplied]=useState<CouponQuote|null>(null),[applying,setApplying]=useState(false);
+ const [rates,setRates]=useState<Rate[]>([]),[ratesError,setRatesError]=useState(''),[quantity,setQuantity]=useState(1),[rateId,setRateId]=useState('');
+ const [details,setDetails]=useState({name:'',phone:'',line1:'',line2:'',city:'',region:'',postalCode:''});
+ useEffect(()=>{if(!physical)return;const abort=new AbortController();fetch('/api/shop/shipping',{signal:abort.signal}).then(async r=>{if(!r.ok)throw Error('Delivery options could not be loaded. Please reload.');return r.json();}).then(r=>{if(!abort.signal.aborted)setRates(r.rates);}).catch(e=>{if(e.name!=='AbortError')setRatesError(e.message);});return()=>abort.abort();},[physical]);
+ const rate=rates.find(r=>r.id===rateId),shippingDetails=physical?{...details,country:rate?.country||'',region:rate?.region||details.region}:undefined;
+ const orderIdentity=JSON.stringify({email:email.trim().toLowerCase(),coupon:coupon.trim().toUpperCase(),quantity:physical?quantity:undefined,rateId:physical?rateId:undefined,shippingDetails});
+ const identity=JSON.stringify({orderIdentity,currency,base:quote?.amountMinor});
+ const validCoupon=applied?.identity===identity?applied:null,subtotal=(quote?.amountMinor||0)*(physical?quantity:1),shipping=physical?Number(rate?.fee_kobo||0):0,total=validCoupon?.amount??subtotal+shipping;
+ const physicalFields=physical?{quantity,shippingRateId:rateId,shippingDetails}:{};
+ async function apply(){setApplying(true);setError('');setApplied(null);try{const r=await fetch('/api/shop/coupon',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({productId,email:email.trim().toLowerCase(),section,displayCurrency:currency,couponCode:coupon.trim().toUpperCase(),...physicalFields})});const data=await r.json();if(!r.ok)throw Error(data.error||'Could not apply coupon.');setApplied({...data,identity});}catch(e){setError((e as Error).message);}finally{setApplying(false);}}
+ async function startCheckout(resume?:SavedCheckoutQuote){
+  if(pending.current)return;
+  if(coupon.trim()&&!validCoupon){setError('Apply your coupon again before continuing, or remove the code.');return;}
+  pending.current=true;setLoading(true);setError('');const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),25000);
+  try{
+   const normalizedEmail=email.trim().toLowerCase();
+   if(!request.current||request.current.identity!==orderIdentity){const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(orderIdentity)))).map(b=>b.toString(16).padStart(2,'0')).join('');const storageKey=`shop-checkout:v2:${section}:${productId}:${digest}`;const old=!physical&&!coupon.trim()?getStorageItem('local',`shop-checkout:${section}:${productId}:${normalizedEmail}`):null;const stored=getStorageItem('local',storageKey)||old;const key=stored&&/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(stored)?stored:crypto.randomUUID();request.current={identity:orderIdentity,key,storageKey};setStorageItem('local',storageKey,key);}
+   const response=await fetch('/api/paystack/initialize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({productId,email:normalizedEmail,section,requestKey:request.current.key,displayCurrency:currency,expectedAmount:total,couponCode:validCoupon?.code,...physicalFields,resumeReference:resume?.reference,resumeAmount:resume?.amountMinor}),signal:controller.signal});const data=await response.json().catch(()=>({}));
+   if(typeof data.paymentPath==='string'&&data.paymentPath.startsWith(`${productShopPath(section)}/payment?reference=`))setPaymentPath(data.paymentPath);
+   if(data.restartRequired){setRestartRequired(true);throw Error(data.error||'Checkout reservation expired. Check the original payment.');}
+   if(response.ok&&data.confirmationRequired){const saved=parseSavedCheckoutQuote(data.resumeQuote);if(!saved)throw Error('The saved checkout could not be verified. Contact the studio.');setResumeQuote(saved);return;}
+   if(response.ok&&data.paymentPath){if(typeof data.paymentPath!=='string'||!data.paymentPath.startsWith(`${productShopPath(section)}/payment?reference=`))throw Error('Invalid payment return address.');window.location.assign(data.paymentPath);return;}
+   if(!response.ok||!data.checkoutUrl)throw Error(data.error||'We could not open checkout. Please try again.');
+   const checkout=new URL(data.checkoutUrl);if(checkout.protocol!=='https:'||checkout.hostname!=='checkout.paystack.com'||checkout.username||checkout.password||checkout.port||checkout.search||checkout.hash||!/^\/[A-Za-z0-9_-]+\/?$/.test(checkout.pathname))throw Error('Checkout could not be verified. Contact the studio.');window.location.assign(checkout.href);
+  }catch(e){setError(controller.signal.aborted?'Checkout is taking longer than expected. Check the original payment before trying another.':(e as Error).message);}
+  finally{clearTimeout(timeout);pending.current=false;setLoading(false);}
+ }
+ return <form onSubmit={e=>{e.preventDefault();void startCheckout();}} className="space-y-4" aria-busy={loading}>
+  <label className="block space-y-2 text-xs text-foreground/75"><span>Your email address</span><input type="email" required maxLength={254} autoComplete="email" disabled={loading} value={email} onChange={e=>{setEmail(e.target.value);setResumeQuote(null);}} placeholder="you@example.com" className={inputClass}/></label>
+  {physical&&<fieldset disabled={loading} className="space-y-3 border-t border-foreground/15 pt-4"><legend className="text-sm">Delivery details</legend><label className="block text-xs">Quantity<input aria-label="Quantity" type="number" min={1} max={Math.min(stock??10000,10000)} step={1} required value={quantity} onChange={e=>setQuantity(Number(e.target.value))} className={inputClass}/></label><label className="block text-xs">Delivery region<select aria-label="Delivery region" required value={rateId} onChange={e=>setRateId(e.target.value)} className={inputClass}><option value="">Choose delivery or pickup</option>{rates.map(r=><option key={r.id} value={r.id}>{r.label} · {r.country}{r.region?` / ${r.region}`:''} · {money(Number(r.fee_kobo))}</option>)}</select></label>{ratesError&&<p role="alert" className="text-sm">{ratesError}</p>}{!ratesError&&rates.length===0&&<p className="text-xs text-foreground/60">No delivery options are available yet. Contact the studio before ordering.</p>}{(['name','phone'] as const).map(key=><label key={key} className="block text-xs">{key==='name'?'Recipient name':'Contact phone'}<input required maxLength={key==='name'?120:30} autoComplete={key==='name'?'shipping name':'shipping tel'} value={details[key]} onChange={e=>setDetails({...details,[key]:e.target.value})} className={inputClass}/></label>)}{rate&&!rate.pickup&&(['line1','line2','city','region','postalCode'] as const).map(key=><label key={key} className="block text-xs">{{line1:'Address',line2:'Address line 2 (optional)',city:'City',region:'State / region',postalCode:'Postal code (optional)'}[key]}<input required={!['line2','postalCode'].includes(key)} maxLength={key.startsWith('line')?200:key==='postalCode'?30:100} value={key==='region'&&rate.region?rate.region:details[key]} readOnly={key==='region'&&!!rate.region} onChange={e=>setDetails({...details,[key]:e.target.value})} className={inputClass}/></label>)}</fieldset>}
+  <div className="border-t border-foreground/15 pt-4"><label className="block text-xs text-foreground/75">Coupon code (optional)<div className="mt-2 flex gap-2"><input aria-label="Coupon code" maxLength={40} autoCapitalize="characters" value={coupon} disabled={loading||applying} onChange={e=>{setCoupon(e.target.value);setApplied(null);setResumeQuote(null);}} className={inputClass}/><button type="button" onClick={()=>void apply()} disabled={loading||applying||!coupon.trim()||!pricingReady} className="min-h-12 border border-foreground/25 px-4 text-xs disabled:opacity-40">{applying?'Checking…':'Apply'}</button></div></label>{validCoupon&&<p role="status" className="mt-2 text-xs text-foreground/70">{validCoupon.code} applied. Save {money(validCoupon.discount)}. Availability is confirmed when checkout starts.</p>}</div>
+  {pricingReady&&<dl className="space-y-2 border-y border-foreground/15 py-4 text-xs"><div className="flex justify-between"><dt>Products</dt><dd>{money(subtotal)}</dd></div>{validCoupon&&<div className="flex justify-between"><dt>Coupon discount</dt><dd>−{money(validCoupon.discount)}</dd></div>}{physical&&<div className="flex justify-between"><dt>Shipping</dt><dd>{rate?money(shipping):'Choose a region'}</dd></div>}<div className="flex justify-between pt-2 text-base"><dt>Total · NGN</dt><dd>{money(total)}</dd></div></dl>}
+  <p className="text-[11px] leading-relaxed text-foreground/55">Paystack charges in NGN. Your bank may apply conversion fees. {physical?'Stock is reserved for 30 minutes when checkout starts.':`Your receipt and protected download link for ${title} will be emailed after payment verification.`}</p>
+  {resumeQuote&&<ResumeCheckout quote={resumeQuote} busy={loading} onResume={()=>void startCheckout(resumeQuote)}/>}
+  {restartRequired&&<button type="button" disabled={loading} className="min-h-12 w-full border border-foreground/30 px-4 text-sm" onClick={()=>{if(!request.current)return;const key=crypto.randomUUID();setStorageItem('local',request.current.storageKey,key);request.current={...request.current,key};setRestartRequired(false);setResumeQuote(null);void startCheckout();}}>I checked the original payment — start a new checkout</button>}
+  {!resumeQuote&&!restartRequired&&<button type="submit" disabled={loading||applying||!pricingReady||(physical&&(!rate||(stock!==undefined&&stock<1)))} className="inline-flex min-h-13 w-full items-center justify-between gap-3 border border-accent bg-accent px-5 py-4 text-xs font-medium text-[var(--on-accent)] transition-opacity hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent disabled:opacity-60">{loading?'Opening secure checkout…':'Continue to payment'}{loading?<LoaderCircle size={17} className="motion-safe:animate-spin"/>:<ArrowUpRight size={17}/>}</button>}
+  {paymentPath&&<a href={paymentPath} className="block text-sm underline">Check original payment before starting another checkout</a>}{error&&<p role="alert" className="border-l-2 border-accent pl-3 text-sm leading-relaxed">{error}</p>}
+ </form>;
 }

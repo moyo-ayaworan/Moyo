@@ -14,6 +14,6 @@ export async function GET(req: NextRequest) {
     if (!order || order.kind !== 'digital') throw new PaymentError('Order not found.', 404);
     const saved = await verifyOrder(order), paid = saved.status === 'paid';
     after(() => deliverPaymentNotifications());
-    return NextResponse.json({ paid, status: saved.status, shopSection: saved.shop_section || 'photography', downloadUrl: paid ? `/api/digital-products/download?reference=${encodeURIComponent(reference)}` : null }, { headers: privateHeaders });
+    return NextResponse.json({ paid, status: saved.status, shopSection: saved.shop_section || 'photography', fulfillmentKind:saved.fulfillment_kind||'digital',fulfillmentStatus:saved.fulfillment_status||'unfulfilled',trackingNumber:saved.tracking_number||'',downloadUrl: paid&&saved.fulfillment_kind!=='physical' ? `/api/digital-products/download?reference=${encodeURIComponent(reference)}` : null }, { headers: privateHeaders });
   } catch (error) { return paymentFailure(error); }
 }

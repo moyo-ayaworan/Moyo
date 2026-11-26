@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     const reference = req.nextUrl.searchParams.get('reference') || '';
     if (!hasPurchaseAccess(req, reference)) throw new PaymentError('This download is not available.', 403);
     const order = await payments.order(reference);
-    if (!order || order.kind !== 'digital' || order.status !== 'paid') throw new PaymentError('This download is not available.', 403);
+    if (!order || order.kind !== 'digital' || order.fulfillment_kind==='physical' || order.status !== 'paid') throw new PaymentError('This download is not available.', 403);
     const verified = await verifyOrder(order, true);
     if (verified.status !== 'paid') throw new PaymentError('This payment needs studio review before download.', 403);
     const protectedUrl = temporaryOriginalUrl(order.delivery_url || '');

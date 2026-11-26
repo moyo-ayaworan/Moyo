@@ -1,3 +1,4 @@
+import { commerceSchema, shippingSchema } from '../lib/commerceSchema.ts';
 // Real Paystack SANDBOX transactions; all application writes are confined to a disposable schema.
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID, generateKeyPairSync } from 'node:crypto';
@@ -47,6 +48,7 @@ try {
       CREATE TABLE digital_products(id SERIAL PRIMARY KEY,title TEXT,price TEXT,product_url TEXT,is_active BOOLEAN DEFAULT TRUE);
       CREATE TABLE digital_orders(reference TEXT,product_id INTEGER,customer_email TEXT,amount_kobo BIGINT,currency TEXT,status TEXT,provider_reference TEXT,paid_at TIMESTAMPTZ,created_at TIMESTAMPTZ DEFAULT NOW());`);
     await c.query(paymentSchema);
+    await c.query(commerceSchema);await c.query(shippingSchema);
     await c.query(await readFile(new URL('../lib/stillbounds/billing-schema.sql',import.meta.url),'utf8'));
     const asset=(await c.query('SELECT product_url FROM public.digital_products WHERE id=1')).rows[0]?.product_url; assert(asset);
     await c.query("INSERT INTO digital_products(title,price,product_url) VALUES('Sandbox MELATONE','₦20,000',$1)",[asset]);

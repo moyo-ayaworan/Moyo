@@ -43,20 +43,22 @@ export async function deliverPaymentNotifications(options: { limit?: number; dea
         if (!isPaymentEmail(order.email)) throw Error('Invalid recipient');
         const money = `NGN ${(Number(order.amount_kobo) / 100).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
         let text = `${order.title}\nPayment reference: ${order.reference}\nAmount: ${money}\nStatus: ${order.status}\n`;
-        if (order.status === 'paid' && order.kind === 'digital') {
+        if(order.status==='paid'&&order.fulfillment_kind==='physical'){const expiry=Date.now()+30*86400000,token=`${expiry}.${accessProof(order.reference,order.email,expiry,purchaseSigningKey())}`;text+=`\nPhysical order · Quantity: ${order.quantity}\nShipping: NGN ${Number(order.shipping_kobo||0)/100}\nDelivery option: ${String(order.shipping_details?.shippingLabel||'')}\nThe studio will prepare your order and confirm delivery or pickup details.\nView your order (link valid for 30 days):\n${paymentOrigin()}${productShopPath(order.shop_section||'photography')}/payment?reference=${encodeURIComponent(order.reference)}#access=${token}\n`;}
+        else if (order.status === 'paid' && order.kind === 'digital') {
           const expiry = Date.now() + 30 * 86400000;
           const token = `${expiry}.${accessProof(order.reference, order.email, expiry, purchaseSigningKey())}`;
           text += `\nYour protected download (link valid for 30 days):\n${paymentOrigin()}${productShopPath(order.shop_section || 'photography')}/payment?reference=${encodeURIComponent(order.reference)}#access=${token}\n`;
         } else if (order.status === 'paid') text += '\nYour invoice and payment receipt are available in your private client portal. A deposit does not unlock final gallery downloads.\n';
         else text += '\nThe studio will review this payment. Please do not pay again until the studio confirms the next step.\n';
+        if(order.coupon_code)text+=`\nCoupon: ${order.coupon_code} · Discount: NGN ${Number(order.discount_kobo||0)/100}\n`;
         const studio = process.env.CONTACT_EMAIL || 'moyoayaworan@gmail.com';
         // SMTP failure never rolls back a verified payment. The durable outbox retries it.
         const result = await config.mail.sendMail({ from: config.from, to: { address: order.email, name: '' }, replyTo: { address: studio, name: '' },
           subject: `${order.status === 'paid' ? 'Payment receipt' : 'Payment update'} · ${order.title}`,
           messageId: `<${order.reference}.${order.status}@${new URL(paymentOrigin()).hostname}>`, text });
         if (!result.accepted?.length || result.rejected?.length) throw Error('Mail not accepted');
-        if (order.status !== 'paid') {
-          const alert = await config.mail.sendMail({ from: config.from, to: studio, subject: `Payment needs review · ${order.reference}`, text: `${text}\nCustomer: ${order.email}\nReview in the admin payment ledger.` });
+        if (order.status !== 'paid'||order.fulfillment_kind==='physical') {
+          const alert = await config.mail.sendMail({ from: config.from, to: studio, subject: `${order.status==='paid'?'Physical order paid':'Payment needs review'} · ${order.reference}`, text: `${text}\nCustomer: ${order.email}\nReview in the admin payment ledger.` });
           if (!alert.accepted?.length || alert.rejected?.length) throw Error('Alert not accepted');
         }
         await finishNotification(order, true);
