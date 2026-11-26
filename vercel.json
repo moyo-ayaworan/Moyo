@@ -16,6 +16,10 @@
     {
       "path": "/api/payments/maintenance",
       "schedule": "30 7 * * *"
+    },
+    {
+      "path": "/api/analytics/cleanup",
+      "schedule": "45 7 * * *"
     }
   ]
 }

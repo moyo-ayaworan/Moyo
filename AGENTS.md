@@ -17,3 +17,9 @@ When the user asks to push, deploy, or publish an update, update both the GitHub
 Use the existing Moyo design system for all UI work, including private review, account, and admin flows. Read `docs/design-system.md` before changing visible UI. The source of truth is `app/globals.css`, with established Stillbounds patterns in `components/mofolio/mofolio.module.css` and `app/stillbounds/account/account.module.css`.
 
 Reuse the shared color and typography variables, existing components, button/form treatments, and responsive spacing. Support both light and dark themes. Do not introduce a separate palette, hardcoded UI colors, or substitute fonts. Preserve original colors in uploaded previews and other media. Verify new screens in both themes and at desktop and mobile sizes.
+
+## Sharing previews and analytics
+
+Every new public page must use `createPageMetadata` from `lib/seo.ts` with its own title, description and canonical path. The helper creates a page-specific sharing card; extend `lib/sharePreview.ts` to use that page’s public CMS imagery when applicable. Dynamic product/detail pages must set both Open Graph and Twitter previews through the helper. Never expose private/client media in sharing cards. Keep preview metadata aligned with content updates.
+
+Public navigation is tracked centrally by `AnalyticsTracker`; register new public paths in `analyticsPath` without allowing private identifiers, query strings or tokens. Keep shop purchases sourced from verified live `payment_orders` and label download requests accurately. Preserve the dashboard’s privacy exclusions, 90-day retention and design tokens.

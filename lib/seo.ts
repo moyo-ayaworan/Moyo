@@ -23,13 +23,14 @@ export const siteUrl = normalizeSiteUrl(
 export const siteName = 'Ijabiken Moyo';
 export const defaultDescription =
   'Visual storytelling across photography and fine art. Two practices. One vision.';
-export const defaultOgImage = '/homepage-desktop.jpg';
+export const defaultOgImage = '/api/share?path=%2F&title=Photography%20%26%20Fine%20Art';
 
 type PageMetadataOptions = {
   title: string;
   description: string;
   path: string;
   noIndex?: boolean;
+  image?: string;
 };
 
 export function createPageMetadata({
@@ -37,12 +38,14 @@ export function createPageMetadata({
   description,
   path,
   noIndex = false,
+  image,
 }: PageMetadataOptions): Metadata {
   const canonicalPath = path || '/';
+  const shareImage = image || `/api/share?${new URLSearchParams({path:canonicalPath,title,description}).toString()}`;
   const fullTitle = title.includes(siteName) ? title : `${title} | ${siteName}`;
 
   return {
-    title: fullTitle,
+    title: { absolute: fullTitle },
     description,
     alternates: {
       canonical: canonicalPath,
@@ -54,10 +57,10 @@ export function createPageMetadata({
       siteName,
       images: [
         {
-          url: defaultOgImage,
-          width: 2560,
-          height: 1707,
-          alt: siteName,
+          url: shareImage,
+          width: 1200,
+          height: 630,
+          alt: title,
         },
       ],
       locale: 'en_US',
@@ -67,7 +70,7 @@ export function createPageMetadata({
       card: 'summary_large_image',
       title: fullTitle,
       description,
-      images: [defaultOgImage],
+      images: [shareImage],
     },
     robots: noIndex
       ? {
