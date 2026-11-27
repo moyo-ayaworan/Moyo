@@ -72,6 +72,7 @@ test('gallery deletion retains all financial documents and locks parent before c
 test('private session notifications return without emailing, even when submitted directly', async () => {
   const route = load('app/api/notify-session/route.ts', {
     '@/lib/requestBody': body, '@/lib/privacy': privacy,
+    '@/lib/analyticsPolicy':{excludedAnalytics:()=>false},'@/lib/visitContext':{},
     '@/lib/rateLimit': {rateLimit: async () => null},
     nodemailer: {createTransport() { assert.fail('must not send private path'); }},
   });

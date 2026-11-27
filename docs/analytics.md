@@ -27,3 +27,9 @@ Extend the resolver when introducing a new content type. The public-route metada
 ## Daily, weekly and monthly calculations
 
 Choose Today, This week, This month, or a rolling 7/30/90-day range, then choose Daily, Weekly or Monthly calculation. Both the chart and calculation table aggregate the selected days. Tables include page views, summed daily visitor estimates, download requests, paid purchases and revenue, including zero-activity periods and a totals row. CSV exports follow the selected grouping. Weeks start on Monday. Current periods and boundary weeks/months are partial, labelled in the dashboard; monthly traffic still follows the 90-day retention window. Buyer counts are unique within the selected range, while visitor estimates rotate daily.
+
+## Studio visit email context
+
+The existing New Active Session Detected email adds approximate city/region/country from Vercel request headers, plus device category, browser family and operating system inferred from the User-Agent request header. It uses server receipt time in Africa/Lagos; posted browser strings, timestamps and locations are ignored. Outside Vercel, geography is Unavailable. VPNs/proxies, missing headers and reduced/spoofed user agents affect accuracy; no exact device model or verified identity is claimed.
+
+No external geolocation API, GPS permission, IP/coordinate logging or new analytics storage is introduced. Studio email copies follow the inbox's retention, separate from the dashboard's existing 90-day records. Private/unrecognized/query-bearing paths, Stillbounds/Mofolio, bots/prefetches and DNT/GPC requests are excluded server-side. Allowed public visit requests require matching Origin and remain limited to three notifications per IP/hour and the existing browser session deduplication. The browser sends only the public path. SMTP calls in tests are mocked; no actual visit email is sent during QA.
