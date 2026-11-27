@@ -33,6 +33,8 @@ export async function GET(req: NextRequest) {
       const recovery = await recoverStillboundsPayments(Date.now() + 70000);
       checked += recovery.checked; failed += recovery.failed;
     }
+    const {reconcileShopRefunds}=await import('@/lib/refunds');
+    const refunds=await reconcileShopRefunds(Date.now()+20000);checked+=refunds.checked;failed+=refunds.failed;
     await deliverPaymentNotifications({ limit: 100, deadline: Date.now() + 40000 });
     const bookingRecovery = await deliverBookingRecovery({ limit: 20, deadline: Date.now() + 25000 });
     failed += bookingRecovery?.deferred || 0;

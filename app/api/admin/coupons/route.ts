@@ -7,7 +7,8 @@ import { parseCoupon } from '@/lib/couponAdmin';
 import { PaymentError } from '@/lib/payments/policy';
 const headers={'Cache-Control':'private, no-store'};
 export async function GET(req:NextRequest){const denied=await requireAdmin(req);if(denied)return denied;
- const result=await query(`SELECT c.*,COUNT(o.reference) FILTER(WHERE o.mode='live' AND o.status IN ('paid','refunded','disputed','review'))::int used,COUNT(o.reference) FILTER(WHERE o.mode='live' AND o.status IN ('pending','failed') AND o.coupon_reserved_until>NOW())::int reserved FROM shop_coupons c LEFT JOIN payment_orders o ON o.coupon_id=c.id GROUP BY c.id ORDER BY c.created_at DESC LIMIT 200`);return NextResponse.json({coupons:result.rows},{headers});}
+ const result=await query(`SELECT c.*,COUNT(o.reference) FILTER(WHERE o.mode='live' AND o.status IN ('paid','refunded','disputed','review'))::int used,COUNT(o.reference) FILTER(WHERE o.mode='live' AND o.status IN ('pending','failed') AND o.coupon_reserved_until>NOW())::int reserved FROM shop_coupons c LEFT JOIN payment_orders o ON o.coupon_id=c.id GROUP BY c.id ORDER BY c.created_at DESC LIMIT 200`);const products=await query("SELECT id,title,section,product_kind,is_active FROM digital_products WHERE section IN ('art','photography') ORDER BY title,id");
+ return NextResponse.json({coupons:result.rows,products:products.rows},{headers});}
 export async function POST(req:NextRequest){const denied=await requireAdmin(req,true);if(denied)return denied;
  const parsed=await readJsonRequest(req,4096);if(parsed.response)return parsed.response;
  try{const value=parseCoupon(parsed.body);const coupon=await transaction(async c=>{

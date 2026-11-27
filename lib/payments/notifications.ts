@@ -27,9 +27,10 @@ async function finishNotification(order: PaymentOrder, delivered: boolean) {
   });
 }
 export async function deliverPaymentNotifications(options: { limit?: number; deadline?: number } = {}) {
+  const deadline = options.deadline ?? Date.now() + 40000;
+  try{const {deliverShopMail}=await import('../shopMail');await deliverShopMail({limit:Math.min(options.limit??10,3),deadline:Math.min(deadline,Date.now()+10000)});}catch{console.error('[shop] Notification queue deferred.');}
   const config = transport(); if (!config) return;
   try {
-    const deadline = options.deadline ?? Date.now() + 40000;
     for (let i = 0; i < (options.limit ?? 10) && Date.now() < deadline; i++) {
       const order = await transaction(async c => {
         const row = (await c.query<PaymentOrder>(`SELECT o.* FROM payment_notifications n JOIN payment_orders o ON o.reference=n.reference

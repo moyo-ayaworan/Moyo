@@ -3,6 +3,8 @@ import { commerceSchema, shippingSchema } from '../../lib/commerceSchema.ts';
 import assert from 'node:assert/strict';
 import pg from 'pg';
 import { randomUUID } from 'node:crypto';
+import {checkLowStock,updateFulfillment} from '../../lib/shopOperations.ts';
+import {createReturn,returnAction,claimRefund} from '../../lib/returns.ts';
 import { PaymentStore } from '../../lib/payments/store.ts';
 import { paymentSchema } from '../../lib/payments/schema.ts';
 import { writeFile } from 'node:fs/promises';
@@ -42,6 +44,22 @@ try {
   await Promise.all(Array.from({length:12},()=>store.fulfill(paid.reference,evidencePayment)));
   assert.equal((await pool.query('SELECT stock_on_hand FROM shop_inventory WHERE product_id=$1',[physical])).rows[0].stock_on_hand,0);
 
+  // Operations races use synthetic purchases; no provider or SMTP calls are made.
+  await pool.query("UPDATE payment_orders SET mode='live' WHERE reference=$1",[paid.reference]);
+  await pool.query('UPDATE shop_inventory SET low_stock_threshold=0 WHERE product_id=$1',[physical]);
+  await Promise.all(Array.from({length:12},()=>tx(c=>checkLowStock(c,physical))));
+  assert.equal((await pool.query("SELECT COUNT(*)::int n FROM shop_notifications WHERE kind='low_stock'")).rows[0].n,1);
+  await Promise.all(Array.from({length:12},()=>tx(c=>updateFulfillment(c,paid.reference,'ready_for_pickup',''))));
+  assert.equal((await pool.query("SELECT COUNT(*)::int n FROM shop_notifications WHERE kind='fulfillment'")).rows[0].n,1);
+  const returnId=randomUUID();
+  await tx(c=>createReturn(c,{id:returnId,reference:paid.reference,quantity:1,amount:2000000,reason:'Synthetic test return'}));
+  await assert.rejects(tx(c=>returnAction(c,returnId,'restock',1)),/receipt/);
+  await tx(c=>returnAction(c,returnId,'approved'));await tx(c=>returnAction(c,returnId,'received'));
+  await Promise.all(Array.from({length:12},()=>tx(c=>returnAction(c,returnId,'restock',1))));
+  assert.equal((await pool.query('SELECT stock_on_hand FROM shop_inventory WHERE product_id=$1',[physical])).rows[0].stock_on_hand,1);
+  const claims=await Promise.allSettled(Array.from({length:12},()=>tx(c=>claimRefund(c,returnId,paid.reference,2000000))));
+  assert.equal(claims.filter(r=>r.status==='fulfilled'&&r.value.send).length,1);
+
   await Promise.all(Array.from({ length: 24 }, () => timed(async () => {
     const body = await boundedBody(new Request('http://localhost/upload-fixture', { method: 'POST', body: Buffer.alloc(1024 * 1024) }), 4 * 1024 * 1024);
     assert.equal(body.length, 1024 * 1024);
@@ -49,7 +67,7 @@ try {
   await assert.rejects(boundedBody(new Request('http://localhost/upload-fixture', { method: 'POST', body: Buffer.alloc(4 * 1024 * 1024 + 1) }), 4 * 1024 * 1024), error => error.status === 413);
   const plan = await pool.query("EXPLAIN (FORMAT JSON) SELECT id,title FROM digital_products WHERE section='photography' AND is_active=TRUE ORDER BY id LIMIT 24");
   times.sort((a,b) => a-b);
-  const evidence = { syntheticOnly: true, productionTraffic: false, databaseHost: 'loopback', operations: times.length, poolLimit: 4, uniqueOrders: count, duplicateAttempts: 40, duplicateOrders: 1, couponAttempts:20,couponWinners:1,stockAttempts:20,stockWinners:1,repeatedSettlements:12,elapsedMs: Math.round(performance.now()-start), p50Ms: Math.round(times[Math.floor(times.length*.5)]), p95Ms: Math.round(times[Math.floor(times.length*.95)]), p99Ms: Math.round(times[Math.floor(times.length*.99)]), catalogPlan: plan.rows[0]['QUERY PLAN'][0].Plan['Node Type'] };
+  const evidence = { syntheticOnly: true, productionTraffic: false, databaseHost: 'loopback', operations: times.length, poolLimit: 4, uniqueOrders: count, duplicateAttempts: 40, duplicateOrders: 1, couponAttempts:20,couponWinners:1,stockAttempts:20,stockWinners:1,repeatedSettlements:12,stockAlertRaces:12,fulfillmentRaces:12,restockRaces:12,refundClaimRaces:12,refundSubmissions:0,elapsedMs: Math.round(performance.now()-start), p50Ms: Math.round(times[Math.floor(times.length*.5)]), p95Ms: Math.round(times[Math.floor(times.length*.95)]), p99Ms: Math.round(times[Math.floor(times.length*.99)]), catalogPlan: plan.rows[0]['QUERY PLAN'][0].Plan['Node Type'] };
   console.log(JSON.stringify(evidence));
   if (process.env.LOAD_REPORT_PATH) await writeFile(process.env.LOAD_REPORT_PATH, JSON.stringify(evidence, null, 2));
 } finally { await pool.end(); }
