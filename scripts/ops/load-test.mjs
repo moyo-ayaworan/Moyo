@@ -31,9 +31,17 @@ try {
   const count = (await pool.query('SELECT COUNT(*)::int AS n FROM payment_orders')).rows[0].n;
   assert.equal(count, 121);
   // Different buyers compete for a single coupon slot under independent pool transactions.
-  const couponId=randomUUID();await pool.query("INSERT INTO shop_coupons(id,code,kind,value,max_uses) VALUES($1,'CONCURRENCY10','percent',10,1)",[couponId]);
+  const couponId=randomUUID();await pool.query("INSERT INTO shop_coupons(id,code,kind,value,max_uses,max_discount_kobo,budget_kobo,max_quantity,limits_reviewed) VALUES($1,'CONCURRENCY10','percent',10,1,200000,200000,1,TRUE)",[couponId]);
   const couponAttempts=await Promise.allSettled(Array.from({length:20},(_,i)=>store.createDigital(1,`coupon-${i}@example.test`,'test',randomUUID(),'photography','NG','NGN',1800000,'CONCURRENCY10')));
   assert.equal(couponAttempts.filter(r=>r.status==='fulfilled').length,1);
+  // Discount budgets and mailbox aliases serialize under independent connections.
+  await pool.query("INSERT INTO shop_coupons(id,code,kind,value,max_discount_kobo,budget_kobo,max_quantity,limits_reviewed) VALUES($1,'BUDGET10','percent',10,200000,400000,1,TRUE)",[randomUUID()]);
+  const budgetAttempts=await Promise.allSettled(Array.from({length:20},(_,i)=>store.createDigital(1,`budget-${i}@example.test`,'test',randomUUID(),'photography','NG','NGN',1800000,'BUDGET10')));
+  assert.equal(budgetAttempts.filter(r=>r.status==='fulfilled').length,2);
+  assert.equal(Number((await pool.query("SELECT SUM(discount_kobo) total FROM payment_orders WHERE coupon_code='BUDGET10'")).rows[0].total),400000);
+  await pool.query("INSERT INTO shop_coupons(id,code,kind,value,max_discount_kobo,budget_kobo,max_quantity,limits_reviewed) VALUES($1,'ALIAS10','percent',10,200000,4000000,1,TRUE)",[randomUUID()]);
+  const aliases=await Promise.allSettled(Array.from({length:12},(_,i)=>store.createDigital(1,`s.y.n.t.h.e.t.i.c+${i}@${i%2?'gmail.com':'googlemail.com'}`,'test',randomUUID(),'photography','NG','NGN',1800000,'ALIAS10')));
+  assert.equal(aliases.filter(r=>r.status==='fulfilled').length,1);
   const shippingId=randomUUID();await pool.query("INSERT INTO shop_shipping_regions(id,label,country,fee_kobo,pickup) VALUES($1,'Synthetic pickup','NG',0,TRUE)",[shippingId]);
   const physical=(await pool.query("INSERT INTO digital_products(title,price,product_url,product_kind) VALUES('One remaining physical item','20000','','physical') RETURNING id")).rows[0].id;
   await pool.query('INSERT INTO shop_inventory(product_id,stock_on_hand) VALUES($1,1)',[physical]);
@@ -67,7 +75,7 @@ try {
   await assert.rejects(boundedBody(new Request('http://localhost/upload-fixture', { method: 'POST', body: Buffer.alloc(4 * 1024 * 1024 + 1) }), 4 * 1024 * 1024), error => error.status === 413);
   const plan = await pool.query("EXPLAIN (FORMAT JSON) SELECT id,title FROM digital_products WHERE section='photography' AND is_active=TRUE ORDER BY id LIMIT 24");
   times.sort((a,b) => a-b);
-  const evidence = { syntheticOnly: true, productionTraffic: false, databaseHost: 'loopback', operations: times.length, poolLimit: 4, uniqueOrders: count, duplicateAttempts: 40, duplicateOrders: 1, couponAttempts:20,couponWinners:1,stockAttempts:20,stockWinners:1,repeatedSettlements:12,stockAlertRaces:12,fulfillmentRaces:12,restockRaces:12,refundClaimRaces:12,refundSubmissions:0,elapsedMs: Math.round(performance.now()-start), p50Ms: Math.round(times[Math.floor(times.length*.5)]), p95Ms: Math.round(times[Math.floor(times.length*.95)]), p99Ms: Math.round(times[Math.floor(times.length*.99)]), catalogPlan: plan.rows[0]['QUERY PLAN'][0].Plan['Node Type'] };
+  const evidence = { syntheticOnly: true, productionTraffic: false, databaseHost: 'loopback', operations: times.length, poolLimit: 4, uniqueOrders: count, duplicateAttempts: 40, duplicateOrders: 1, couponAttempts:20,couponWinners:1,budgetAttempts:20,budgetWinners:2,aliasAttempts:12,aliasWinners:1,stockAttempts:20,stockWinners:1,repeatedSettlements:12,stockAlertRaces:12,fulfillmentRaces:12,restockRaces:12,refundClaimRaces:12,refundSubmissions:0,elapsedMs: Math.round(performance.now()-start), p50Ms: Math.round(times[Math.floor(times.length*.5)]), p95Ms: Math.round(times[Math.floor(times.length*.95)]), p99Ms: Math.round(times[Math.floor(times.length*.99)]), catalogPlan: plan.rows[0]['QUERY PLAN'][0].Plan['Node Type'] };
   console.log(JSON.stringify(evidence));
   if (process.env.LOAD_REPORT_PATH) await writeFile(process.env.LOAD_REPORT_PATH, JSON.stringify(evidence, null, 2));
 } finally { await pool.end(); }

@@ -16,3 +16,9 @@ export async function shippingQuote(c:PoolClient,id:unknown,details:unknown){
  if(!rate.pickup&&!rate.region&&address.region){const specific=await c.query("SELECT id FROM shop_shipping_regions WHERE active=TRUE AND pickup=FALSE AND country=$1 AND LOWER(region)=LOWER($2) AND region<>'' LIMIT 1",[rate.country,address.region]);if(specific.rows.length)throw new PaymentError('Choose the shipping rule specifically configured for your state or region.',400);}
  return {fee:Number(rate.fee_kobo),details:{name,phone,...address,shippingRateId:rate.id,shippingLabel:rate.label,pickup:rate.pickup,country:rate.country}};
 }
+// JSONB does not preserve object-key order; compare snapshotted delivery fields by key.
+export function shippingDetailsMatch(a:unknown,b:unknown){
+ if(!a||!b||typeof a!=='object'||typeof b!=='object'||Array.isArray(a)||Array.isArray(b))return false;
+ const left=a as Record<string,unknown>,right=b as Record<string,unknown>,keys=Object.keys(left);
+ return keys.length===Object.keys(right).length&&keys.every(key=>Object.hasOwn(right,key)&&left[key]===right[key]);
+}

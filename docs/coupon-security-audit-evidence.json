@@ -1,0 +1,47 @@
+{
+  "sourceRevision": "c36d2e97b1b3219bc8c353ae554c8b508cd7a47a",
+  "syntheticOnly": true,
+  "engine": "PGlite/PostgreSQL",
+  "concurrencyTestedHere": false,
+  "providerCalls": 0,
+  "unpaidHold": {
+    "status": "pending",
+    "checkoutUrl": null,
+    "blocksOtherBuyer": true,
+    "providerInitialized": false,
+    "holdMinutes": 30
+  },
+  "emailLimit": {
+    "sameAddressRejected": true,
+    "unverifiedAliasAccepted": true
+  },
+  "gatewayMinimum": {
+    "savedAmountKobo": 1000,
+    "paystackMinimumKobo": 5000,
+    "reservationSaved": true,
+    "status": "pending"
+  },
+  "lateDiscount": {
+    "couponDisabled": true,
+    "couponExpired": true,
+    "holdExpired": true,
+    "syntheticPaymentPaidNow": true,
+    "orderStatus": "paid",
+    "note": "Provider acceptance of an old URL was not tested; fulfillment accepts matching late evidence."
+  },
+  "emailStatusOracle": {
+    "usedEmailStatus": 409,
+    "unusedEmailStatus": 200,
+    "usedEmailError": "This coupon has reached its usage limit."
+  },
+  "bulkPolicy": {
+    "oneRedemption": true,
+    "quantity": 10000,
+    "discountKobo": 9900000000,
+    "amountKobo": 100000000
+  },
+  "positiveChecks": {
+    "integerDiscountCases": 693,
+    "forgedPaymentEvidenceRejected": true
+  }
+}

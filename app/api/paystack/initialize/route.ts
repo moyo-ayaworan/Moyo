@@ -1,3 +1,4 @@
+import { couponEmailCookie,verifiedCouponEmail } from '@/lib/couponIdentity';
 import { validateCheckoutInput, normalizeCouponCode } from '@/lib/checkoutInput';
 import { savedCheckoutQuote } from '@/lib/pricingSnapshot';
 import { isDisplayCurrency } from '@/lib/regionalPricing';
@@ -22,6 +23,7 @@ export async function POST(req: NextRequest) {
     if (!isProductSection(section)) throw new PaymentError('Choose a valid product collection.', 400);
     const displayCurrency = body.displayCurrency ?? 'NGN';
     if (!isDisplayCurrency(displayCurrency)) throw new PaymentError('Choose a valid currency.', 400);
+    if(normalizeCouponCode(body.couponCode)&&!verifiedCouponEmail(req.cookies.get(couponEmailCookie)?.value,email))return NextResponse.json({error:'Verify your email to use a coupon.',verificationRequired:true},{status:403,headers:privateHeaders});
     const key = body.requestKey || randomUUID();
     if (typeof key !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(key)) throw new PaymentError('Invalid checkout request.', 400);
     const order = await payments.createDigital(productId, email, mode, key, section, req.headers.get('x-vercel-ip-country') || '', displayCurrency, typeof body.expectedAmount === 'number' ? body.expectedAmount : undefined, normalizeCouponCode(body.couponCode), ('quantity' in body||'shippingRateId' in body||'shippingDetails' in body)?{quantity:body.quantity as number,shippingRateId:body.shippingRateId,shippingDetails:body.shippingDetails}:undefined);

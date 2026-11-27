@@ -1,5 +1,12 @@
 import { normalizeCouponCode } from './checkoutInput.ts';
 import { PaymentError, priceToKobo } from './payments/policy.ts';
+export function parseCouponLimits(input:Record<string,unknown>){
+ const maxDiscount=priceToKobo(String(input.maxDiscount??'')),budget=priceToKobo(String(input.budget??''));
+ const maxQuantity=input.maxQuantity;
+ if(typeof maxQuantity!=='number'||!Number.isSafeInteger(maxQuantity)||maxQuantity<1||maxQuantity>10000)throw new PaymentError('Set a maximum quantity from 1 to 10,000.',400);
+ if(budget<maxDiscount)throw new PaymentError('The total discount budget must cover the maximum discount per order.',400);
+ return {maxDiscount,budget,maxQuantity};
+}
 export function parseCoupon(input:Record<string,unknown>){
  const code=normalizeCouponCode(input.code);if(!code)throw new PaymentError('A coupon code is required.',400);
  const kind=input.kind;if(kind!=='percent'&&kind!=='fixed')throw new PaymentError('Choose a percentage or fixed discount.',400);
@@ -14,5 +21,5 @@ export function parseCoupon(input:Record<string,unknown>){
  const date=(v:unknown,fallback:string|null)=>{if(v===''||v===undefined||v===null)return fallback;if(typeof v!=='string'||!Number.isFinite(Date.parse(v)))throw new PaymentError('Enter valid start and end dates.',400);return new Date(v).toISOString();};
  const startsAt=date(input.startsAt,new Date().toISOString())!,endsAt=date(input.endsAt,null);
  if(endsAt&&Date.parse(endsAt)<=Date.parse(startsAt))throw new PaymentError('Expiry must be after the start date.',400);
- return {code,kind,value,minimum,section,productId,maxUses,perEmailLimit,startsAt,endsAt};
+ return {code,kind,value,minimum,section,productId,maxUses,perEmailLimit,startsAt,endsAt,...parseCouponLimits(input)};
 }

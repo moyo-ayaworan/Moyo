@@ -18,7 +18,7 @@ const config={enabled:true,checkoutEnabled:true,mode:'test',origin:'https://fixt
 function loadInitialize(order){
  let initialized=0,body;
  const mocks={
-  '@/lib/checkoutInput':checkoutInput,
+  '@/lib/couponIdentity':{couponEmailCookie:'moyo-coupon-email',verifiedCouponEmail:()=>true},'@/lib/checkoutInput':checkoutInput,
   '@/lib/pricingSnapshot':snapshot,'@/lib/regionalPricing':pricing,'@/lib/productSections':sections,'node:crypto':{randomUUID},
   'next/server':{NextResponse:{json:(body,options)=>({body,options})}},'@/lib/rateLimit':{rateLimit:async()=>null},'@/lib/purchaseAccess':{setPurchaseCookie:()=>{}},
   '@/lib/paystack':{paystackSecret:()=> 'sk_test_fixture',PaymentReferenceMissing:class extends Error{}},'@/lib/payments/policy':policy,
