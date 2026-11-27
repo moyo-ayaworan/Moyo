@@ -236,6 +236,32 @@ test('gallery previews bake a watermark into bounded JPEG bytes without redirect
   assert.ok(stats.channels[0].stdev > 1, 'watermark must change the uniform input pixels');
 });
 
+test('paid finished previews stay clean while unpaid finished work is denied before fetching', async () => {
+  const sharp = dependency('sharp');
+  const input = await sharp({create:{width:1600,height:800,channels:3,background:'#303030'}}).png().toBuffer();
+  for (const paid of [false,true]) {
+    let fetched=false;
+    const route = load('app/api/galleries/preview/route.ts', {
+      '@/lib/db':{query:async()=>({rows:[{access_code:'test',payment_verified:paid,finished_images:['private-finished.jpg']}]})},
+      '@/lib/galleryAccess':{hasGalleryCookie:()=>true},
+      '@/lib/privateMedia':{signedGalleryPreview:()=> 'https://provider.test/signed'},
+      sharp:{default:sharp},
+    }, {fetch:async()=>{fetched=true;return new Response(input);}});
+    const response = await route.GET(new Request('https://example.test/api/galleries/preview?galleryId=7&index=0&collection=finished'));
+    assert.equal(response.status,paid?200:403);
+    assert.equal(fetched,paid);
+    assert.equal(response.headers.get('cache-control'),'private, no-store');
+    if(paid){
+      assert.equal(response.headers.get('location'),null);
+      const image=Buffer.from(await response.arrayBuffer());
+      const metadata=await sharp(image).metadata();
+      assert.equal(metadata.width,1200);assert.equal(metadata.height,600);
+      const stats=await sharp(image).stats();
+      assert.ok(stats.channels[0].stdev<1,'finished previews must not contain a proof watermark');
+    }
+  }
+});
+
 test('gallery selections resolve scoped preview references to server-side originals', async () => {
   let saved;
   const route = load('app/api/galleries/approve-selection/route.ts', {

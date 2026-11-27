@@ -1,3 +1,4 @@
+import { checkLowStock } from './shopOperations.ts';
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { PaymentError } from './payments/policy.ts';
@@ -21,4 +22,5 @@ export async function commitStock(c:PoolClient,id:string){
  const updated=await c.query('UPDATE shop_inventory SET stock_on_hand=stock_on_hand-$2,updated_at=NOW() WHERE product_id=$1 AND stock_on_hand>=$2 RETURNING product_id',[current.product_id,current.quantity]);
  if(!updated.rowCount)throw new PaymentError('Stock needs review.',409);
  await c.query("UPDATE shop_stock_reservations SET state='committed' WHERE id=$1",[id]);
+ await checkLowStock(c,current.product_id);
 }

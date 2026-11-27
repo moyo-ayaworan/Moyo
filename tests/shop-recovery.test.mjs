@@ -41,7 +41,7 @@ test('maintenance keeps old unresolved payments, separates paid audits, drains l
   '@/lib/db':{query:async sql=>{sqls.push(sql);return {rows:sql.includes('payment_notifications')?[{pending:4}]:sql.includes("('pending','failed')")?[{...order,status:'failed'}]:[{...order,reference:'paid',status:'paid'}]};}},
   '@/lib/payments/server':{verifyOrder:async o=>{verified.push(o.status);},payments:{transact:async work=>work({query:async()=>({rows:[]})})},privateHeaders:{}},
   '@/lib/payments/notifications':{deliverPaymentNotifications:async options=>{notificationOptions=options;}},
-  '@/lib/newsletter/queue': { deliverNewsletterCampaigns: async () => ({ delivered: 0, deferred: 0 }) },
+  '@/lib/refunds':{reconcileShopRefunds:async()=>({checked:0,failed:0})},'@/lib/newsletter/queue': { deliverNewsletterCampaigns: async () => ({ delivered: 0, deferred: 0 }) },
     '@/lib/bookingRecovery':{deliverBookingRecovery:async()=>{}},
  });
  const result=await route.GET({headers:new Headers()});assert.equal(result.body.checked,2);assert.equal(result.body.pendingNotifications,4);

@@ -15,10 +15,13 @@ export async function GET(req: NextRequest) {
   if (!Number.isSafeInteger(id) || id < 1 || !params.has('index') || !Number.isSafeInteger(index) || index < 0 || !['proofs', 'finished'].includes(collection || '')) {
     return NextResponse.json({ error: 'Invalid preview.' }, { status: 400, headers });
   }
-  const { rows } = await query('SELECT access_code, is_locked, images, finished_images FROM galleries WHERE id=$1', [id]);
+  const { rows } = await query('SELECT access_code, is_locked, payment_verified, images, finished_images FROM galleries WHERE id=$1', [id]);
   const gallery = rows[0];
   if (!gallery || gallery.is_locked || !hasGalleryCookie(req, id, gallery.access_code)) {
     return NextResponse.json({ error: 'This preview is unavailable. Reopen your gallery with its access code.' }, { status: 403, headers });
+  }
+  if (collection === 'finished' && !gallery.payment_verified) {
+    return NextResponse.json({ error: 'Finished work is available after payment is verified.' }, { status: 403, headers });
   }
   const source = (collection === 'proofs' ? gallery.images : gallery.finished_images)?.[index];
   let upstream = typeof source === 'string' ? signedGalleryPreview(source) : null;
@@ -48,6 +51,10 @@ export async function GET(req: NextRequest) {
       chunks.push(chunk);
     }
     const preview = await sharp(Buffer.concat(chunks), { limitInputPixels: 40_000_000 }).rotate().resize({ width: 1200, height: 1200, fit: 'inside', withoutEnlargement: true }).toBuffer({ resolveWithObject: true });
+    if (collection === 'finished') {
+      const image = await sharp(preview.data).jpeg({ quality: 72 }).toBuffer();
+      return new NextResponse(new Uint8Array(image), { headers: { ...headers, 'Content-Type': 'image/jpeg' } });
+    }
     const { width, height } = preview.info;
     // Paths keep the watermark readable on hosts without installed fonts.
     const glyphs: Record<string, string[]> = {
