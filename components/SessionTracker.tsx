@@ -9,6 +9,7 @@ export default function SessionTracker() {
 
     useEffect(() => {
         const notifySession = async () => {
+            if (navigator.doNotTrack === '1' || (navigator as Navigator & {globalPrivacyControl?: boolean}).globalPrivacyControl) return;
             const path = publicTrackingPath(window.location.pathname);
             if (!path) return;
             // Simple check to prevent duplicate notifications in the same session (SPA navigation)
@@ -20,16 +21,14 @@ export default function SessionTracker() {
             hasNotified.current = true;
 
             try {
-                await fetch('/api/notify-session', {
+                const response = await fetch('/api/notify-session', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        userAgent: navigator.userAgent,
-                        timestamp: Date.now(),
                         path
                     })
                 });
-                setStorageItem('session', sessionKey, 'true');
+                if(response.ok)setStorageItem('session', sessionKey, 'true');
             } catch (err) {
                 console.error('Session tracking failed', err);
             }

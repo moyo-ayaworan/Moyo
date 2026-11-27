@@ -108,6 +108,7 @@ test('non-production session tracking cannot parse customer data or send notific
     const forbidden = () => { touched = true; throw Error('must not call'); };
     const route = load('app/api/notify-session/route.ts', {
       '@/lib/requestBody': { readJsonRequest: forbidden }, '@/lib/privacy': { publicTrackingPath: forbidden },
+      '@/lib/analyticsPolicy':{},'@/lib/visitContext':{},
       '@/lib/rateLimit': { rateLimit: forbidden }, 'next/server': {}, nodemailer: { default: { createTransport: forbidden } },
     }, env);
     assert.equal((await route.POST(new Request('http://localhost/api/notify-session', { method: 'POST' }))).status, 204);
