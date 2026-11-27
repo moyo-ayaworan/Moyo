@@ -1,0 +1,43 @@
+// Synthetic hardening checks only. Never reads DATABASE_URL or calls a provider.
+// Install PGlite separately and set COUPON_AUDIT_PGLITE_MODULE to its file URL.
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+const {PGlite}=await import(process.env.COUPON_AUDIT_PGLITE_MODULE || '@electric-sql/pglite');
+import {PaymentStore} from '../../lib/payments/store.ts';
+import {paymentSchema} from '../../lib/payments/schema.ts';
+import {commerceSchema,shippingSchema} from '../../lib/commerceSchema.ts';
+import {couponIdentity} from '../../lib/couponIdentity.ts';
+import {createCouponChallenge,consumeCouponChallenge} from '../../lib/couponVerification.ts';
+const db=new PGlite();
+await db.exec(`CREATE TABLE gallery_documents(id SERIAL PRIMARY KEY); CREATE TABLE digital_products(id SERIAL PRIMARY KEY,title TEXT,price TEXT,product_url TEXT,is_active BOOLEAN DEFAULT TRUE); CREATE TABLE digital_orders(reference TEXT,product_id INTEGER,customer_email TEXT,amount_kobo BIGINT,currency TEXT,status TEXT,provider_reference TEXT,paid_at TIMESTAMPTZ,created_at TIMESTAMPTZ DEFAULT NOW());`);
+await db.exec(paymentSchema);await db.exec(commerceSchema);await db.exec(shippingSchema);
+await db.exec(commerceSchema);await db.exec(shippingSchema);
+const transact=work=>db.transaction(tx=>work({query:(sql,args)=>sql.includes('pg_advisory_xact_lock')?Promise.resolve({rows:[]}):tx.query(sql,args)}));
+const store=new PaymentStore(transact),evidence={syntheticOnly:true,engine:'PGlite/PostgreSQL',concurrencyTestedHere:false,providerCalls:0};
+const p=(await db.query("INSERT INTO digital_products(title,price,product_url) VALUES('Synthetic digital product','10000','https://example.test/private') RETURNING id")).rows[0].id;
+async function coupon(code,{value=10,max=null,cap=200000,budget=2000000,quantity=1,reviewed=true}={}){const id=randomUUID();await db.query("INSERT INTO shop_coupons(id,code,kind,value,max_uses,starts_at,max_discount_kobo,budget_kobo,max_quantity,limits_reviewed) VALUES($1,$2,'percent',$3,$4,'2020-01-01',$5,$6,$7,$8)",[id,code,value,max,cap,budget,quantity,reviewed]);return id;}
+const create=(code,email='buyer@example.test',product=p)=>store.createDigital(product,email,'test',randomUUID(),'photography','NG','NGN',undefined,code);
+const payment=(order,id,paidAt=new Date())=>({status:'success',reference:order.reference,domain:'test',amount:Number(order.amount_kobo),currency:'NGN',id,customer:{email:order.email},metadata:order.metadata,paid_at:paidAt.toISOString()});
+await coupon('HOLD10');await coupon('OTHER10');const held=await create('HOLD10','holder@example.test');await assert.rejects(create('OTHER10','holder@example.test'),/already have a coupon checkout/);evidence.oneActiveHoldPerVerifiedMailbox=true;
+await coupon('EMAIL10');const first=await create('EMAIL10','buyer.name@gmail.com');await store.fulfill(first.reference,payment(first,1001));await assert.rejects(create('EMAIL10','b.u.y.e.r.n.a.m.e+offer@googlemail.com'),/unavailable/);evidence.gmailAliasLimit=true;
+for(const value of ['Buyer.Name+offer@googlemail.com','buyername@gmail.com','buyer+offer@example.test'])assert.equal((await db.query('SELECT shop_coupon_identity($1) identity',[value])).rows[0].identity,couponIdentity(value));evidence.databaseAndApplicationIdentityMatch=true;
+await coupon('TINY99',{value:99});const cheap=(await db.query("INSERT INTO digital_products(title,price,product_url) VALUES('Synthetic cheap product','1000','https://example.test/private') RETURNING id")).rows[0].id;const before=(await db.query('SELECT COUNT(*)::int total FROM payment_orders')).rows[0].total;await assert.rejects(create('TINY99','tiny@example.test',cheap),/at least ₦50/);assert.equal((await db.query('SELECT COUNT(*)::int total FROM payment_orders')).rows[0].total,before);evidence.subminimumRejectedBeforeOrderAndReservation=true;
+await coupon('LATE10');const late=await create('LATE10','late@example.test');await db.query("UPDATE payment_orders SET created_at=NOW()-INTERVAL '2 days',coupon_reserved_until=NOW()-INTERVAL '1 day' WHERE reference=$1",[late.reference]);assert.equal((await store.fulfill(late.reference,payment(late,1002))).status,'review');evidence.latePaymentReview=true;
+await coupon('ONTIME10');const ontime=await create('ONTIME10','ontime@example.test');const paidAt=new Date(Date.now()-120000);await db.query("UPDATE payment_orders SET coupon_reserved_until=NOW()-INTERVAL '1 minute' WHERE reference=$1",[ontime.reference]);await db.query('UPDATE shop_coupons SET active=FALSE WHERE id=$1',[ontime.coupon_id]);assert.equal((await store.fulfill(ontime.reference,payment(ontime,1003,paidAt))).status,'paid');evidence.delayedOnTimePaymentPreserved=true;
+await coupon('STOP10');const stopped=await create('STOP10','stop@example.test');await db.query("UPDATE shop_coupons SET active=FALSE,stopped_at=NOW()-INTERVAL '1 second' WHERE id=$1",[stopped.coupon_id]);assert.equal((await store.fulfill(stopped.reference,payment(stopped,1004))).status,'review');evidence.emergencyStop=true;
+await coupon('BUDGET10',{budget:100000,cap:100000});await create('BUDGET10','budget1@example.test');await assert.rejects(create('BUDGET10','budget2@example.test'),/unavailable/);evidence.activeHoldsConsumeDiscountBudget=true;
+await coupon('LEGACY10',{reviewed:false});await assert.rejects(create('LEGACY10','legacy@example.test'),/unavailable/);evidence.unreviewedLegacyCouponBlocked=true;
+const physical=(await db.query("INSERT INTO digital_products(title,price,product_url,product_kind) VALUES('Synthetic physical edition','10000','','physical') RETURNING id")).rows[0].id;await db.query('INSERT INTO shop_inventory(product_id,stock_on_hand) VALUES($1,10000)',[physical]);const rate=randomUUID();await db.query("INSERT INTO shop_shipping_regions(id,label,country,fee_kobo,pickup) VALUES($1,'Synthetic pickup','NG',0,TRUE)",[rate]);await coupon('BULK99',{value:99,cap:200000,budget:400000,quantity:2});
+const physicalInput=quantity=>({quantity,shippingRateId:rate,shippingDetails:{name:'Synthetic buyer',phone:'+2348000000000'}});
+await assert.rejects(store.createDigital(physical,'bulk@example.test','test',randomUUID(),'photography','NG','NGN',undefined,'BULK99',physicalInput(10000)),/unavailable/);
+const key=randomUUID(),bulk=await store.createDigital(physical,'bulk@example.test','test',key,'photography','NG','NGN',undefined,'BULK99',physicalInput(2));assert.equal(Number(bulk.discount_kobo),200000);assert.equal(bulk.quantity,2);
+const retry=await store.createDigital(physical,'bulk@example.test','test',key,'photography','NG','NGN',undefined,'BULK99',physicalInput(2));assert.equal(retry.reference,bulk.reference);assert.equal(retry.retry,true);evidence.bulkQuantityAndDiscountCaps=true;evidence.physicalRetrySurvivesJsonbOrdering=true;
+process.env.GALLERY_SESSION_SECRET='synthetic-coupon-audit-only';
+const challenge=await transact(c=>createCouponChallenge(c,'verification@example.test','synthetic-browser'));
+const challengeInput={id:challenge.id,email:'verification@example.test',browser:'synthetic-browser',code:challenge.code==='000000'?'111111':'000000'};
+assert.equal(await transact(c=>consumeCouponChallenge(c,challengeInput)),false);
+assert.equal((await db.query('SELECT attempts FROM shop_coupon_challenges WHERE id=$1',[challenge.id])).rows[0].attempts,1);
+assert.equal(await transact(c=>consumeCouponChallenge(c,{...challengeInput,code:challenge.code})),true);
+assert.equal(await transact(c=>consumeCouponChallenge(c,{...challengeInput,code:challenge.code})),false);
+evidence.emailCodeAttemptsCommitAndReplayFails=true;
+await db.close();console.log(JSON.stringify(evidence,null,2));

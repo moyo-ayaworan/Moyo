@@ -3,7 +3,7 @@ import { transaction } from '../db';
 import { paystackRequest, paystackSecret, paymentOrigin, verifyPaystackTransaction } from '../paystack';
 import { parseAuthenticatedAsset } from '../privateMedia';
 import { PaymentStore } from './store';
-import { PaymentError, checkoutAddress, paymentMode, type PaymentOrder } from './policy';
+import { PaymentError, payableAmount, checkoutAddress, paymentMode, type PaymentOrder } from './policy';
 
 export const payments = new PaymentStore(transaction);
 export const privateHeaders = { 'Cache-Control': 'private, no-store', 'Referrer-Policy': 'no-referrer' };
@@ -38,6 +38,9 @@ export async function initializeOrder(order: PaymentOrder, callback: string) {
     await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['initialize:' + order.reference]);
     const current = (await c.query<PaymentOrder>('SELECT * FROM payment_orders WHERE reference=$1', [order.reference])).rows[0];
     if (!current || !['pending', 'failed'].includes(current.status)) throw new PaymentError('Check the original payment before paying again.');
+    payableAmount(Number(current.amount_kobo));
+    if(current.coupon_id&&(!current.coupon_reserved_until||new Date(current.coupon_reserved_until).getTime()<=Date.now()))throw new PaymentError('This coupon checkout has expired. Check its payment status before starting again.',409);
+    if(current.coupon_id){const coupon=(await c.query('SELECT stopped_at,ends_at FROM shop_coupons WHERE id=$1',[current.coupon_id])).rows[0];if(!coupon||coupon.stopped_at||(coupon.ends_at&&new Date(coupon.ends_at).getTime()<=Date.now()))throw new PaymentError('This coupon checkout is no longer payable. Check its original payment status.',409);}
     if (current.checkout_url) return checkoutAddress(current.checkout_url);
     if (process.env.VERCEL_ENV === 'production' && !process.env.PAYSTACK_WEBHOOK_SECRET) throw new PaymentError('Payments are awaiting webhook configuration. Please contact the studio.', 503);
     if (current.kind === 'digital' && current.fulfillment_kind!=='physical' && !parseAuthenticatedAsset(current.delivery_url || '')) throw new PaymentError('This delivery file needs private storage.', 503);

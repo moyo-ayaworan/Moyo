@@ -10,7 +10,7 @@ function load(file, mocks) {
  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{module:compiled,exports:compiled.exports,require:name=>{if(!(name in mocks))throw Error(name);return mocks[name];},process:{env:{}},URL,Date,Buffer,AbortSignal});
  return compiled.exports;
 }
-const order={reference:'moyo-1-00000000-0000-4000-8000-000000000000',kind:'digital',target_id:1,email:'buyer@example.test',mode:'test',shop_section:'photography',status:'pending',amount_kobo:100,currency:'NGN',delivery_url:'private',metadata:{},checkout_url:null};
+const order={reference:'moyo-1-00000000-0000-4000-8000-000000000000',kind:'digital',target_id:1,email:'buyer@example.test',mode:'test',shop_section:'photography',status:'pending',amount_kobo:10000,currency:'NGN',delivery_url:'private',metadata:{},checkout_url:null};
 test('same-key retry recovers pending, failed and paid orders without another insert; rejects other buyers',async()=>{
  for(const status of ['pending','failed','paid']){
   const store=new PaymentStore(async work=>work({query:async sql=>{assert(!sql.includes('INSERT'));return {rows:sql.includes('WHERE request_key')?[{...order,status}]:[]};}}));

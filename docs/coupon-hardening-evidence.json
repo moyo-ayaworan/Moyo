@@ -1,0 +1,18 @@
+{
+  "syntheticOnly": true,
+  "engine": "PGlite/PostgreSQL",
+  "concurrencyTestedHere": false,
+  "providerCalls": 0,
+  "oneActiveHoldPerVerifiedMailbox": true,
+  "gmailAliasLimit": true,
+  "databaseAndApplicationIdentityMatch": true,
+  "subminimumRejectedBeforeOrderAndReservation": true,
+  "latePaymentReview": true,
+  "delayedOnTimePaymentPreserved": true,
+  "emergencyStop": true,
+  "activeHoldsConsumeDiscountBudget": true,
+  "unreviewedLegacyCouponBlocked": true,
+  "bulkQuantityAndDiscountCaps": true,
+  "physicalRetrySurvivesJsonbOrdering": true,
+  "emailCodeAttemptsCommitAndReplayFails": true
+}

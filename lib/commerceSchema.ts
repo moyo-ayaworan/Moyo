@@ -7,12 +7,32 @@ CREATE TABLE IF NOT EXISTS shop_coupons (
  starts_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), ends_at TIMESTAMPTZ, active BOOLEAN NOT NULL DEFAULT TRUE,
  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), CHECK(kind<>'percent' OR value<=99), CHECK(ends_at IS NULL OR ends_at>starts_at)
 );
+ALTER TABLE shop_coupons ADD COLUMN IF NOT EXISTS max_discount_kobo BIGINT CHECK(max_discount_kobo>0);
+ALTER TABLE shop_coupons ADD COLUMN IF NOT EXISTS budget_kobo BIGINT CHECK(budget_kobo>0);
+ALTER TABLE shop_coupons ADD COLUMN IF NOT EXISTS max_quantity INTEGER CHECK(max_quantity BETWEEN 1 AND 10000);
+ALTER TABLE shop_coupons ADD COLUMN IF NOT EXISTS limits_reviewed BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE shop_coupons ADD COLUMN IF NOT EXISTS stopped_at TIMESTAMPTZ;
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='shop_coupons'::regclass AND conname='shop_coupon_reviewed_limits') THEN
+ ALTER TABLE shop_coupons ADD CONSTRAINT shop_coupon_reviewed_limits CHECK(NOT limits_reviewed OR (max_discount_kobo IS NOT NULL AND budget_kobo IS NOT NULL AND max_quantity IS NOT NULL AND budget_kobo>=max_discount_kobo));
+ END IF;
+END $$;
+CREATE OR REPLACE FUNCTION shop_coupon_identity(value TEXT) RETURNS TEXT LANGUAGE SQL IMMUTABLE STRICT AS $$
+ SELECT CASE WHEN split_part(lower(trim(value)),'@',2) IN ('gmail.com','googlemail.com')
+ THEN replace(split_part(split_part(lower(trim(value)),'@',1),'+',1),'.','')||'@gmail.com' ELSE lower(trim(value)) END;
+$$;
+CREATE TABLE IF NOT EXISTS shop_coupon_challenges (
+ id UUID PRIMARY KEY,email TEXT NOT NULL,identity TEXT NOT NULL,browser_hash TEXT NOT NULL,code_hash TEXT NOT NULL,
+ attempts INTEGER NOT NULL DEFAULT 0 CHECK(attempts BETWEEN 0 AND 5),expires_at TIMESTAMPTZ NOT NULL,consumed_at TIMESTAMPTZ,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS shop_coupon_challenge_due ON shop_coupon_challenges(expires_at);
 ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS coupon_id UUID REFERENCES shop_coupons(id) ON DELETE RESTRICT;
 ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS coupon_code TEXT;
 ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS discount_kobo BIGINT NOT NULL DEFAULT 0 CHECK(discount_kobo>=0);
 ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS subtotal_kobo BIGINT;
 ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS coupon_reserved_until TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS payment_orders_coupon ON payment_orders(coupon_id,email,status,coupon_reserved_until);
+CREATE INDEX IF NOT EXISTS payment_orders_coupon_customer ON payment_orders(coupon_id,mode,shop_coupon_identity(email));
 ALTER TABLE digital_products ADD COLUMN IF NOT EXISTS product_kind TEXT NOT NULL DEFAULT 'digital' CHECK(product_kind IN ('digital','physical'));
 CREATE TABLE IF NOT EXISTS shop_inventory (
  product_id INTEGER PRIMARY KEY REFERENCES digital_products(id) ON DELETE RESTRICT,

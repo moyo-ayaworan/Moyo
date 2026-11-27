@@ -17,6 +17,11 @@ export class PaymentError extends Error {
   status: number;code?:string;reference?:string;
   constructor(message: string, status = 409, code?:string, reference?:string) { super(message); this.status = status; this.code=code;this.reference=reference; }
 }
+// Paystack's NGN minimum applies to the final total, including configured shipping.
+export function payableAmount(amount:number){
+ if(!Number.isSafeInteger(amount)||amount<5000)throw new PaymentError('The total after discount must be at least ₦50. Remove the coupon or adjust your purchase.',400);
+ return amount;
+}
 // Never extract digits from a foreign-currency or malformed price.
 export function priceToKobo(value: string) {
   if (typeof value !== 'string' || value.length > 60) throw new PaymentError('Enter a valid NGN price.', 400);
